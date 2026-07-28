@@ -2,12 +2,48 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <script>
+    // Applies the saved theme/mode before CSS paints, so there's no
+    // flash of the default palette on load. js/theme.js re-derives and
+    // owns this state right after; this only needs to run once, fast,
+    // and match its validation rules closely enough to avoid a visible
+    // flicker if they ever disagree.
+    (function () {
+      var THEMES = ['cyber', 'woodgrain', 'paper', 'light'];
+      var MODES = ['system', 'dark', 'light'];
+      var pref = { theme: 'light', mode: 'system' };
+      try {
+        var raw = localStorage.getItem('sudoku-inspire:appearance');
+        if (raw) {
+          var parsed = JSON.parse(raw);
+          if (
+            parsed &&
+            parsed.version === 1 &&
+            THEMES.indexOf(parsed.theme) !== -1 &&
+            MODES.indexOf(parsed.mode) !== -1
+          ) {
+            pref = { theme: parsed.theme, mode: parsed.mode };
+          }
+        }
+      } catch (e) {
+        // Corrupt/unavailable storage: fall through to defaults.
+      }
+      var mode =
+        pref.mode === 'system'
+          ? window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light'
+          : pref.mode;
+      document.documentElement.dataset.theme = pref.theme;
+      document.documentElement.dataset.mode = mode;
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="A polished, offline-first Sudoku web app by INSPIRE.">
   <title>Sudoku by Inspire</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
-<body data-theme-pack="light" data-color-mode="system">
+<body>
   <div id="app">
 
     <section id="screen-start" class="screen is-active" tabindex="-1" aria-label="Start screen">
@@ -38,6 +74,89 @@
     </section>
 
   </div>
+
+  <dialog id="settings-dialog" class="settings-dialog" aria-labelledby="settings-title">
+    <form method="dialog" class="settings-form">
+      <h2 id="settings-title">Settings</h2>
+
+      <fieldset class="settings-group">
+        <legend>Theme pack</legend>
+        <label class="option-tile">
+          <input type="radio" name="theme" value="cyber">
+          <span>Cyber</span>
+        </label>
+        <label class="option-tile">
+          <input type="radio" name="theme" value="woodgrain">
+          <span>Woodgrain</span>
+        </label>
+        <label class="option-tile">
+          <input type="radio" name="theme" value="paper">
+          <span>Paper</span>
+        </label>
+        <label class="option-tile">
+          <input type="radio" name="theme" value="light">
+          <span>Light</span>
+        </label>
+      </fieldset>
+
+      <fieldset class="settings-group">
+        <legend>Color mode</legend>
+        <label class="option-tile">
+          <input type="radio" name="mode" value="system">
+          <span>System</span>
+        </label>
+        <label class="option-tile">
+          <input type="radio" name="mode" value="dark">
+          <span>Dark</span>
+        </label>
+        <label class="option-tile">
+          <input type="radio" name="mode" value="light">
+          <span>Light</span>
+        </label>
+      </fieldset>
+      <p id="mode-current-hint" class="settings-hint" aria-live="polite"></p>
+
+      <section class="settings-preview" aria-label="Appearance preview">
+        <h3 class="settings-subheading">Preview</h3>
+        <div class="preview-swatches">
+          <div class="preview-swatch preview-swatch--selected">
+            <span class="preview-digit">5</span>
+            <small>Selected</small>
+          </div>
+          <div class="preview-swatch preview-swatch--related">
+            <span class="preview-digit preview-digit--fixed">3</span>
+            <small>Related</small>
+          </div>
+          <div class="preview-swatch preview-swatch--match">
+            <span class="preview-digit">5</span>
+            <small>Matching value</small>
+          </div>
+          <div class="preview-swatch">
+            <span class="preview-digit preview-digit--fixed">7</span>
+            <small>Fixed clue</small>
+          </div>
+          <div class="preview-swatch">
+            <span class="preview-digit">4</span>
+            <small>Your entry</small>
+          </div>
+          <div class="preview-swatch">
+            <span class="preview-notes">1 2 4</span>
+            <small>Notes</small>
+          </div>
+        </div>
+        <div class="preview-status">
+          <span class="status-chip status-chip--success">&check; Success</span>
+          <span class="status-chip status-chip--warning">&#9888; Warning</span>
+          <span class="status-chip status-chip--error">&cross; Error</span>
+        </div>
+      </section>
+
+      <div class="settings-actions">
+        <button type="button" id="btn-reset-appearance" class="btn-secondary">Reset Appearance</button>
+        <button type="submit" class="btn-primary">Close</button>
+      </div>
+    </form>
+  </dialog>
 
   <script type="module" src="./index.js"></script>
 </body>

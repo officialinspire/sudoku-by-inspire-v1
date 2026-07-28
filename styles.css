@@ -13,6 +13,7 @@ body {
   font-family: var(--font-sans);
   background: var(--color-bg);
   color: var(--color-text);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 img {
@@ -24,57 +25,281 @@ button {
   font: inherit;
 }
 
-/* ---------- Theme scaffold ----------
-   Base (Light) values live on :root. Theme packs and color modes override
-   these custom properties; Phase 7 fills in Cyber/Woodgrain/Paper and the
-   Dark/Light/System color-mode overrides. Wired now so later phases only
-   need to add values, not restructure anything.
-*/
+/* ================================================================
+   DESIGN TOKENS
+   ================================================================
+   Every color/shadow a component needs is expressed as a custom
+   property here, never hard-coded in a component rule below. A
+   component says "give me the accent color" (`var(--color-accent)`),
+   not "give me #2b6cb0" — which color that resolves to depends on
+   `data-theme` and `data-mode` on <html>, set by js/theme.js. This is
+   what lets every component render correctly in all 4 theme packs ×
+   2 concrete color modes without a single per-theme override anywhere
+   outside this token block.
+
+   Structure:
+   - :root defines the Light pack / Light mode palette as the ultimate
+     safe fallback (used if data-theme/data-mode are ever missing or
+     invalid — see js/theme.js for the matching validation).
+   - [data-mode="dark"] (no theme requirement) is the Light pack's dark
+     variant, doubling as a generic dark fallback.
+   - Each [data-theme="X"][data-mode="Y"] block overrides only the
+     tokens that change for that combination.
+   - "system" mode is never written to the DOM — js/theme.js resolves
+     it to a concrete "dark"/"light" data-mode value up front and keeps
+     it in sync with the OS via a matchMedia listener. That keeps every
+     rule below dealing with exactly two states instead of three, and
+     keeps this file the single source of truth for what each state
+     looks like (no parallel copy inside an `@media (prefers-color-
+     scheme)` block to keep in sync).
+   ================================================================ */
 
 :root {
-  --color-bg: #f5f5f5;
+  /* Layout/surface */
+  --color-bg: #eef0f2;
+  --color-panel: #ffffff;
   --color-surface: #ffffff;
-  --color-text: #1a1a1a;
-  --color-text-muted: #5a5a5a;
-  --color-primary: #2b6cb0;
-  --color-primary-contrast: #ffffff;
-  --color-border: #d0d0d0;
-  --color-focus-ring: #2b6cb0;
+  --color-border: #d0d3d6;
 
+  /* Text */
+  --color-text: #1a1a1a;
+  --color-text-secondary: #55595e;
+
+  /* Accent + focus */
+  --color-accent: #2b6cb0;
+  --color-accent-contrast: #ffffff;
+  --color-focus: #1a56db;
+
+  /* Status — never the only cue; always paired with an icon/label
+     (see .status-chip in the Settings dialog for the pattern). */
+  --color-success: #1f7a3d;
+  --color-warning: #8a5a00;
+  --color-error: #b3261e;
+
+  /* Sudoku board tokens (used starting Phase 4). Selection/relation/
+     match tints below are deliberately soft — Phase 4 must pair each
+     with a structural cue (a ring/border, not color alone) so the
+     board reads correctly for color-blind and low-vision players. */
+  --color-cell-selected: #cfe3f7;
+  --color-cell-related: #e3e8ec;
+  --color-cell-match: #fde68a;
+  --color-clue-fixed: #111827;
+  --color-entry-player: #1e5a92;
+  --color-notes: #6b7280;
+
+  --shadow-color: rgba(15, 23, 42, 0.14);
+
+  /* Spacing / shape / type — theme-independent */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 1rem;
   --space-4: 1.5rem;
   --space-5: 2.5rem;
 
+  --radius-sm: 0.35rem;
   --radius-md: 0.5rem;
+  --radius-lg: 1rem;
+
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 
   --touch-target-min: 44px;
 }
 
-[data-theme-pack="cyber"],
-[data-theme-pack="woodgrain"],
-[data-theme-pack="paper"] {
-  /* Phase 7: theme pack overrides */
-}
+/* ---- Light pack, dark mode (also the generic dark-mode fallback) ---- */
 
-[data-color-mode="dark"] {
+[data-mode="dark"] {
   --color-bg: #121212;
-  --color-surface: #1e1e1e;
-  --color-text: #f0f0f0;
-  --color-text-muted: #b0b0b0;
+  --color-panel: #1c1c1e;
+  --color-surface: #232326;
   --color-border: #3a3a3a;
+
+  --color-text: #f0f0f0;
+  --color-text-secondary: #b0b0b0;
+
+  --color-accent: #5b9bd5;
+  --color-accent-contrast: #06202f;
+  --color-focus: #7db4e8;
+
+  --color-success: #3ddc84;
+  --color-warning: #f0b429;
+  --color-error: #f28b82;
+
+  --color-cell-selected: #26415a;
+  --color-cell-related: #232326;
+  --color-cell-match: #4a3b12;
+  --color-clue-fixed: #f5f5f5;
+  --color-entry-player: #7db4e8;
+  --color-notes: #9aa0a6;
+
+  --shadow-color: rgba(0, 0, 0, 0.55);
 }
 
-@media (prefers-color-scheme: dark) {
-  [data-color-mode="system"] {
-    --color-bg: #121212;
-    --color-surface: #1e1e1e;
-    --color-text: #f0f0f0;
-    --color-text-muted: #b0b0b0;
-    --color-border: #3a3a3a;
-  }
+/* ---- Cyber: dark technical interface, restrained neon accents ---- */
+
+[data-theme="cyber"][data-mode="light"] {
+  --color-bg: #eef3f5;
+  --color-panel: #ffffff;
+  --color-surface: #ffffff;
+  --color-border: #c8d3d7;
+
+  --color-text: #0b1720;
+  --color-text-secondary: #45565f;
+
+  --color-accent: #066a85;
+  --color-accent-contrast: #ffffff;
+  --color-focus: #0e7490;
+
+  --color-success: #067a53;
+  --color-warning: #92620a;
+  --color-error: #b3261e;
+
+  --color-cell-selected: #d6eef2;
+  --color-cell-related: #e3ecee;
+  --color-cell-match: #f3e3ee;
+  --color-clue-fixed: #0b1720;
+  --color-entry-player: #0b5d75;
+  --color-notes: #6b7d84;
+
+  --shadow-color: rgba(11, 23, 32, 0.14);
+}
+
+[data-theme="cyber"][data-mode="dark"] {
+  --color-bg: #0a0e14;
+  --color-panel: #121a24;
+  --color-surface: #1a2430;
+  --color-border: #24313d;
+
+  --color-text: #e6f1f5;
+  --color-text-secondary: #8fa3ad;
+
+  --color-accent: #22d3ee;
+  --color-accent-contrast: #04141a;
+  --color-focus: #67e8f9;
+
+  --color-success: #34d399;
+  --color-warning: #fbbf24;
+  --color-error: #f87171;
+
+  --color-cell-selected: #113a44;
+  --color-cell-related: #16202a;
+  --color-cell-match: #341530;
+  --color-clue-fixed: #dff6fb;
+  --color-entry-player: #67e8f9;
+  --color-notes: #8199a3;
+
+  --shadow-color: rgba(0, 0, 0, 0.6);
+}
+
+/* ---- Woodgrain: warm natural browns (CSS gradients, no images) ---- */
+
+[data-theme="woodgrain"][data-mode="light"] {
+  --color-bg: linear-gradient(160deg, #e9d9c2 0%, #dfc7a1 50%, #e3cfae 100%);
+  --color-panel: linear-gradient(180deg, #f3e6d2, #ead9bd);
+  --color-surface: linear-gradient(160deg, #fbf2e3, #f0e0c4);
+  --color-border: #b98f5e;
+
+  --color-text: #3b2412;
+  --color-text-secondary: #6b4c30;
+
+  --color-accent: #6b3f16;
+  --color-accent-contrast: #fdf6ec;
+  --color-focus: #6b3f16;
+
+  --color-success: #3f6b28;
+  --color-warning: #8a5205;
+  --color-error: #8f2c1a;
+
+  --color-cell-selected: #f0dcb8;
+  --color-cell-related: #eddec0;
+  --color-cell-match: #e0b975;
+  --color-clue-fixed: #2a1a0d;
+  --color-entry-player: #6b3f16;
+  --color-notes: #7a6142;
+
+  --shadow-color: rgba(59, 36, 18, 0.22);
+}
+
+[data-theme="woodgrain"][data-mode="dark"] {
+  --color-bg: linear-gradient(160deg, #2b1c10 0%, #201409 60%, #241708 100%);
+  --color-panel: linear-gradient(180deg, #34220f, #281a0b);
+  --color-surface: linear-gradient(160deg, #3d2814, #2c1c0e);
+  --color-border: #5a3f22;
+
+  --color-text: #f1e3cd;
+  --color-text-secondary: #c9ac85;
+
+  --color-accent: #d99a4e;
+  --color-accent-contrast: #241407;
+  --color-focus: #e7b56d;
+
+  --color-success: #7fbf5a;
+  --color-warning: #e0a63c;
+  --color-error: #e2695a;
+
+  --color-cell-selected: #4a3419;
+  --color-cell-related: #3a2814;
+  --color-cell-match: #5a4014;
+  --color-clue-fixed: #fbf1df;
+  --color-entry-player: #e7b56d;
+  --color-notes: #a58f6c;
+
+  --shadow-color: rgba(0, 0, 0, 0.55);
+}
+
+/* ---- Paper: off-white tactile paper (CSS gradients, no images) ---- */
+
+[data-theme="paper"][data-mode="light"] {
+  --color-bg: linear-gradient(160deg, #faf7f0 0%, #f3ecdd 100%);
+  --color-panel: linear-gradient(180deg, #fffdf8, #f7f1e4);
+  --color-surface: linear-gradient(160deg, #fffefb, #f3ecdd);
+  --color-border: #d8cfba;
+
+  --color-text: #2e2a22;
+  --color-text-secondary: #6b6355;
+
+  --color-accent: #a1462f;
+  --color-accent-contrast: #fffaf0;
+  --color-focus: #8a3320;
+
+  --color-success: #2e6b3a;
+  --color-warning: #8a5a08;
+  --color-error: #8f2c1a;
+
+  --color-cell-selected: #f0e6d0;
+  --color-cell-related: #f7f1e4;
+  --color-cell-match: #e8d9b0;
+  --color-clue-fixed: #201c16;
+  --color-entry-player: #8a3320;
+  --color-notes: #736b58;
+
+  --shadow-color: rgba(46, 42, 34, 0.16);
+}
+
+[data-theme="paper"][data-mode="dark"] {
+  --color-bg: linear-gradient(160deg, #2a2823 0%, #201e1a 100%);
+  --color-panel: linear-gradient(180deg, #34322c, #282622);
+  --color-surface: linear-gradient(160deg, #3a3830, #2c2a25);
+  --color-border: #4a473d;
+
+  --color-text: #efe9db;
+  --color-text-secondary: #b7ae9b;
+
+  --color-accent: #d97b5c;
+  --color-accent-contrast: #241a14;
+  --color-focus: #e79274;
+
+  --color-success: #7fbf5a;
+  --color-warning: #e0a63c;
+  --color-error: #e2695a;
+
+  --color-cell-selected: #453f31;
+  --color-cell-related: #34322b;
+  --color-cell-match: #4d4530;
+  --color-clue-fixed: #f7f1e2;
+  --color-entry-player: #f0a688;
+  --color-notes: #9c9484;
+
+  --shadow-color: rgba(0, 0, 0, 0.5);
 }
 
 /* ---------- Motion ---------- */
@@ -91,8 +316,16 @@ button {
 /* ---------- Focus states ---------- */
 
 :focus-visible {
-  outline: 3px solid var(--color-focus-ring);
+  outline: 3px solid var(--color-focus);
   outline-offset: 2px;
+}
+
+/* ---------- App frame ---------- */
+
+#app {
+  min-height: 100dvh;
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 /* ---------- Screens ---------- */
@@ -104,8 +337,12 @@ button {
   justify-content: center;
   gap: var(--space-3);
   min-height: 100dvh;
-  padding: var(--space-4) var(--space-3);
+  padding-top: max(var(--space-4), env(safe-area-inset-top));
+  padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
+  padding-left: max(var(--space-3), env(safe-area-inset-left));
+  padding-right: max(var(--space-3), env(safe-area-inset-right));
   text-align: center;
+  transition: background-color 0.2s ease;
 }
 
 .screen[hidden] {
@@ -119,7 +356,7 @@ button {
 }
 
 .brand span {
-  color: var(--color-primary);
+  color: var(--color-accent);
 }
 
 .brand--compact {
@@ -127,7 +364,7 @@ button {
 }
 
 .start-prompt {
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   margin: 0;
 }
 
@@ -169,16 +406,17 @@ button {
 .menu-nav button {
   min-height: var(--touch-target-min);
   padding: var(--space-2) var(--space-3);
-  background: var(--color-primary);
-  color: var(--color-primary-contrast);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .menu-nav button:disabled {
   background: var(--color-border);
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   cursor: not-allowed;
 }
 
@@ -191,6 +429,202 @@ button {
   margin: 0 auto;
 }
 
+/* ---------- Shared buttons (Settings dialog) ---------- */
+
+.btn-primary,
+.btn-secondary {
+  min-height: var(--touch-target-min);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.btn-primary {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  border: 1px solid var(--color-accent);
+}
+
+.btn-secondary {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+
+/* ---------- Settings dialog ---------- */
+
+.settings-dialog {
+  width: min(30rem, 92vw);
+  max-height: min(85dvh, 44rem);
+  overflow-y: auto;
+  border: none;
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  margin: auto;
+  background: var(--color-panel);
+  color: var(--color-text);
+  box-shadow: 0 4px 12px var(--shadow-color), 0 24px 48px var(--shadow-color);
+}
+
+.settings-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.settings-form h2 {
+  margin-top: 0;
+}
+
+.settings-group {
+  border: 0;
+  padding: 0;
+  margin: 0 0 var(--space-4);
+}
+
+.settings-group legend {
+  font-weight: 700;
+  padding: 0;
+  margin-bottom: var(--space-2);
+}
+
+.settings-group .option-tile + .option-tile {
+  margin-top: var(--space-2);
+}
+
+.settings-hint {
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  min-height: 1.2em;
+}
+
+.settings-subheading {
+  font-size: 1rem;
+  margin: 0 0 var(--space-2);
+}
+
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+/* ---- Option tiles (theme/mode radio choices) ---- */
+
+.option-tile {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--touch-target-min);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  background: var(--color-panel);
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.option-tile input[type="radio"] {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+/* Progressive enhancement only — the native radio dot + accent-color
+   above already communicates selection without :has() support. */
+.option-tile:has(input:checked) {
+  border-color: var(--color-accent);
+  background: var(--color-surface);
+  font-weight: 600;
+}
+
+/* ---------- Appearance preview ---------- */
+
+.preview-swatches {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+
+.preview-swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+}
+
+.preview-swatch--selected {
+  background: var(--color-cell-selected);
+}
+
+.preview-swatch--related {
+  background: var(--color-cell-related);
+}
+
+.preview-swatch--match {
+  background: var(--color-cell-match);
+}
+
+.preview-digit {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-entry-player);
+}
+
+.preview-digit--fixed {
+  color: var(--color-clue-fixed);
+  font-weight: 700;
+}
+
+.preview-notes {
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  color: var(--color-notes);
+}
+
+.preview-swatch small {
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+}
+
+.preview-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+/* Status is never color-only: each chip pairs a color with an icon
+   glyph, a text label, and its own outline shape. */
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid currentColor;
+}
+
+.status-chip--success {
+  color: var(--color-success);
+}
+
+.status-chip--warning {
+  color: var(--color-warning);
+}
+
+.status-chip--error {
+  color: var(--color-error);
+}
+
 /* ---------- Desktop ---------- */
 
 @media (min-width: 768px) {
@@ -200,5 +634,20 @@ button {
 
   .menu-nav {
     max-width: 24rem;
+  }
+
+  #app {
+    max-width: 60rem;
+    margin: var(--space-5) auto;
+    min-height: calc(100dvh - var(--space-5) * 2);
+    background: var(--color-panel);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 1px 3px var(--shadow-color), 0 12px 32px var(--shadow-color);
+    overflow: hidden;
+    transition: background-color 0.2s ease;
+  }
+
+  .screen {
+    min-height: calc(100dvh - var(--space-5) * 2);
   }
 }

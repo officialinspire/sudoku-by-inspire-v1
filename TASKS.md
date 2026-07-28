@@ -32,7 +32,40 @@ for the amendment).
 - [x] Base `styles.css` mobile-first layout + CSS custom-property scaffold
       for theme packs/color modes (empty palettes, wired but not themed yet).
 
-## Phase 2 — Sudoku Engine (Generator + Solver)
+## Phase 2 — Theme System & Responsive Design ✅ (2026-07-28)
+
+- [x] Design-token architecture in `styles.css`: every color a component
+      needs (background, panel, raised surface, primary/secondary text,
+      border, accent, accent contrast, focus, success, warning, error,
+      selected/related/matching-value cells, fixed clues, player entries,
+      notes, shadow) expressed as a custom property, never hard-coded in
+      a component rule.
+- [x] 4 theme packs (Cyber, Woodgrain, Paper, Light) × 2 concrete color
+      modes (dark/light) = 8 full palettes, applied via `data-theme` and
+      `data-mode` on `<html>`. Woodgrain and Paper use CSS gradients only
+      (no images). All text/background pairs verified against WCAG AA
+      contrast with a scripted check (see Verification below).
+- [x] `js/theme.js` — versioned localStorage persistence
+      (`sudoku-inspire:appearance`), safe fallback to defaults on
+      missing/corrupt/old-schema/invalid data, "System" mode resolved
+      live via `matchMedia('(prefers-color-scheme: dark)')` with a
+      change listener so the OS can flip the app's mode without a reload.
+- [x] Anti-flash inline script in `index.html <head>` applies the saved
+      theme/mode before first paint.
+- [x] Settings dialog (native `<dialog>`) with theme/mode radio groups
+      (live preview — applies immediately on change), a mini swatch
+      preview of board-state tokens, a status-chip preview (success/
+      warning/error, each paired with an icon + label, never color
+      alone), and a Reset Appearance action.
+- [x] Responsive app frame: full-bleed on mobile, centered card with
+      panel background/shadow on desktop (≥768px); safe-area insets on
+      all screen edges and the intro Skip button.
+- [x] Touch targets ≥44px on menu buttons, dialog buttons, and option
+      tiles.
+- [x] Reduced-motion respected (existing global transition-collapse
+      rule extended to the new theme-switch transitions).
+
+## Phase 3 — Sudoku Engine (Generator + Solver)
 
 - [ ] `js/sudoku/board-model.js` — grid state representation, givens vs.
       user entries, notes storage.
@@ -42,16 +75,18 @@ for the amendment).
 - [ ] Unit-style manual test harness (console-driven or simple assertions)
       confirming generated puzzles solve uniquely at each difficulty.
 
-## Phase 3 — Board Rendering (DOM + CSS Grid)
+## Phase 4 — Board Rendering (DOM + CSS Grid)
 
 - [ ] `js/ui/board-view.js` — renders the 9x9 grid via DOM/CSS Grid, 3x3
       box borders, given vs. editable cell styling, selected/peer/error
-      highlighting.
+      highlighting (using the `--color-cell-*`/`--color-clue-fixed`/
+      `--color-entry-player`/`--color-notes` tokens from Phase 2 — pair
+      each state with a structural cue, not color alone).
 - [ ] Number pad UI + notes-mode toggle UI.
 - [ ] Wire board-view to board-model (render reflects model state, no
       duplicated state).
 
-## Phase 4 — Input Controls (Keyboard, Mouse, Touch)
+## Phase 5 — Input Controls (Keyboard, Mouse, Touch)
 
 - [ ] `js/ui/controls.js` — pointer (mouse/touch) selection + digit entry
       via number pad.
@@ -59,29 +94,21 @@ for the amendment).
       delete/backspace, escape).
 - [ ] Touch target sizing/spacing verified on small viewports.
 
-## Phase 5 — Persistence: Autosave, Continue, Settings
+## Phase 6 — Persistence: Autosave, Continue, Settings
 
 - [ ] `js/storage.js` — thin localStorage wrapper (namespaced keys,
-      versioned schema for future-proofing).
+      versioned schema for future-proofing, same safe-fallback pattern
+      as `js/theme.js`).
 - [ ] Autosave in-progress game state (debounced).
 - [ ] "Continue Game" wiring from main menu.
-- [ ] Settings persistence (theme, color mode, audio, input prefs).
+- [ ] Remaining settings persistence (audio, input prefs) alongside the
+      appearance settings already persisted in Phase 2.
 
-## Phase 6 — Statistics, Best Times, High Scores
+## Phase 7 — Statistics, Best Times, High Scores
 
 - [ ] Track games played/won, streaks, per-difficulty best time.
 - [ ] Score formula + high-score tracking per difficulty.
 - [ ] Statistics screen UI.
-
-## Phase 7 — Themes & Color Modes
-
-- [ ] Implement 4 theme packs (Cyber, Woodgrain, Paper, Light) as CSS
-      custom-property sets.
-- [ ] Implement 3 color modes (System, Dark, Light) layered independently
-      of theme pack.
-- [ ] `js/theme.js` — applies + persists theme/mode, respects `prefers-
-      color-scheme` for System.
-- [ ] Contrast check across all 12 theme×mode combinations.
 
 ## Phase 8 — Audio (Music + SFX)
 
