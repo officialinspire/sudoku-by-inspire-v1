@@ -19,6 +19,8 @@ import { initCompletionDialog } from './js/ui/completion-dialog.js';
 import { initStatisticsScreen } from './js/ui/statistics-screen.js';
 import { initHighScoresScreen } from './js/ui/high-scores-screen.js';
 import { initAudioBindings } from './js/ui/audio-bindings.js';
+import { initConnectionStatus } from './js/ui/connection-status.js';
+import { initServiceWorker } from './js/sw-register.js';
 
 initTheme();
 initGameSettings();
@@ -38,6 +40,8 @@ initCompletionDialog();
 initStatisticsScreen();
 initHighScoresScreen();
 initAudioBindings();
+initConnectionStatus();
+initServiceWorker();
 
 // initAudioEngine() must run synchronously inside this same gesture
 // handler, not just "sometime after" it — browsers only treat an

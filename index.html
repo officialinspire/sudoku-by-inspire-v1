@@ -40,11 +40,20 @@
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="A polished, offline-first Sudoku web app by INSPIRE.">
+  <meta name="theme-color" content="#2b6cb0">
   <title>Sudoku by Inspire</title>
+  <link rel="manifest" href="./manifest.webmanifest">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <div id="app">
+
+    <p id="connection-status" class="connection-status" role="status" aria-live="polite" hidden></p>
+
+    <div id="update-banner" class="update-banner" hidden>
+      <p>An updated version is available.</p>
+      <button type="button" id="btn-update-refresh" class="btn-primary">Refresh</button>
+    </div>
 
     <section id="screen-start" class="screen is-active" tabindex="-1" aria-label="Start screen">
       <h1 class="brand">Sudoku <span>by Inspire</span></h1>
@@ -275,6 +284,18 @@
           <span class="status-chip status-chip--warning">&#9888; Warning</span>
           <span class="status-chip status-chip--error">&cross; Error</span>
         </div>
+      </section>
+
+      <section class="settings-group" aria-label="Privacy">
+        <h3 class="settings-subheading">Your data</h3>
+        <p class="settings-hint">
+          Everything — saved games, statistics, high scores, and settings —
+          stays on this device, in your browser's local storage. Nothing is
+          sent to a server, there's no account, and the app works fully
+          offline once loaded. Clearing your browser's site data for this
+          app removes it permanently; use Clear Data below for a
+          controlled reset instead.
+        </p>
       </section>
 
       <div class="settings-actions">

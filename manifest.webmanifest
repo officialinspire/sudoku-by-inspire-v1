@@ -1,0 +1,13 @@
+{
+  "id": "./",
+  "name": "Sudoku by Inspire",
+  "short_name": "Sudoku",
+  "description": "A mobile-first, offline-first Sudoku game with theme packs, statistics, high scores, and full keyboard, mouse, and touch support. No account, no server — everything stays on your device.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#2b6cb0",
+  "background_color": "#eef0f2",
+  "icons": []
+}

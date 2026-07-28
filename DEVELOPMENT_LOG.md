@@ -5,6 +5,206 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-28 — Phase 10: Offline-First PWA Behavior
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+This prompt's own "Phase 9" (offline PWA) is `TASKS.md`'s Phase 10
+(Offline / PWA) — matches it directly, no renumbering needed.
+
+**What was built:**
+
+- **`manifest.webmanifest`** — `name`, `short_name`, `description`,
+  `start_url`/`scope` both relative (`"./index.html"` / `"./"`, resolved
+  against the manifest's own URL, so it stays correct at a GitHub Pages
+  repository subpath the same way every other path in this repo already
+  is), `display: "standalone"`, `theme_color`/`background_color` matched
+  to the Light theme pack's `--color-accent`/`--color-bg` (the default
+  pack on first load), and `"icons": []` — deliberately empty, since no
+  icon files exist yet (see below), rather than pointing at files that
+  would 404.
+- **`icons/README.md`** — documents the three PNGs a real install needs
+  (192×192, 512×512, and a *separate* 512×512 maskable icon — reusing an
+  edge-to-edge icon as "maskable" gets its content clipped by the
+  platform's mask, which is why it has to be its own file with padding),
+  and the exact steps to wire them into `manifest.webmanifest` and
+  `sw.js` once supplied.
+- **`sw.js`** — a versioned cache (`inspire-sudoku-shell-v1`) with:
+  - `install`: precaches a small, explicit **mandatory** app-shell list
+    (`./`, `./index.html`, `./index.js`, `./styles.css`,
+    `./manifest.webmanifest`) via `cache.addAll()` — deliberately *not*
+    every `js/**.js` module by hand, since that list would silently drift
+    out of date as future phases add files; then, separately, attempts
+    each **optional** root asset (`inspiresoftwareintro.mp4`, `logo.png`,
+    `background-music.mp3`) individually with its own try/catch, so one
+    404 (currently `background-music.mp3` — it doesn't exist, same as
+    Phase 9) can't take the others down or fail the whole installation
+    the way a single `cache.addAll()` covering all of them would.
+  - `activate`: deletes every cache whose name isn't the current
+    `CACHE_NAME`, then `clients.claim()`.
+  - `fetch`: ignores non-GET and cross-origin requests entirely (never
+    calls `respondWith()` for them, leaving the browser's normal handling
+    untouched); navigations go network-first with a cached-`index.html`
+    fallback (so an online visitor always gets current HTML, offline
+    still boots); every other same-origin GET goes cache-first, filling
+    the cache from the network on a miss — this is what makes the full
+    `js/**` module graph end up cached after one real visit, without
+    hand-listing it.
+  - Cache-version bumps are entirely manual (edit the `CACHE_NAME`
+    suffix) — documented at the top of the file, along with the
+    devtools-based hard-reset path (Application → Service Workers →
+    Unregister / Clear site data) for local development.
+- **`js/sw-register.js`** — feature-detected (`'serviceWorker' in
+  navigator`), registers after the `load` event with `{ scope: './' }`,
+  and a `.catch()` that treats registration failure as "no offline
+  caching this session," never a broken app. Also wires a small
+  "Update available" banner: when `updatefound` fires and the *new*
+  worker reaches `'installed'` while `navigator.serviceWorker.controller`
+  is already set (i.e. this is a genuine update, not the very first
+  install), the banner appears with a Refresh button that just calls
+  `location.reload()`.
+- **`js/ui/connection-status.js`** — a small `aria-live="polite"` status
+  line, hidden by default, that only appears when `!navigator.onLine`
+  (via the `online`/`offline` window events) — quiet when everything's
+  normal, visible only when it's actually useful to know.
+- **Settings dialog**: a new "Your data" section explaining, in plain
+  language, that everything stays local (no account, no server) and
+  pointing at Clear Data for a controlled reset versus clearing browser
+  site data entirely.
+- New CSS: `.connection-status` and `.update-banner`, both small fixed-
+  position pills. `.connection-status` deliberately reuses the same
+  "colored text + colored border on a neutral panel background" pattern
+  already established by `.status-chip--warning`, rather than a solid
+  `--color-warning` fill with white text — checked the contrast math for
+  `--color-warning`-on-`--color-panel` across all 4 theme packs × their
+  light/dark variants (8 combinations) and every one landed between 5.19
+  and 10.49:1, comfortably above WCAG AA's 4.5:1 for normal text; a
+  couple of the theme packs' `--color-warning` values are light amber
+  tones meant to be read as foreground text, and would have failed
+  contrast badly as a background fill under white text.
+
+**Explanation (manifest vs. service worker, install/activate/fetch
+lifecycle, cache versioning, precache failure behavior, navigation
+fallback, relative paths):**
+
+- *Manifest vs. service worker*: the web manifest is a static, declarative
+  JSON file — the browser reads it to decide things like the app's name,
+  icon, and start URL *if* the user installs it to their home screen/app
+  list. It does nothing for offline behavior by itself. The service
+  worker is the opposite: an actual background script the browser runs
+  independently of any open tab, and it's the only piece that can
+  intercept network requests and decide to serve a cached response
+  instead — offline support is 100% the service worker's job, not the
+  manifest's.
+- *Install/activate/fetch lifecycle*: `install` fires once, the moment
+  the browser sees a new-or-changed `sw.js`; this is where the mandatory
+  and optional precaching above happens. `activate` fires once the new
+  worker is about to start controlling pages; this is the correct (and
+  really only sanctioned) place to clean up old caches, since at that
+  point nothing is still relying on them. `fetch` fires on every network
+  request the page makes for as long as the worker is active/controlling
+  it, and is the only handler that can actually change what a request
+  returns (via `event.respondWith()`).
+- *Cache versioning*: `CACHE_NAME` is a plain string constant with a
+  version suffix — nothing hashes file contents or bumps it
+  automatically. That's a deliberate, simple, always-correct-by-
+  construction choice for a project with no build step: the developer
+  who changes a core file is the one person who reliably knows a bump is
+  needed, and the `activate` handler's "delete anything that isn't the
+  current name" logic means bumping is the *entire* update mechanism —
+  no separate cleanup step to remember.
+- *Precache failure behavior*: `cache.addAll()` is atomic — if any single
+  URL in the list 404s or errors, the *whole* call rejects and `install`
+  fails, meaning this service worker never activates at all (the browser
+  falls back to whatever was controlling the page before, or none). That
+  behavior is exactly right for the mandatory app-shell list (a missing
+  core file means something is genuinely broken), but exactly wrong for
+  optional assets — which is why they're precached in a separate loop
+  with per-file `try`/`catch`, so `background-music.mp3` being absent
+  can't drag `inspiresoftwareintro.mp4` and `logo.png` down with it, and
+  can't fail installation at all.
+- *Navigation fallback*: a "navigation" is specifically a request for a
+  new document (typing the URL, hitting reload, following a link) as
+  opposed to a request for a script/stylesheet/image a page already
+  makes on its own. This app has exactly one real page (`index.html`) —
+  every screen is a client-side show/hide, not a real navigation — so
+  "app-shell fallback" here just means: if a navigation request fails
+  (offline), serve the cached `index.html` instead of a browser error
+  page, and everything downstream (its `<script type="module">` import,
+  which pulls in the already-cached `js/**` graph) continues to work from
+  there.
+- *Why relative paths matter*: `start_url`/`scope` in the manifest and
+  every `fetch`/`cache.addAll()` path in `sw.js` are written as `./...`,
+  resolved against the file's own location rather than the site's domain
+  root. Hard-coding `/index.html` would work fine at
+  `https://user.github.io/` but break at
+  `https://user.github.io/sudoku-by-inspire-v1/` (GitHub Pages' normal
+  project-site URL shape) — the browser would look for
+  `/index.html` at the domain root, not inside the repo's subpath. This
+  is the exact same constraint CLAUDE.md already states for every other
+  asset reference in the app; `sw.js` and the manifest just extend it to
+  service-worker/PWA-specific paths too.
+
+**Checks run:**
+
+- `node --check` on every new/modified JS file — all clean; `styles.css`
+  brace-balance check; `manifest.webmanifest` parsed as valid JSON.
+- `npm test`: 163/163 passing, unchanged (this phase's code is
+  browser/service-worker-runtime behavior with no pure logic to unit-test
+  in Node — verified via Playwright instead, per the prompt's own test
+  list).
+- Playwright verification, covering every scenario the prompt named:
+  - **First online visit**: manifest linked with a relative href, service
+    worker reaches `'activated'`, exactly one clearly-named cache exists,
+    all four mandatory app-shell files are in it, both existing optional
+    root assets (`logo.png`, the intro video) are in it, the missing
+    optional `background-music.mp3` correctly is *not*, no console/page
+    errors.
+  - **Reload**: online reload lands cleanly back on the Start screen, no
+    errors.
+  - **Offline reload**: after one online visit + a bit of navigation (to
+    let the fetch handler runtime-cache the JS module graph),
+    `context.setOffline(true)` + reload still renders the Start screen
+    and can still dynamically `import()` an already-visited module —
+    no errors.
+  - **Service-worker update after cache-version change**: bumped
+    `CACHE_NAME` in a scratch copy of `sw.js` (exactly the developer
+    workflow documented at the top of the real file), triggered
+    `registration.update()`, confirmed the "Update available" banner
+    appeared, clicked Refresh, reloaded, and confirmed exactly one
+    cache remained afterward and it was the *new* version — the old one
+    was cleaned up automatically.
+  - **Missing optional asset**: covered by the first-visit check above
+    (`background-music.mp3` absent, install still succeeds, no errors).
+  - **GitHub Pages-style subpath**: every one of the above tests ran
+    against a local static server mounting the app under a
+    `/sudoku-by-inspire-v1/` prefix (mimicking a GitHub Pages project
+    site), not the domain root — manifest, service worker registration,
+    and every cached path all resolved correctly.
+  - Note: real browser devtools "Network: Offline" throttling wasn't
+    available to drive from this sandboxed environment; `context.
+    setOffline(true)` via Playwright (which actually blocks the
+    network layer, not just simulates it) is the practical equivalent
+    used instead, and exercises the same service-worker fetch-
+    interception code path devtools throttling would.
+
+**Remaining limitations:**
+
+- No icon files exist yet (`icons/README.md` documents exactly what's
+  needed); until they're supplied, the manifest's `"icons": []` means the
+  app is installable but without a custom icon — some platforms may
+  decline to show an install prompt at all without one.
+- Background music still isn't a real file in this repo (correctly, per
+  CLAUDE.md); the precache/offline behavior around its absence is
+  verified, but there's nothing to actually hear yet.
+- The update banner's Refresh button reloads the *current* tab; other
+  open tabs on an old version won't be prompted until they're
+  interacted with or reloaded themselves — acceptable for a small,
+  single-tab-typical app, but worth knowing if that assumption ever
+  stops holding.
+
+---
+
 ## 2026-07-28 — Phase 9: Audio, Haptics, and User-Gesture Initialization
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`

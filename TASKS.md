@@ -279,14 +279,29 @@ real device, not fully coverable by automation):
 - [x] Audio/haptics controls added to the Settings dialog (music
       enable+volume, SFX enable+volume, vibration enable).
 
-## Phase 10 — Offline / PWA
+## Phase 10 — Offline / PWA ✅ (2026-07-28)
 
-- [ ] `manifest.webmanifest` with relative `start_url`/`scope` (subpath-safe).
-- [ ] App icons (sizes per manifest spec).
-- [ ] `sw.js` service worker: install/activate/fetch caching strategy for
-      all core assets; versioned cache with safe upgrade path.
-- [ ] `js/sw-register.js` registration with relative scope.
-- [ ] Verified offline load via devtools network throttling to "Offline."
+- [x] `manifest.webmanifest` with relative `start_url`/`scope` (subpath-safe).
+- [x] `icons/README.md` documents the 192×192, 512×512, and maskable
+      512×512 PNGs needed — no icon files exist yet, so the manifest
+      correctly declares `"icons": []` rather than pointing at anything
+      fabricated (see CLAUDE.md's asset policy).
+- [x] `sw.js` service worker: versioned cache (`inspire-sudoku-shell-vN`),
+      install/activate/fetch caching strategy — mandatory app-shell
+      precache, best-effort optional-root-asset precache (missing
+      `background-music.mp3` doesn't fail installation), cache-first
+      runtime fill for same-origin static assets, network-first-with-
+      cache-fallback for navigations, old-cache cleanup on activation.
+- [x] `js/sw-register.js` — safe, feature-detected registration with
+      relative scope, plus an in-page "Update available" banner.
+- [x] Online/offline status indicator (`js/ui/connection-status.js`).
+- [x] Local-data privacy explanation added to the Settings dialog.
+- [x] Verified offline reload, a service-worker update after a
+      cache-version bump, a missing optional asset, and GitHub
+      Pages-style subpath hosting — all via Playwright against a local
+      static server (devtools network throttling wasn't available in
+      this environment; the automated equivalents cover the same
+      scenarios — see DEVELOPMENT_LOG.md for details).
 
 ## Phase 11 — Accessibility Polish
 
