@@ -1,4 +1,6 @@
-const STORAGE_KEY = 'sudoku-inspire:appearance';
+import { loadJSON, saveJSON } from './storage.js';
+
+const STORAGE_KEY = 'inspireSudoku:v1:appearance';
 const SCHEMA_VERSION = 1;
 
 export const THEME_PACKS = ['cyber', 'woodgrain', 'paper', 'light'];
@@ -12,45 +14,24 @@ const darkSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
 let preference = { ...DEFAULTS };
 const listeners = new Set();
 
+function isValidPreference(value) {
+  return (
+    value &&
+    value.version === SCHEMA_VERSION &&
+    THEME_PACKS.includes(value.theme) &&
+    COLOR_MODES.includes(value.mode)
+  );
+}
+
 function readStoredPreference() {
-  let raw;
-  try {
-    raw = localStorage.getItem(STORAGE_KEY);
-  } catch {
-    return { ...DEFAULTS };
-  }
-  if (!raw) return { ...DEFAULTS };
-
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return { ...DEFAULTS };
-  }
-
-  // Reject anything that isn't exactly the schema we expect — an old
-  // schema version, a hand-edited value, or corrupted storage all fall
-  // back to safe defaults rather than being partially trusted.
-  const isValid =
-    parsed &&
-    parsed.version === SCHEMA_VERSION &&
-    THEME_PACKS.includes(parsed.theme) &&
-    COLOR_MODES.includes(parsed.mode);
-
-  return isValid ? { theme: parsed.theme, mode: parsed.mode } : { ...DEFAULTS };
+  // An old schema version, a hand-edited value, or corrupted storage
+  // all fall back to safe defaults rather than being partially trusted.
+  const stored = loadJSON(STORAGE_KEY, { ...DEFAULTS, version: SCHEMA_VERSION }, isValidPreference);
+  return { theme: stored.theme, mode: stored.mode };
 }
 
 function persist() {
-  try {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ version: SCHEMA_VERSION, ...preference })
-    );
-  } catch {
-    // Storage unavailable (private browsing, quota exceeded, etc). The
-    // chosen appearance still works for the rest of this session — it
-    // just won't be remembered on reload.
-  }
+  saveJSON(STORAGE_KEY, { version: SCHEMA_VERSION, ...preference });
 }
 
 function effectiveMode() {

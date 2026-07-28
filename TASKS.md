@@ -238,21 +238,33 @@ real device, not fully coverable by automation):
       behavior to be exercisable/useful mid-game; this was a real gap
       found while testing, not part of the original plan.
 
-## Phase 7 — Persistence: Autosave, Continue, Settings
+## Phase 7 — Persistence: Autosave, Continue, Settings ✅ (2026-07-28)
 
-- [ ] `js/storage.js` — thin localStorage wrapper (namespaced keys,
+- [x] `js/storage.js` — thin localStorage wrapper (namespaced keys,
       versioned schema for future-proofing, same safe-fallback pattern
-      as `js/theme.js`).
-- [ ] Autosave in-progress game state (debounced).
-- [ ] "Continue Game" wiring from main menu.
-- [ ] Remaining settings persistence (audio, input prefs) alongside the
-      appearance settings already persisted in Phase 2.
+      as `js/theme.js`). `theme.js` and `game-settings.js` migrated onto it
+      (keys renamed to `inspireSudoku:v1:appearance` /
+      `inspireSudoku:v1:gameplaySettings`).
+- [x] Autosave in-progress game state (debounced 500ms, plus a `pagehide`
+      flush) via `js/active-game-store.js` + `js/game-persistence.js`.
+- [x] "Continue Game" wiring from main menu — always resumes into the
+      paused overlay, never straight into play.
+- [x] New Game confirmation dialog before replacing an unfinished game.
+- [x] Clear Data confirmation, with scope clearly explained (active game +
+      statistics + high scores; leaves appearance/gameplay settings alone).
+- [ ] Audio/input-pref persistence — deferred to Phase 9 (`js/audio.js`
+      doesn't exist yet, so there are no audio prefs to persist).
 
-## Phase 8 — Statistics, Best Times, High Scores
+## Phase 8 — Statistics, Best Times, High Scores ✅ (2026-07-28)
 
-- [ ] Track games played/won, streaks, per-difficulty best time.
-- [ ] Score formula + high-score tracking per difficulty.
-- [ ] Statistics screen UI.
+- [x] Track games started/completed, completion rate, total/average/best
+      play time, current + best streak, total hints, total mistakes — per
+      difficulty (`js/statistics-store.js`).
+- [x] Centralized score formula (`js/scoring.js`): difficulty multiplier +
+      speed bonus − mistake/hint penalties, floored at 0.
+- [x] Top-10 high-score leaderboard per difficulty (`js/high-scores-store.js`).
+- [x] Statistics screen UI with a difficulty filter.
+- [x] High Scores screen UI with a difficulty filter.
 
 ## Phase 9 — Audio (Music + SFX)
 

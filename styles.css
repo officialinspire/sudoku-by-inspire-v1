@@ -896,6 +896,109 @@ button {
   margin-bottom: var(--space-2);
 }
 
+/* ---------- Statistics & High Scores screens ---------- */
+
+.difficulty-filter {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-2);
+  width: min(100%, 32rem);
+  margin: 0 auto;
+}
+
+.difficulty-filter-btn {
+  min-height: var(--touch-target-min);
+  padding: var(--space-2) var(--space-2);
+  font-size: 0.9rem;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.difficulty-filter-btn[aria-selected="true"] {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  border-color: var(--color-accent);
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-3);
+  width: min(100%, 32rem);
+  margin: 0 auto;
+  text-align: left;
+}
+
+.stats-item {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.stats-item dt {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+}
+
+.stats-item dd {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.highscores-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(100%, 32rem);
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.highscore-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.highscore-rank {
+  min-width: 2.25rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.highscore-score {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.highscore-detail {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.highscore-date {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
 /* ---------- Desktop ---------- */
 
 @media (min-width: 768px) {
@@ -905,6 +1008,10 @@ button {
 
   .menu-nav {
     max-width: 24rem;
+  }
+
+  .difficulty-filter {
+    grid-template-columns: repeat(4, 1fr);
   }
 
   #app {

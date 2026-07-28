@@ -1,4 +1,4 @@
-const SCREEN_IDS = ['start', 'intro', 'menu', 'game'];
+const SCREEN_IDS = ['start', 'intro', 'menu', 'game', 'statistics', 'highscores'];
 
 const screenElements = new Map(
   SCREEN_IDS.map((id) => [id, document.getElementById(`screen-${id}`)])

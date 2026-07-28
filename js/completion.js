@@ -1,27 +1,24 @@
 /**
- * Pure helpers for the completion dialog: a provisional score estimate
- * and the generated "share results" text. Both take a game-state
- * snapshot (as returned by getState()) plus the matching difficulty
- * config and return plain values — no DOM, so they're testable the same
- * way as the engine/generator/game-state modules.
+ * Pure helpers for the completion dialog: the score (via the
+ * centralized formula in js/scoring.js) and the generated "share
+ * results" text. Both take a game-state snapshot (as returned by
+ * getState()) plus the matching difficulty config and return plain
+ * values — no DOM, so they're testable the same way as the engine/
+ * generator/game-state modules.
  */
 
-const SCORE_BASE = 1000;
-const MISTAKE_PENALTY = 20;
-const HINT_PENALTY = 50;
+import { calculateScore } from './scoring.js';
 
-/**
- * v1 placeholder formula, not the final scoring system — Phase 7
- * (Statistics, Best Times, High Scores) owns that. Higher difficulty
- * scores a higher base; mistakes and hints each cost a fixed amount;
- * never negative. Kept here (not in game-state.js) because it's a
- * *derived* display value, never stored as part of the actual game
- * state.
- */
 export function estimateScore(state, difficultyConfig) {
-  const base = SCORE_BASE * difficultyConfig.scoreMultiplier;
-  const penalty = state.mistakes * MISTAKE_PENALTY + state.hintsUsed * HINT_PENALTY;
-  return Math.max(0, Math.round(base - penalty));
+  return calculateScore(
+    {
+      difficultyId: state.difficulty,
+      elapsedSeconds: state.elapsedSeconds,
+      mistakes: state.mistakes,
+      hintsUsed: state.hintsUsed,
+    },
+    difficultyConfig
+  );
 }
 
 export function formatElapsedTime(totalSeconds) {

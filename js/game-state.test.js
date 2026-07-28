@@ -5,18 +5,19 @@ import {
   getState,
   onStateChange,
   startGame,
+  restoreGame,
   selectCell,
   applyNumberInput,
   toggleNote,
   eraseSelectedCell,
   toggleNotesMode,
   useHint,
-  HINT_SCORE_PENALTY,
   MAX_HISTORY_SIZE,
   undo,
   moveSelection,
   pauseGame,
   resumeGame,
+  resetToIdle,
   suspendTimer,
   resumeTimer,
   getPeerIndices,
@@ -471,11 +472,6 @@ describe('useHint', () => {
     useHint();
     assert.equal(getState().status, 'complete');
   });
-
-  test('HINT_SCORE_PENALTY is a positive number available as scoring metadata', () => {
-    assert.equal(typeof HINT_SCORE_PENALTY, 'number');
-    assert.ok(HINT_SCORE_PENALTY > 0);
-  });
 });
 
 describe('timer', () => {
@@ -544,5 +540,90 @@ describe('timer', () => {
     const elapsedAtCompletion = getState().elapsedSeconds;
     clock.advance(60000);
     assert.equal(getState().elapsedSeconds, elapsedAtCompletion);
+  });
+});
+
+describe('restoreGame', () => {
+  function savedGameFixture(overrides = {}) {
+    const entries = new Array(81).fill(0);
+    entries[1] = solution[1];
+    const notes = new Array(81).fill(0);
+    notes[2] = 0b101; // digits 1 and 3
+    return {
+      puzzle: freshGameResult().puzzle,
+      solution: solution.slice(),
+      entries,
+      notes,
+      selectedIndex: 4,
+      difficulty: 'advanced',
+      elapsedSeconds: 250,
+      mistakes: 2,
+      hintsUsed: 1,
+      notesMode: true,
+      ...overrides,
+    };
+  }
+
+  test('restores every field and always resumes as paused', () => {
+    restoreGame(savedGameFixture(), { autoStartTimer: false });
+    const state = getState();
+    assert.equal(state.status, 'paused');
+    assert.equal(state.difficulty, 'advanced');
+    assert.equal(state.elapsedSeconds, 250);
+    assert.equal(state.mistakes, 2);
+    assert.equal(state.hintsUsed, 1);
+    assert.equal(state.selectedIndex, 4);
+    assert.equal(state.notesMode, true);
+    assert.equal(state.entries[1], solution[1]);
+    assert.equal(state.notes[2], 0b101);
+  });
+
+  test('restored state is independently mutable (a fresh copy, not a shared reference)', () => {
+    const saved = savedGameFixture();
+    restoreGame(saved, { autoStartTimer: false });
+    const before = saved.entries[1];
+    resumeGame();
+    selectCell(3);
+    applyNumberInput(solution[3]);
+    assert.equal(saved.entries[1], before); // the original fixture object is untouched
+  });
+
+  test('a restored game requires an explicit Resume before it accepts input', () => {
+    restoreGame(savedGameFixture(), { autoStartTimer: false }); // restores with selectedIndex: 4
+    selectCell(5); // rejected — game is 'paused', not 'playing'
+    applyNumberInput(1); // also rejected
+    const state = getState();
+    assert.equal(state.selectedIndex, 4); // unchanged from the restored save, not 5
+    assert.equal(state.entries[5], 0); // the input never applied
+  });
+
+  test('resumeGame after a restore continues the timer from the saved elapsedSeconds', () => {
+    const clock = fakeClock(0);
+    restoreGame(savedGameFixture({ elapsedSeconds: 100 }), { autoStartTimer: false, now: clock });
+    resumeGame();
+    clock.advance(5000);
+    assert.equal(getState().elapsedSeconds, 105);
+  });
+
+  test('undo history starts empty after a restore', () => {
+    restoreGame(savedGameFixture(), { autoStartTimer: false });
+    assert.deepEqual(getState().history, []);
+  });
+});
+
+describe('resetToIdle', () => {
+  test('drops the in-memory game back to idle with no puzzle', () => {
+    resetToIdle();
+    const state = getState();
+    assert.equal(state.status, 'idle');
+    assert.equal(state.puzzle, null);
+    assert.equal(state.difficulty, null);
+  });
+
+  test('a reset game rejects further input', () => {
+    resetToIdle();
+    selectCell(0);
+    applyNumberInput(1);
+    assert.equal(getState().selectedIndex, null);
   });
 });

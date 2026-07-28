@@ -28,12 +28,6 @@ const BOARD_SIZE = 81;
 // so unbounded growth is a real, if slow, memory leak over a long session.
 export const MAX_HISTORY_SIZE = 50;
 
-// v1 placeholder — Phase 7 (Statistics) owns the real scoring formula.
-// Tracked here because hintsUsed already lives in this module and a
-// hint's cost needs to be known at the moment it's used, not
-// reconstructed later from a raw count.
-export const HINT_SCORE_PENALTY = 50;
-
 const listeners = new Set();
 
 function notify() {
@@ -252,6 +246,43 @@ export function startGame(generationResult, difficultyId, options = {}) {
   notify();
 }
 
+/**
+ * Restores a previously-saved in-progress game (js/active-game-store.js's
+ * shape — already schema/shape-validated by its own loader before this
+ * is ever called). Always resumes as `'paused'`, regardless of what
+ * status it was saved under: surfacing a running timer and a fully
+ * visible board the instant "Continue Game" is clicked would be a
+ * jarring surprise, and the player already has to press Resume from a
+ * dead stop either way, so there's no meaningful difference between
+ * "was paused" and "was mid-play" once reloaded.
+ */
+export function restoreGame(saved, options = {}) {
+  stopTimer();
+  segmentStartedAt = null;
+  timerSuspensions.clear();
+  clockNow = options.now ?? Date.now;
+  intervalEnabled = options.autoStartTimer ?? true;
+  state = {
+    ...createEmptyState(),
+    puzzle: saved.puzzle.slice(),
+    solution: saved.solution.slice(),
+    entries: saved.entries.slice(),
+    notes: saved.notes.slice(),
+    selectedIndex: saved.selectedIndex,
+    difficulty: saved.difficulty,
+    elapsedSeconds: saved.elapsedSeconds,
+    mistakes: saved.mistakes,
+    hintsUsed: saved.hintsUsed,
+    notesMode: saved.notesMode,
+    status: 'paused',
+  };
+  // No interval starts here, matching pauseGame()'s "fully stopped, not
+  // just idling" policy — status is 'paused', so there's nothing for it
+  // to do yet. resumeGame() starts both the segment and the interval
+  // together when the player actually clicks Resume.
+  notify();
+}
+
 export function selectCell(index) {
   if (state.status !== 'playing') return;
   if (!Number.isInteger(index) || index < 0 || index >= BOARD_SIZE) return;
@@ -380,9 +411,11 @@ export function toggleNotesMode() {
 }
 
 /**
- * Reveals the solution's value for the selected cell. Costs a hint
- * (see HINT_SCORE_PENALTY) and, like a normal entry, clears the cell's
- * own notes and removes the revealed value from peer notes — a hint is
+ * Reveals the solution's value for the selected cell. Increments
+ * `hintsUsed` (js/scoring.js's HINT_PENALTY is what actually costs the
+ * player points, computed later at completion — this module doesn't
+ * know about scoring) and, like a normal entry, clears the cell's own
+ * notes and removes the revealed value from peer notes — a hint is
  * still a real placed value, not a different kind of thing the rest of
  * the board should treat specially. No confirmation prompt lives here;
  * that's a UI concern (see js/ui/hint-dialog.js) so this function stays
@@ -462,5 +495,20 @@ export function resumeGame() {
   state = { ...state, status: 'playing' };
   beginSegmentIfNeeded();
   if (intervalEnabled) startTimer();
+  notify();
+}
+
+/**
+ * Drops any in-memory game entirely, back to the pre-game 'idle' state.
+ * Used by the Clear Data flow (js/ui/clear-data-dialog.js) — clearing
+ * saved data but leaving an in-progress game sitting in memory would
+ * just resurrect a fresh active-game save moments later via autosave,
+ * quietly undoing part of what "clear" was supposed to mean.
+ */
+export function resetToIdle() {
+  stopTimer();
+  segmentStartedAt = null;
+  timerSuspensions.clear();
+  state = createEmptyState();
   notify();
 }

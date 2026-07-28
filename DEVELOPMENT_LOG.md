@@ -5,6 +5,192 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-28 — Phase 7: Save Data, Statistics, Best Times, and High Scores
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+This prompt's "Phase 7" covers both `TASKS.md`'s Phase 7 (Persistence)
+and Phase 8 (Statistics/High Scores) in one pass — both are now marked
+done in `TASKS.md`.
+
+**What was built:**
+
+- **`js/storage.js`** — the generic safe-localStorage foundation every
+  persisted feature now shares: `loadJSON(key, fallback, validator?)`,
+  `saveJSON(key, value)`, `removeJSON(key)`. Every failure mode (storage
+  denied/quota exceeded, malformed JSON, missing key, `localStorage`
+  itself unavailable, a validator rejecting the shape) falls back to the
+  caller's `fallback` value rather than throwing. `js/theme.js` and
+  `js/game-settings.js` were migrated onto it, and their keys renamed
+  under a shared versioned prefix: `inspireSudoku:v1:appearance` and
+  `inspireSudoku:v1:gameplaySettings` (previously `sudoku-inspire:*`).
+  Kept as two separate keys rather than one merged `...:settings` blob —
+  they're read/written independently by unrelated modules, and merging
+  would only add read-modify-write coordination between them for no
+  functional benefit.
+- **`js/active-game-store.js`** — persists exactly one in-progress game
+  under `inspireSudoku:v1:activeGame` (versioned, validated on load:
+  board-shape checks on puzzle/solution/entries/notes, difficulty must be
+  a known id, counters must be non-negative integers, status must be
+  `'playing'` or `'paused'` — a persisted `'complete'` status is never
+  written in the first place). Any corrupt/incompatible save fails safely
+  back to "no save," so Continue Game just stays disabled instead of
+  crashing.
+- **`js/statistics-store.js`** — per-difficulty counters under
+  `inspireSudoku:v1:statistics`: games started/completed, total play
+  time, best time, current streak, best streak, total hints, total
+  mistakes. `completionRate` and `averageTimeSeconds` are *derived* on
+  read from the raw counters, never stored, so they can't drift out of
+  sync with them. `recordGameStarted`/`recordGameCompleted`/
+  `recordGameAbandoned` are called directly by the specific UI code that
+  unambiguously knows what just happened (see below) rather than
+  inferred from generic state-change events, which would have to
+  disambiguate "new game" from "Continue Game restore" and "abandon" from
+  "ordinary pause."
+- **`js/high-scores-store.js`** — top-10 leaderboard per difficulty under
+  `inspireSudoku:v1:highScores`, sorted by score descending with ties
+  broken by faster elapsed time. `recordHighScore` returns the entry's
+  1-based rank, or `null` if it didn't place in the top 10.
+- **`js/scoring.js`** — the single, centralized, documented scoring
+  formula (previously an inline placeholder in `js/completion.js`, and a
+  now-removed, redundant `HINT_SCORE_PENALTY` constant in
+  `js/game-state.js`):
+  `score = round(BASE_SCORE × difficulty.scoreMultiplier + speedBonus − mistakes×MISTAKE_PENALTY − hints×HINT_PENALTY)`,
+  floored at 0. `speedBonus = max(0, parSeconds − elapsedSeconds) × SPEED_BONUS_PER_SECOND`
+  — going over par costs you the bonus, never turns into a penalty.
+  `js/completion.js`'s `estimateScore` now just delegates to it.
+- **`js/game-persistence.js`** — the one place game-state changes turn
+  into storage writes: debounced autosave (500ms, plus a `pagehide`
+  listener to flush a save that's still pending when the tab closes)
+  while `status` is `'playing'`/`'paused'`, and on the transition into
+  `'complete'`: records the finished game into statistics, computes its
+  score, records it into high scores, and clears the active-game save
+  (nothing left to "continue"). `recordGameStarted`/`recordGameAbandoned`
+  are deliberately *not* called from here — they're called directly from
+  `js/ui/game-screen.js` (`startNewGame`, right before `startGame()`) and
+  `js/ui/new-game-confirm-dialog.js` (on confirming a replacement),
+  which are the actual unambiguous moments those things happen.
+- **`restoreGame(saved, options?)`** and **`resetToIdle()`** added to
+  `js/game-state.js`. `restoreGame` always lands in `'paused'` regardless
+  of the save's own status — Continue Game should always show the pause
+  overlay and require an explicit Resume, never drop the player straight
+  into a mid-puzzle board. `resetToIdle` fully stops the timer and clears
+  in-memory state, used by Clear Data so a stale in-memory game can't
+  quietly resurrect a save on its next autosave tick.
+- **New Game confirmation** (`js/ui/new-game-confirm-dialog.js`) — only
+  interrupts with a dialog if there's actually an unfinished game
+  (`status` is `'playing'` or `'paused'`); confirming records the
+  abandonment (resets the current streak) and clears the save before
+  opening the difficulty picker.
+- **Clear Data confirmation** (`js/ui/clear-data-dialog.js`) — clears the
+  active game, statistics, and high scores, and resets any in-memory
+  game; leaves appearance/gameplay settings untouched (the dialog copy
+  says so explicitly, pointing at Reset Appearance instead).
+- **Statistics screen** (`js/ui/statistics-screen.js`) and **High Scores
+  screen** (`js/ui/high-scores-screen.js`), both driven by a shared
+  **`js/ui/difficulty-filter.js`** tab component (`role="tablist"`,
+  `aria-selected` on the active button).
+- New CSS: `.difficulty-filter`/`.difficulty-filter-btn` (a 2×2 grid on
+  mobile, single row of 4 from the existing 768px breakpoint — a plain
+  flex row wrapped unpredictably at narrow widths), `.stats-grid`/
+  `.stats-item`, `.highscores-list`/`.highscore-row` and its rank/score/
+  detail/date sub-elements. The two new confirmation dialogs needed no
+  new CSS — they reuse the existing `.settings-dialog`/`.settings-form`/
+  `.settings-actions` pattern.
+
+**Key technical notes (serialization, defensive parsing, schema/
+versioning, validation, debouncing, derived statistics, scoring):**
+
+- *Serialization*: every store's public shape is a plain JSON-safe object
+  (`{ version, ...fields }`); `JSON.stringify`/`JSON.parse` round-trip it
+  as-is, with no `Map`/`Set`/`Date`-object fields to lose fidelity.
+- *Defensive parsing*: `loadJSON` treats storage access itself, JSON
+  parsing, and shape validation as three independently failable steps —
+  any one failing returns the caller's `fallback`, never throws or
+  returns a half-valid object.
+- *Schema/versioning*: every stored object carries a `version` field;
+  validators reject anything whose version doesn't match the current
+  constant, so a future schema change can detect and discard (or, later,
+  migrate) old-shaped data instead of silently misreading it.
+- *Validation*: beyond the version check, each validator re-checks the
+  invariants the rest of the app assumes hold (board-length arrays,
+  known difficulty ids, non-negative integer counters, a bounded/sorted
+  high-score list) — data is trusted only after passing the same checks
+  fresh code would need anyway.
+- *Debouncing*: `game-persistence.js` collapses rapid-fire state changes
+  (each keystroke, each note toggle) into one write 500ms after the last
+  one, trailing-edge, with a `pagehide` flush so nothing in the last
+  500ms before a tab closes is lost.
+- *Derived statistics*: `completionRate` and `averageTimeSeconds` are
+  computed from raw counters on every read rather than stored, so they
+  can never drift from the numbers they're derived from.
+- *Scoring formula*: base value scaled by difficulty, plus a bonus for
+  finishing under a per-difficulty par time, minus flat per-mistake and
+  per-hint penalties, floored at zero — centralized in one module so
+  every place that shows or ranks a score (completion dialog, high
+  scores) uses the exact same number.
+
+**Checks run:**
+
+- `node --check` on every new/modified JS file — all clean.
+- `npm test` (Node's built-in test runner): 163 tests across 56 suites,
+  all passing, including the 5 new store/formula test files
+  (`storage.test.js`, `scoring.test.js`, `active-game-store.test.js`,
+  `statistics-store.test.js`, `high-scores-store.test.js`) plus the new
+  `restoreGame`/`resetToIdle` coverage in `game-state.test.js`.
+  - Testing note: Node has no global `localStorage`. Rather than change
+    any production module's API to accept an injected storage object,
+    each store's test file installs a small in-memory
+    `globalThis.localStorage` polyfill in `beforeEach`/removes it in
+    `afterEach` — production code is untouched and still exercised
+    exactly as the browser would call it.
+- Browser end-to-end pass (headless Chromium via Playwright, served over
+  a local static HTTP server): start → menu → New Game → deliberate
+  mistake → autosave → back to menu (Continue Game becomes enabled) → New
+  Game confirmation (Cancel leaves the game untouched; Confirm abandons
+  it, resets the streak, and opens the difficulty picker) → Continue Game
+  restores the exact save (mistake count preserved, always paused) →
+  solved the rest of the puzzle through the real `game-state.js` API
+  (exercising the actual completion → statistics → high-score →
+  clear-active-game path, not a mock) → completion dialog shows a
+  positive score → Statistics screen reflects the finished game (1
+  completed, 100% completion rate, 1 mistake) → High Scores screen shows
+  the one ranked entry → Clear Data removes the save, statistics, and
+  high scores in one action, leaving appearance/gameplay settings alone.
+  No unexpected console/page errors (the known Phase 1 intro-video codec
+  message in this sandbox's headless Chromium is excluded, as
+  established in the Phase 1 log entry).
+- **Bug caught by this verification pass, fixed before commit:**
+  `recordGameStarted` existed in `statistics-store.js` and was documented
+  in `game-persistence.js`'s own comment as being called from
+  `js/ui/game-screen.js` — but it never actually was. "Games Started"
+  read 0 while "Games Completed" read 1, and completion rate showed 0%
+  instead of 100%. Fixed by calling `recordGameStarted(difficultyId)` in
+  `startNewGame()` right before `startGame()`, the one unambiguous place
+  a brand-new game begins.
+- **CSS bug caught the same way:** `.difficulty-filter`'s plain
+  `flex-wrap` layout wrapped unpredictably at a 420px mobile viewport
+  (three buttons on one row with the third clipped, the fourth alone on
+  its own row). Switched to a 2×2 CSS grid on mobile, reverting to a
+  single row of 4 at the existing 768px desktop breakpoint.
+- Also corrected leftover copy in the completion dialog that claimed
+  scoring was "a provisional estimate — final scoring lands in a future
+  phase," which stopped being true once this phase landed.
+
+**Remaining limitations:**
+
+- Audio/input-preference persistence is still deferred to Phase 9 —
+  `js/audio.js` doesn't exist yet, so there's nothing to persist.
+- No migration path exists yet for a future schema-version bump beyond
+  "detect mismatch, discard" — acceptable for v1, would need revisiting
+  if a real schema change ever needs to preserve old data.
+- `js/game-persistence.js` itself isn't unit-tested (it's a thin,
+  browser-only `window`/`onStateChange` wiring module with no pure logic
+  of its own to isolate — consistent with how `theme.js` was already
+  handled); it's covered by the browser end-to-end pass instead.
+
+---
+
 ## 2026-07-28 — Phase 6: Gameplay Tools and Completion Flow
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`

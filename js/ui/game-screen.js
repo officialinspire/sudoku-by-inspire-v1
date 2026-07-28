@@ -2,6 +2,7 @@ import { showScreen } from '../screens.js';
 import { generatePuzzle, DIFFICULTIES } from '../sudoku-generator.js';
 import { startGame, pauseGame } from '../game-state.js';
 import { openSettingsDialog } from './settings.js';
+import { recordGameStarted } from '../statistics-store.js';
 
 const statusEl = document.getElementById('game-status');
 const backBtn = document.getElementById('btn-game-back');
@@ -34,6 +35,10 @@ export async function startNewGame(difficultyId = 'easy') {
 
   renderStatus(`Ready — ${label} puzzle, ${result.clueCount} ${clueWord} (${detail}).`);
 
+  // The one unambiguous moment a brand-new game begins — not on resume,
+  // not on Continue-Game restore — so this is the correct call site for
+  // the "games started" counter (see js/game-persistence.js's doc comment).
+  recordGameStarted(difficultyId);
   startGame(result, difficultyId);
 }
 

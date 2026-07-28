@@ -2,33 +2,29 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { estimateScore, formatElapsedTime, buildShareText } from './completion.js';
+import { calculateScore, PAR_SECONDS } from './scoring.js';
 import { DIFFICULTIES } from './sudoku-generator.js';
 
 function fakeState(overrides = {}) {
-  return { elapsedSeconds: 0, mistakes: 0, hintsUsed: 0, ...overrides };
+  return { difficulty: 'easy', elapsedSeconds: PAR_SECONDS.easy, mistakes: 0, hintsUsed: 0, ...overrides };
 }
 
+// estimateScore's whole job is mapping a game-state snapshot onto
+// scoring.js's calculateScore — the formula itself is scoring.test.js's
+// job to verify in depth, so these tests focus on the mapping being
+// correct (right fields, right difficulty config) rather than
+// re-deriving expected score values by hand.
 describe('estimateScore', () => {
-  test('a flawless game scores the difficulty\'s full base value', () => {
-    const score = estimateScore(fakeState(), DIFFICULTIES.easy);
-    assert.equal(score, 1000 * DIFFICULTIES.easy.scoreMultiplier);
+  test('delegates to calculateScore with the state\'s own fields', () => {
+    const state = fakeState({ difficulty: 'advanced', elapsedSeconds: 321, mistakes: 2, hintsUsed: 1 });
+    const expected = calculateScore(
+      { difficultyId: 'advanced', elapsedSeconds: 321, mistakes: 2, hintsUsed: 1 },
+      DIFFICULTIES.advanced
+    );
+    assert.equal(estimateScore(state, DIFFICULTIES.advanced), expected);
   });
 
-  test('harder difficulties score higher for an identical performance', () => {
-    const easy = estimateScore(fakeState(), DIFFICULTIES.easy);
-    const insane = estimateScore(fakeState(), DIFFICULTIES.insane);
-    assert.ok(insane > easy);
-  });
-
-  test('mistakes and hints each reduce the score', () => {
-    const flawless = estimateScore(fakeState(), DIFFICULTIES.easy);
-    const withMistakes = estimateScore(fakeState({ mistakes: 3 }), DIFFICULTIES.easy);
-    const withHints = estimateScore(fakeState({ hintsUsed: 2 }), DIFFICULTIES.easy);
-    assert.ok(withMistakes < flawless);
-    assert.ok(withHints < flawless);
-  });
-
-  test('never goes negative regardless of penalties', () => {
+  test('never negative regardless of penalties (delegated guarantee)', () => {
     const score = estimateScore(fakeState({ mistakes: 1000, hintsUsed: 1000 }), DIFFICULTIES.easy);
     assert.equal(score, 0);
   });
@@ -45,7 +41,7 @@ describe('formatElapsedTime', () => {
 
 describe('buildShareText', () => {
   test('includes difficulty label, time, mistakes, hints, and score', () => {
-    const state = fakeState({ elapsedSeconds: 125, mistakes: 2, hintsUsed: 1 });
+    const state = fakeState({ difficulty: 'advanced', elapsedSeconds: 125, mistakes: 2, hintsUsed: 1 });
     const text = buildShareText(state, DIFFICULTIES.advanced);
     assert.ok(text.includes('Advanced'));
     assert.ok(text.includes('2:05'));

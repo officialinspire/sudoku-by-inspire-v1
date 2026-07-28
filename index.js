@@ -1,28 +1,38 @@
 import { showScreen } from './js/screens.js';
 import { initTheme } from './js/theme.js';
 import { initGameSettings } from './js/game-settings.js';
+import { initGamePersistence } from './js/game-persistence.js';
 import { initStartScreen } from './js/ui/start-screen.js';
 import { initIntroScreen, playIntro } from './js/ui/intro-video.js';
 import { initMenuScreen } from './js/ui/menu.js';
 import { initSettingsDialog } from './js/ui/settings.js';
 import { initDifficultyDialog } from './js/ui/difficulty-dialog.js';
+import { initNewGameConfirmDialog } from './js/ui/new-game-confirm-dialog.js';
+import { initClearDataDialog } from './js/ui/clear-data-dialog.js';
 import { initGameScreen } from './js/ui/game-screen.js';
 import { initBoardView } from './js/ui/board-view.js';
 import { initControls } from './js/ui/controls.js';
 import { initHintDialog } from './js/ui/hint-dialog.js';
 import { initCompletionDialog } from './js/ui/completion-dialog.js';
+import { initStatisticsScreen } from './js/ui/statistics-screen.js';
+import { initHighScoresScreen } from './js/ui/high-scores-screen.js';
 
 initTheme();
 initGameSettings();
+initGamePersistence();
 initIntroScreen();
 initMenuScreen();
 initSettingsDialog();
 initDifficultyDialog();
+initNewGameConfirmDialog();
+initClearDataDialog();
 initGameScreen();
 initBoardView();
 initControls();
 initHintDialog();
 initCompletionDialog();
+initStatisticsScreen();
+initHighScoresScreen();
 initStartScreen(() => playIntro());
 
 showScreen('start');

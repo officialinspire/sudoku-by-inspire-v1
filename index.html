@@ -13,7 +13,7 @@
       var MODES = ['system', 'dark', 'light'];
       var pref = { theme: 'light', mode: 'system' };
       try {
-        var raw = localStorage.getItem('sudoku-inspire:appearance');
+        var raw = localStorage.getItem('inspireSudoku:v1:appearance');
         if (raw) {
           var parsed = JSON.parse(raw);
           if (
@@ -62,6 +62,7 @@
         <button id="btn-new-game" type="button">New Game</button>
         <button id="btn-continue-game" type="button" disabled>Continue Game</button>
         <button id="btn-statistics" type="button">Statistics</button>
+        <button id="btn-highscores" type="button">High Scores</button>
         <button id="btn-settings" type="button">Settings</button>
       </nav>
       <footer class="menu-footer">
@@ -119,6 +120,50 @@
         <p>Paused</p>
         <button id="btn-resume" type="button" class="btn-primary">Resume</button>
       </div>
+    </section>
+
+    <section id="screen-statistics" class="screen screen-game" tabindex="-1" aria-label="Statistics" hidden>
+      <div class="game-header">
+        <button id="btn-statistics-back" type="button" class="btn-secondary game-back-btn">&larr; Menu</button>
+        <h2 class="brand brand--compact">Statistics</h2>
+      </div>
+
+      <div id="statistics-difficulty-filter" class="difficulty-filter" role="tablist" aria-label="Difficulty">
+        <button type="button" class="difficulty-filter-btn" data-difficulty="easy" aria-selected="true">Easy</button>
+        <button type="button" class="difficulty-filter-btn" data-difficulty="intermediate" aria-selected="false">Intermediate</button>
+        <button type="button" class="difficulty-filter-btn" data-difficulty="advanced" aria-selected="false">Advanced</button>
+        <button type="button" class="difficulty-filter-btn" data-difficulty="insane" aria-selected="false">Insane</button>
+      </div>
+
+      <dl class="stats-grid">
+        <div class="stats-item"><dt>Games Started</dt><dd id="stat-games-started">0</dd></div>
+        <div class="stats-item"><dt>Games Completed</dt><dd id="stat-games-completed">0</dd></div>
+        <div class="stats-item"><dt>Completion Rate</dt><dd id="stat-completion-rate">0%</dd></div>
+        <div class="stats-item"><dt>Total Play Time</dt><dd id="stat-total-time">0:00</dd></div>
+        <div class="stats-item"><dt>Best Time</dt><dd id="stat-best-time">—</dd></div>
+        <div class="stats-item"><dt>Average Time</dt><dd id="stat-average-time">—</dd></div>
+        <div class="stats-item"><dt>Current Streak</dt><dd id="stat-current-streak">0</dd></div>
+        <div class="stats-item"><dt>Best Streak</dt><dd id="stat-best-streak">0</dd></div>
+        <div class="stats-item"><dt>Total Hints</dt><dd id="stat-total-hints">0</dd></div>
+        <div class="stats-item"><dt>Total Mistakes</dt><dd id="stat-total-mistakes">0</dd></div>
+      </dl>
+    </section>
+
+    <section id="screen-highscores" class="screen screen-game" tabindex="-1" aria-label="High Scores" hidden>
+      <div class="game-header">
+        <button id="btn-highscores-back" type="button" class="btn-secondary game-back-btn">&larr; Menu</button>
+        <h2 class="brand brand--compact">High Scores</h2>
+      </div>
+
+      <div id="highscores-difficulty-filter" class="difficulty-filter" role="tablist" aria-label="Difficulty">
+        <button type="button" class="difficulty-filter-btn" data-difficulty="easy" aria-selected="true">Easy</button>
+        <button type="button" class="difficulty-filter-btn" data-difficulty="intermediate" aria-selected="false">Intermediate</button>
+        <button type="button" class="difficulty-filter-btn" data-difficulty="advanced" aria-selected="false">Advanced</button>
+        <button type="button" class="difficulty-filter-btn" data-difficulty="insane" aria-selected="false">Insane</button>
+      </div>
+
+      <ol id="highscores-list" class="highscores-list"></ol>
+      <p id="highscores-empty" class="game-status" hidden>No scores yet for this difficulty — go solve a puzzle!</p>
     </section>
 
   </div>
@@ -209,6 +254,7 @@
 
       <div class="settings-actions">
         <button type="button" id="btn-reset-appearance" class="btn-secondary">Reset Appearance</button>
+        <button type="button" id="btn-clear-data" class="btn-secondary">Clear Data</button>
         <button type="submit" class="btn-primary">Close</button>
       </div>
     </form>
@@ -282,7 +328,7 @@
           <dd id="completion-score">0</dd>
         </div>
       </dl>
-      <p class="settings-hint">Score is a provisional estimate — final scoring lands in a future phase.</p>
+      <p class="settings-hint">Higher difficulties and faster times score more; mistakes and hints cost points. See High Scores for your best runs.</p>
 
       <label class="share-label" for="completion-share-text">Share results</label>
       <textarea id="completion-share-text" class="share-textarea" readonly rows="3"></textarea>
@@ -294,6 +340,31 @@
         <button type="button" id="btn-completion-new-game" class="btn-primary">New Game</button>
       </div>
     </div>
+  </dialog>
+
+  <dialog id="new-game-confirm-dialog" class="settings-dialog" aria-labelledby="new-game-confirm-title">
+    <form method="dialog" class="settings-form">
+      <h2 id="new-game-confirm-title">Replace Unfinished Game?</h2>
+      <p>You have a game in progress. Starting a new game will give up that
+        progress — it won't be saved.</p>
+      <div class="settings-actions">
+        <button type="submit" value="cancel" class="btn-secondary">Cancel</button>
+        <button type="submit" value="confirm" class="btn-primary">Start New Game</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="clear-data-confirm-dialog" class="settings-dialog" aria-labelledby="clear-data-confirm-title">
+    <form method="dialog" class="settings-form">
+      <h2 id="clear-data-confirm-title">Clear Data?</h2>
+      <p>This permanently deletes your saved game, statistics, and high
+        scores. It does not change your theme or gameplay settings — use
+        Reset Appearance for those.</p>
+      <div class="settings-actions">
+        <button type="submit" value="cancel" class="btn-secondary">Cancel</button>
+        <button type="submit" value="confirm" class="btn-primary">Clear Data</button>
+      </div>
+    </form>
   </dialog>
 
   <script type="module" src="./index.js"></script>
