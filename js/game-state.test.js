@@ -336,6 +336,26 @@ describe('pause/resume', () => {
     applyNumberInput(solution[1]);
     assert.equal(getState().entries[1], solution[1]);
   });
+
+  test('pauseGame is a no-op when the game is already paused', () => {
+    pauseGame();
+    const pausedState = getState();
+    pauseGame(); // already paused — must not throw or change anything
+    assert.deepEqual(getState(), pausedState);
+  });
+
+  test('resumeGame is a no-op when the game is not paused', () => {
+    const playingState = getState();
+    assert.equal(playingState.status, 'playing');
+    resumeGame(); // not paused — must not throw or change anything
+    assert.deepEqual(getState(), playingState);
+  });
+
+  test('resumeGame is a no-op with no game in progress', () => {
+    resetToIdle();
+    resumeGame();
+    assert.equal(getState().status, 'idle');
+  });
 });
 
 describe('getPeerIndices', () => {

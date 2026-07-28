@@ -5,6 +5,210 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-28 — Phase 12: Full Engineering Audit — Tests and Manual QA
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+This prompt didn't carry an explicit "Prompt NN" header, but its content
+(comprehensive automated-test audit + a manual QA checklist) doesn't
+match any existing `TASKS.md` phase — Phase 11 (Accessibility) was
+already done, Phase 12 was GitHub Pages Deployment, Phase 13 was Final
+QA. Inserted as the actual new Phase 12, shifting Deployment to 13 and
+Final QA to 14, matching the same pattern used for prior insertions
+(see the Phase 6 and Phase 7 log entries).
+
+**What this phase actually was:** an audit, not a build. The explicit
+instruction was "do not intentionally create failing exercises" and to
+add tests only for genuine gaps — so the real work here was reading
+every existing test file against its matching source module, function
+by function, to find out whether the coverage the prompt asked for
+already existed (much of it did, built incrementally as each earlier
+phase landed its own module) versus where a real hole remained.
+
+**Audit findings, by requested category** (file:describe-block, or
+"gap closed" with what was added):
+
+- Coordinate helpers → `sudoku-engine.test.js`: "coordinate conversion"
+  (round-trips all 81 cells, rejects out-of-range input).
+- Board validation → "board shape validation" (wrong length, non-array,
+  out-of-range/non-integer cells).
+- Valid placement → "placement legality" (row/column/box conflicts, a
+  cell's own value never self-conflicting, out-of-range values).
+- Solver success and failure → "solveBoard" (solves a solvable puzzle
+  preserving every given; returns `null` for an unsolvable board with
+  conflicting givens; returns `null` rather than throwing on malformed
+  input).
+- Solution-count limit → "countSolutions" (an empty board — which has
+  an astronomically large solution count — stops at the requested limit
+  in well under 5 seconds instead of exhaustively enumerating).
+- Puzzle uniqueness → `sudoku-generator.test.js`'s "generatePuzzle" test
+  asserts `countSolutions(result.puzzle, 2) === 1` for every difficulty,
+  and the fallback-puzzle path is checked the same way.
+- Difficulty configuration → "difficulty configuration" (every bundled
+  config valid, clue bands match spec and never dip below the proven
+  17-clue minimum, bands don't overlap and get strictly harder,
+  malformed configs rejected on 8 different specific defects).
+- Notes behavior → `game-state.test.js`'s "applyNumberInput — notes
+  mode" and "toggleNote" (candidate bits toggle independently, don't
+  touch entries/mistakes, survive being set/cleared twice).
+- Peer-note cleanup → "removes the placed value from peer notes" (both
+  for a normal entry and, separately, for `useHint`).
+- Undo history → "undo" and "bounded undo history" (restores
+  entries/notes/selection/mistakes/hints from before the last mutation;
+  caps at `MAX_HISTORY_SIZE`, dropping the oldest).
+- Timer/pause state transitions → "timer" (5 tests, all against a fake,
+  advanceable clock — no real `setInterval` in the test process at all):
+  accrual, pause freezing time, a named suspension reason freezing time
+  independently of `status`, multiple simultaneous suspension reasons
+  only releasing once all clear, completion freezing time permanently.
+- Scoring boundaries → `scoring.test.js` (par-value baseline, harder
+  difficulty scores higher, under/over-par speed bonus behavior, exact
+  per-mistake/per-hint penalty amounts, **never negative**, always an
+  integer, unknown-difficulty fallback).
+- Storage corruption and validation → `storage.test.js` plus
+  `active-game-store.test.js`/`statistics-store.test.js`/
+  `high-scores-store.test.js`'s own "corrupt data fails safely" blocks
+  (malformed JSON, validator rejection, storage-access-throws,
+  `localStorage` entirely absent, and per-store shape-specific bad data
+  like a stored high-scores list longer than 10 or a negative score).
+- Statistics updates → `statistics-store.test.js` (started/completed
+  counts, best/average time, streak increment and reset-on-abandon,
+  independence across difficulties, division-by-zero guards for
+  completion rate and average time already covered by the "empty state"
+  test).
+- Completion detection → `game-state.test.js`'s "completion" (filling
+  every cell to match the solution marks it complete and clears
+  selection; an incomplete board never is; placing notes on the last
+  empty cell never triggers it, since notes never write to `entries`).
+- Share-result formatting → `completion.test.js`'s "buildShareText"
+  (includes difficulty/time/mistakes/hints/score, correct singular
+  "1 mistake"/"1 hint" grammar, pure-function determinism).
+
+**Two genuine gaps found and closed** (not padding — both are real,
+previously-unexercised branches in existing source code):
+
+- `getCandidates` had no test for the case where a cell's peers already
+  cover all 9 digits (an empty array result) — only the "some digits
+  used" and "no digits used" cases existed. Added a fixture that fills
+  a target cell's box-peers with 1-8 and a row-peer with 9.
+- `pauseGame()`/`resumeGame()` both have an early-return guard
+  (`if (state.status !== 'playing') return;` and the paused-status
+  equivalent) that had literally zero test coverage — every existing
+  test only ever called them in the state where they're expected to
+  actually do something. Added 3 tests: pausing an already-paused game
+  is a no-op, resuming a non-paused game is a no-op, and resuming with
+  no game in progress at all (`status: 'idle'`) is a no-op.
+
+**`MANUAL_QA.md`** — a new top-level checklist covering everything a
+`node:test` unit test structurally cannot reach: real video/audio codec
+playback, the real service-worker install/update/cache lifecycle, real
+viewport rendering at specific breakpoints, real dialog focus behavior
+in an actual browser, and (explicitly flagged as a known gap, not
+something this phase could close) real screen-reader software. Organized
+around the exact 16 scenarios the prompt named, plus a closing "known
+environment limitations" section documenting what this project's own
+sandboxed dev environment specifically can't verify (the intro video's
+codec, real assistive technology) so a future QA pass knows what's
+already been checked here versus what still needs a real device/browser.
+
+**Checks run:**
+
+- `node --check` across **all 46** `.js` files in the repo (not just the
+  ones touched this phase) — clean.
+- `npm test`: **181/181 passing**, 57 suites (177 carried over + 4 new:
+  1 `getCandidates` test, 3 `pauseGame`/`resumeGame` guard tests).
+- One full Playwright end-to-end smoke run (start → menu → new game →
+  deliberate mistake → hint → pause/resume → complete → statistics/high
+  scores reflect it → reload → Continue correctly disabled → offline
+  reload still boots) — zero console/page errors, confirming no
+  regression across the accumulated work of every prior phase.
+- **Zero automated-test failures found.** Nothing needed fixing this
+  phase beyond closing the two coverage gaps above — an honest finding,
+  not a shortcut: the prior phases' own "run checks" discipline (every
+  phase's `DEVELOPMENT_LOG.md` entry already shows a full green test run
+  before that phase was called done) is exactly why there was nothing
+  broken left to find here.
+
+**Explanation (testing pyramid, unit vs. manual QA, how regression tests
+protect fixes, reading a Node test failure):**
+
+- *The testing pyramid, for this project specifically*: a wide base of
+  fast, deterministic `node:test` unit tests (181 of them, ~5 seconds
+  total) covering every pure-logic module — the Sudoku engine, the
+  generator, game state, scoring, storage, and every persisted store —
+  each testable with zero DOM and zero real timers (see the "fake clock"
+  pattern in `game-state.test.js`'s timer tests, or the in-memory
+  `localStorage` polyfill in every store's test file). Above that, a
+  thin layer of Playwright browser-automation scripts — used throughout
+  Phases 7-12 for exactly the things unit tests can't reach (real
+  `<dialog>` focus restoration, a real service worker's cache lifecycle,
+  real CSS layout at specific viewports) — written ad hoc per phase
+  rather than committed as a permanent suite, since this project
+  deliberately has no browser-test framework installed (see the
+  "do not add a large framework" instruction this phase itself
+  received). At the very top, `MANUAL_QA.md`: the smallest, slowest
+  layer, for the handful of things that need an actual human in an
+  actual browser (or an actual screen reader) — video codec playback,
+  real device rotation, real assistive technology.
+- *What belongs in a unit test vs. manual QA*: the dividing line is
+  "does this function's correctness depend on anything outside pure
+  JavaScript values?" `calculateScore(result, config)` takes plain
+  numbers and returns a plain number — trivially a unit test, no matter
+  how complex the formula. Whether a `<video>` element actually decodes
+  an MP4's specific codec depends on the browser's underlying media
+  pipeline, which nothing in Node can construct or fake — that's
+  manual-QA territory by necessity, not by choice. The useful test in
+  between — "does the intro video's `error` handler correctly skip to
+  the menu" — *is* unit/integration-testable, because it only depends on
+  a DOM event firing, which Playwright can simulate; that's why it's a
+  Playwright script in this project's history rather than either a unit
+  test or a manual-QA line item.
+- *How regression tests protect a fix*: every defect this project has
+  ever found via testing (the Phase 7 `recordGameStarted` never being
+  called, Phase 9's intro-video `error` listener able to bypass the
+  Start gate, Phase 11's Paper/dark contrast failure) was fixed
+  alongside a test or an assertion that would fail again if the same
+  bug were reintroduced — not just a one-time manual confirmation that
+  it currently works. That's the actual value of the 181-test suite:
+  it's not there to prove the code is correct today (a human already
+  just watched it work), it's there so that six phases from now, an
+  unrelated change to `game-state.js` that accidentally breaks undo
+  history gets caught by `npm test` in 5 seconds, instead of silently
+  shipping and being discovered by a player instead.
+- *How to read a Node test failure*: `node --test` output nests by
+  `describe` block; a failing test prints `not ok N - <test name>`
+  (versus `ok N - ...` for a pass) with a `---` YAML block underneath
+  giving the failure location and, for `assert.equal`/`assert.deepEqual`
+  failures, the actual vs. expected values directly (no separate
+  diffing tool needed). The summary at the very end
+  (`# tests`/`# pass`/`# fail`) is the fastest way to confirm "did
+  anything break" without reading the full scrollback — `# fail 0` is
+  the bar this project holds itself to before calling any phase done,
+  and every `DEVELOPMENT_LOG.md` entry from Phase 3 onward records that
+  exact line.
+
+**Remaining limitations:**
+
+- No browser-test framework (Playwright-as-a-committed-dependency,
+  Cypress, etc.) was added, per this phase's own explicit instruction —
+  every Playwright script written across Phases 7-12 lives in the
+  session's scratch directory, not the repo, and would need to be
+  rewritten if a future phase wants to re-run the same browser-level
+  checks. `MANUAL_QA.md` is the durable, repo-committed record of what
+  those checks were, in a form a human can re-run without any tooling
+  at all.
+- Real screen-reader software and a real (non-codec-limited) browser's
+  intro-video playback remain genuinely unverified by anything in this
+  repo or this session — both are called out explicitly in
+  `MANUAL_QA.md`'s "known environment limitations" section rather than
+  silently assumed fine.
+- `README.md` is still the placeholder "planning complete, application
+  code not yet started" version from Phase 0 — out of scope for this
+  phase (that's explicitly Phase 14's job per `TASKS.md`), but worth
+  flagging here so it isn't mistaken for an oversight.
+
+---
+
 ## 2026-07-28 — Phase 11: Accessibility, Mobile Polish, and Desktop Mode
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`

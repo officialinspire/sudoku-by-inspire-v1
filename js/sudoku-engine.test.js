@@ -247,6 +247,16 @@ describe('getCandidates', () => {
     assert.deepEqual(getCandidates(board, 40), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
   });
 
+  test('returns an empty array when every digit is already used among the peers', () => {
+    const board = new Array(81).fill(0);
+    // Fill the other 8 cells of index 0's box with 1-8...
+    const boxPeers = [1, 2, 9, 10, 11, 18, 19, 20];
+    boxPeers.forEach((index, i) => { board[index] = i + 1; });
+    // ...and digit 9 via a row peer outside the box.
+    board[rowColToIndex(0, 3)] = 9;
+    assert.deepEqual(getCandidates(board, 0), []);
+  });
+
   test('does not mutate the input board', () => {
     const before = solvablePuzzle.slice();
     getCandidates(solvablePuzzle, 0);

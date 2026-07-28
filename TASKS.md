@@ -349,13 +349,33 @@ real device, not fully coverable by automation):
       completion dialog's heading) and a subtle, reduced-motion-gated
       Cyber-theme background drift.
 
-## Phase 12 — GitHub Pages Deployment
+## Phase 12 — Testing & QA Hardening ✅ (2026-07-28)
+
+- [x] Full engineering audit of automated test coverage against: coordinate
+      helpers, board validation, valid placement, solver success/failure,
+      solution-count limit, puzzle uniqueness, difficulty configuration,
+      notes behavior, peer-note cleanup, undo history, timer/pause state
+      transitions, scoring boundaries, storage corruption/validation,
+      statistics updates, completion detection, share-result formatting —
+      all already covered in depth by prior phases' test files; audit
+      found and closed 2 genuine small gaps (`getCandidates`'s
+      zero-candidates case, `pauseGame`/`resumeGame` no-op guards) rather
+      than padding with redundant tests.
+- [x] `MANUAL_QA.md` — a full manual browser QA checklist covering every
+      scenario `node:test` can't reach (real video/audio codecs, real
+      service-worker lifecycle, real viewport rendering, real
+      screen-reader behavior).
+- [x] Ran the complete automated suite + `node --check` across every JS
+      file + one full Playwright-driven end-to-end smoke run — zero
+      failures found; see `DEVELOPMENT_LOG.md` for exact counts.
+
+## Phase 13 — GitHub Pages Deployment
 
 - [ ] Verify no absolute-root paths anywhere (grep audit).
 - [ ] GitHub Pages workflow or branch config for subpath hosting.
 - [ ] Deployed smoke test at the actual Pages subpath URL.
 
-## Phase 13 — Final QA Against Acceptance Criteria
+## Phase 14 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and
       check it off with evidence (manual test note in
