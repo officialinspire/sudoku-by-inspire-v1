@@ -168,7 +168,7 @@ function applyMusicGain() {
  * own gain node used purely for fade-in/fade-out, feeding into the
  * shared `musicGain` (the actual volume-slider control) below it.
  */
-function createMusicTrack(src) {
+function createMusicTrack(name, src) {
   const track = {
     element: new Audio(encodeURI(src)),
     gain: audioContext.createGain(),
@@ -188,6 +188,12 @@ function createMusicTrack(src) {
     'canplaythrough',
     () => {
       track.available = true;
+      // Loading is async — the screen that wants this track playing may
+      // already have been shown (and setActiveMusicTrack already called)
+      // *before* the file finished loading, in which case that earlier
+      // call saw `available: false` and did nothing. This is the retry:
+      // if this track is (still) the active one, actually start it now.
+      if (activeTrackName === name) updateMusicPlayback();
     },
     { once: true }
   );
@@ -259,8 +265,8 @@ function updateMusicPlayback() {
 
 function loadMusicTracks() {
   musicTracks = {
-    menu: createMusicTrack(MUSIC_TRACK_SOURCES.menu),
-    gameplay: createMusicTrack(MUSIC_TRACK_SOURCES.gameplay),
+    menu: createMusicTrack('menu', MUSIC_TRACK_SOURCES.menu),
+    gameplay: createMusicTrack('gameplay', MUSIC_TRACK_SOURCES.gameplay),
   };
 }
 
