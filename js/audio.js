@@ -21,12 +21,12 @@
  * marks it unavailable and the app carries on silently, the same
  * graceful-missing-asset pattern already used for the intro video in
  * js/ui/intro-video.js. Only one track plays at a time; switching tracks
- * (via `js/screens.js`'s `onScreenChange`, or game completion) crossfades
- * rather than cutting instantly.
+ * (via `js/screens.js`'s `onScreenChange`, a game-state pause/resume, or
+ * game completion) crossfades rather than cutting instantly.
  */
 
 import { getAudioSettings, onAudioSettingsChange } from './audio-settings.js';
-import { onStateChange } from './game-state.js';
+import { onStateChange, getState } from './game-state.js';
 import { onScreenChange, getCurrentScreen } from './screens.js';
 
 const MUSIC_FADE_SECONDS = 1.2;
@@ -286,6 +286,28 @@ const SCREEN_MUSIC_TRACK = {
   game: 'gameplay',
 };
 
+/**
+ * The game screen is the one case where "which track should be playing"
+ * depends on more than just which screen is showing: pausing mid-game
+ * (Escape, or the in-game pause overlay) opens what's functionally an
+ * in-game menu, so the menu track fades in the same as if the player had
+ * actually navigated to the main menu — then fades back to "Logic Flow"
+ * on resume. Every other screen only ever depends on SCREEN_MUSIC_TRACK.
+ */
+function activeTrackForContext(screenId, gameStatus) {
+  if (screenId === 'game' && gameStatus === 'paused') return 'menu';
+  return SCREEN_MUSIC_TRACK[screenId] ?? null;
+}
+
+// Reads live game state rather than caching the last-seen status — a
+// fresh game's `showScreen('game')` fires before `startGame()` resolves
+// (see js/ui/difficulty-dialog.js), so a cached status from the
+// *previous* game (e.g. left 'paused') would otherwise leak into the new
+// one's very first track resolution.
+function syncActiveMusicTrack() {
+  setActiveMusicTrack(activeTrackForContext(getCurrentScreen(), getState().status));
+}
+
 function handleVisibilityChange() {
   if (typeof document === 'undefined') return;
   if (document.visibilityState === 'hidden') {
@@ -320,6 +342,14 @@ function initAudioReactions() {
       playError();
     } else if (isRealSelectionChange) {
       playSelect();
+    }
+
+    // Pause/resume during a game crossfades between the gameplay and menu
+    // tracks (see activeTrackForContext) — 'complete' is handled by the
+    // explicit setActiveMusicTrack(null) above instead, so skip it here
+    // to avoid fighting that with a "menu" resolution.
+    if (state.status !== prevStatus && state.status !== 'complete') {
+      syncActiveMusicTrack();
     }
 
     prevMistakes = state.mistakes;
@@ -377,10 +407,10 @@ export function initAudioEngine() {
   // when the engine finishes initializing (e.g. the menu, if it's
   // already visible by the time the Start-screen gesture unlocks
   // audio), then keeps it in sync with every screen change after.
-  onScreenChange((screenId) => {
-    setActiveMusicTrack(SCREEN_MUSIC_TRACK[screenId] ?? null);
+  onScreenChange(() => {
+    syncActiveMusicTrack();
   });
-  setActiveMusicTrack(SCREEN_MUSIC_TRACK[getCurrentScreen()] ?? null);
+  syncActiveMusicTrack();
 
   initAudioReactions();
 }

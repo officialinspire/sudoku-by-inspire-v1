@@ -5,6 +5,102 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-28 — Phase 14b: Pause Music, Real Video Audio, Menu Hierarchy
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+A second direct user-feedback round, same day, continuing Phase 14's
+thread rather than opening new scope.
+
+**What was built:**
+
+- **Pause-triggered music crossfade.** Opening the pause overlay
+  mid-game (Escape, or tapping the overlay) now fades gameplay music out
+  and menu music in, then crossfades back to gameplay on Resume.
+  `js/audio.js` previously only switched tracks on `onScreenChange`
+  (screen id), which never fires for pause/resume since the screen stays
+  `'game'` the whole time — added `activeTrackForContext(screenId,
+  gameStatus)` and `syncActiveMusicTrack()`, called both from
+  `onScreenChange` and from the existing `onStateChange` reaction
+  whenever `state.status` changes. Deliberately reads `getState().status`
+  live rather than caching it: a fresh game's `showScreen('game')` fires
+  *before* `startGame()` resolves (see `js/ui/difficulty-dialog.js`), so
+  a cached status would leak the *previous* game's `'paused'` or
+  `'complete'` state into the new game's very first track resolution.
+  Verified end-to-end with a `HTMLMediaElement.prototype.play` observer:
+  menu → gameplay → pause (menu track resumes) → resume (gameplay track
+  resumes), zero console errors.
+- **Real bug fixed: intro video was force-muted despite having real
+  audio.** The user reported the intro plays with no sound. Rather than
+  assume the file itself has no audio track (as Phase 14 had, based on
+  the user's own description), inspected `inspiresoftwareintro.mp4`'s
+  MP4 box structure directly this round: it contains exactly one `soun`
+  handler and one `mp4a` codec box alongside the video track — a real
+  audio track is genuinely present. The actual cause was
+  `index.html`'s `<video>` element hardcoding the `muted` attribute.
+  `playIntro()` already calls `video.play()` synchronously inside the
+  Start screen's click/keydown gesture handler (see index.js's comment
+  on why `initAudioEngine()` has to run there too), which is exactly the
+  condition browsers require to allow *unmuted* autoplay — so removing
+  `muted` is safe. Confirmed via Playwright that the video element no
+  longer carries the attribute and the existing error/skip fallback path
+  is unaffected; actual audible playback still can't be confirmed in
+  this sandbox (this headless Chromium build lacks H.264/AAC decode
+  support, documented back in Phase 1) and should be spot-checked by the
+  user in a real browser.
+- **Menu visual hierarchy.** Screenshotted the current menu across
+  themes and found the real problem behind the user's repeated "make the
+  UX/UI look better": five identically-styled accent-filled buttons with
+  no hierarchy, sitting in a large mostly-empty card. Fixed by keeping
+  New Game as the one solid-accent primary action and switching Continue
+  Game/Statistics/High Scores/Settings to the `.btn-secondary` outline
+  style already used for dialog buttons elsewhere (reused, not
+  reinvented) — plus a small accent-colored divider under every
+  `.brand` heading (shared by Start/Menu/Statistics/High Scores) for a
+  consistent branded header, and more vertical breathing room on the
+  menu screen (`#screen-menu` gap bumped to `--space-5`, nav button gap
+  `--space-2` → `--space-3`).
+
+**Investigated but found no code bug:** the user reported that scrolling
+on desktop reveals the gameplay screen — the exact symptom of the
+`#screen-game[hidden]` bug already fixed in Phase 14. Swept 10 realistic
+desktop viewport sizes × 4 themes × before/after a real game session with
+Playwright: zero overflow cases, `#screen-game` computed `display: none`
+in every single case. The most likely explanation is a stale cached
+build — `js/sw-register.js`'s "Update available" banner requires the user
+to actually click Refresh before a new service-worker version's cached
+JS/CSS take over an already-open tab (`sw.js`'s fetch handler serves
+`styles.css`/`js/**` cache-first). Bumped `CACHE_NAME` `v2` → `v3`
+regardless, since this round's HTML/CSS/JS changes need it anyway — if
+the scrolling bug is still visible after this deploys, it's worth asking
+the user to do a hard refresh / "Clear site data" to rule out cache
+staleness before assuming a live regression.
+
+**Checks run:**
+
+- `node --check` across every `.js` file plus `sw.js`/`index.js`: clean.
+- `npm test`: 181/181, unchanged (no pure-logic module touched).
+- Real-audio crossfade verification (`play()` observer): menu track on
+  reaching the menu, gameplay track on starting a game, menu track on
+  pause, gameplay track on resume — all correct, zero console errors.
+- 10-viewport × 4-theme overflow sweep, before and after playing a full
+  game: zero overflow cases.
+- Full Phase 14 regression playtest suite (all 4 difficulties, complete
+  input surface, 8 theme/mode combinations, completion, reload +
+  Continue, 320px keyboard-only): all passing, zero console/page errors.
+
+**Remaining limitations:**
+
+- Can't confirm the intro video is now actually *audible* in a real
+  browser from this sandbox (codec limitation, not a code issue) — worth
+  a manual spot-check.
+- If the "scrolling reveals gameplay screen" report persists after this
+  deploys and a hard refresh, that would mean there's a real bug this
+  round's investigation didn't reproduce — would need the exact browser/
+  OS/window size to chase further.
+
+---
+
 ## 2026-07-28 — Phase 14 Follow-up: Real Music Files Merged and Verified
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`

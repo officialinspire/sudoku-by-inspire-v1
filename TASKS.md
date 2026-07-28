@@ -458,6 +458,59 @@ logged here in full rather than folded silently into another phase.
       (no application logic touched, only markup/styles/the audio
       module). `node --check`: all 46 JS files clean.
 
+## Phase 14b — Pause Music, Real Video Audio, and Menu Hierarchy ✅ (2026-07-28)
+
+A second direct user-feedback round on the same day, following up on Phase
+14. Logged as 14b rather than a new numbered phase since it's a
+continuation of the same polish/bug-fix thread, not new scope.
+
+- [x] Gameplay music now fades out to the menu track while paused
+      (Escape / pause overlay) and fades back to "Logic Flow" on resume —
+      `js/audio.js` gained `activeTrackForContext()`/
+      `syncActiveMusicTrack()`, reading live `getState().status` rather
+      than a cached value (a fresh game's screen change fires before
+      `startGame()` resolves, so a cached status would leak the
+      *previous* game's paused/complete state into the new one).
+- [x] **Real bug fixed:** the intro video was hardcoded `muted` in
+      `index.html` even though the file genuinely has an audio track
+      (confirmed via MP4 box inspection — one `soun`/`mp4a` track
+      alongside the video track). `playIntro()` already calls
+      `video.play()` synchronously inside the Start screen's
+      click/keydown gesture handler, so removing `muted` is safe under
+      browser autoplay policy. Not audible in this sandbox (still no
+      H.264/AAC codec support in this headless Chromium build — see
+      Phase 1's note) but structurally correct and ready for a real
+      browser.
+- [x] Menu button hierarchy: New Game keeps the solid accent fill as the
+      one primary action; Continue Game/Statistics/High Scores/Settings
+      now reuse the existing `.btn-secondary` outline style (previously
+      only used in dialogs), so the menu reads as "one clear next step,
+      four supporting ones" instead of five identical bars.
+- [x] Added a small accent-colored divider under every `.brand` heading
+      (Start, Menu, Statistics, High Scores all share the class) for a
+      consistent branded header moment on every screen.
+- [x] More breathing room on the menu screen (`#screen-menu` gap bumped
+      to `--space-5`) and between nav buttons (`--space-2` → `--space-3`)
+      — the previous tight clustering read as unfinished inside the
+      much larger card.
+- [x] Investigated the reported "scrolling reveals the gameplay screen
+      on desktop" regression: swept 10 realistic viewport sizes × 4
+      themes × before/after a real game session with Playwright —
+      zero overflow cases found, `#screen-game` computed `display:
+      none` in every case. This exactly matches the bug already fixed
+      in Phase 14 (`#screen-game[hidden]` override); most likely
+      explanation is a stale cached build (the service worker only
+      swaps in new JS/CSS after a page reload once the new worker has
+      activated — see `js/sw-register.js`'s "Update available" banner).
+      `sw.js`'s `CACHE_NAME` bumped `v2` → `v3` for this round's actual
+      HTML/CSS/JS changes regardless.
+- [x] Full regression playtest: real-audio crossfade verification
+      (menu → gameplay → pause → resume, via a `play()` observer),
+      unmuted-video fallback check, 10-viewport overflow sweep, and the
+      full Phase 14 playtest suite (all difficulties, full input
+      surface, completion, reload/Continue, 320px keyboard-only) — all
+      passing, zero console/page errors. `npm test`: 181/181 unchanged.
+
 ## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and

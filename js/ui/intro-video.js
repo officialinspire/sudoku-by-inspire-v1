@@ -61,8 +61,10 @@ export function playIntro() {
 
   const playPromise = video.play();
   if (playPromise && typeof playPromise.catch === 'function') {
-    // Autoplay can be blocked by the browser even with muted video in some
-    // contexts; fall back to the menu rather than showing a frozen screen.
+    // Playback is unmuted (allowed here because play() runs synchronously
+    // inside the Start screen's click/keydown handler — see index.js) but
+    // autoplay can still be blocked in some contexts; fall back to the
+    // menu rather than showing a frozen screen.
     playPromise.catch(finishIntro);
   }
 }

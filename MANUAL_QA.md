@@ -216,6 +216,9 @@ least once:
     looping under the completion dialog).
   - Returning to the menu (or starting another game) fades the correct
     track back in.
+  - Pausing mid-game (Escape, or tapping the pause overlay) fades
+    "Logic Flow" out and "Sudoku Zen" in; pressing Resume fades back to
+    "Logic Flow." (Added 2026-07-28, Phase 14b.)
   - No audible click/pop/gap at any of these transitions — they should
     crossfade smoothly, not cut instantly.
 - [ ] **Missing music (regression check only)**: temporarily rename or

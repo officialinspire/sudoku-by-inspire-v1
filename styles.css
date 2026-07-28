@@ -475,8 +475,22 @@ button {
   font-size: 1.35rem;
 }
 
+/* A small accent-colored rule under every screen's title (Start, Menu,
+   Statistics, High Scores all share .brand) — a cheap, reusable way to
+   give each screen a consistent branded "header" moment instead of a
+   heading floating with nothing to visually anchor it. */
+.brand::after {
+  content: '';
+  display: block;
+  width: 3rem;
+  height: 3px;
+  margin: var(--space-2) auto 0;
+  background: var(--color-accent);
+  border-radius: var(--radius-sm);
+}
+
 .start-logo {
-  width: min(65%, 14rem);
+  width: min(70%, 16rem);
   margin: 0 auto var(--space-2);
 }
 
@@ -522,7 +536,7 @@ button {
 .menu-nav {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-3);
   width: 100%;
   max-width: 20rem;
 }
@@ -539,7 +553,19 @@ button {
   letter-spacing: 0.01em;
   cursor: pointer;
   box-shadow: 0 2px 6px var(--shadow-color);
-  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+/* New Game keeps the solid accent fill above — it's the one primary
+   action on this screen. Continue Game/Statistics/High Scores/Settings
+   reuse the outlined .btn-secondary look already established for dialog
+   buttons, so the menu reads as "one clear next step, four supporting
+   ones" instead of five identical bars with no hierarchy between them. */
+.menu-nav .btn-secondary {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  box-shadow: none;
 }
 
 .menu-nav button:disabled {
@@ -557,6 +583,14 @@ button {
   max-width: 9rem;
   margin: 0 auto;
   opacity: 0.9;
+}
+
+/* Extra breathing room between the title, the nav list, and the footer —
+   with only three direct children, the default .screen gap (var(--space-3))
+   left them clumped tightly together in the middle of a much larger card,
+   which read as unfinished rather than deliberately centered. */
+#screen-menu {
+  gap: var(--space-5);
 }
 
 /* ---------- Game screen ---------- */
