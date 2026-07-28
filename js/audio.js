@@ -15,17 +15,25 @@
  * SFX are synthesized here with the Web Audio API (oscillator + gain
  * envelope) rather than shipped as audio files — zero extra binary
  * assets, fully offline. Background music is the one optional exception:
- * if `./background-music.mp3` exists it's loaded and looped; if it
- * doesn't (the common case — no such file ships with this repo), the
- * `<audio>` element's `error` event marks it unavailable and the app
- * carries on silently, the same graceful-missing-asset pattern already
- * used for the intro video in js/ui/intro-video.js.
+ * two named tracks — "Sudoku Zen.mp3" for the menu family of screens and
+ * "Logic Flow.mp3" for gameplay — are loaded and looped if present; if
+ * either doesn't exist, that track's `<audio>` element's `error` event
+ * marks it unavailable and the app carries on silently, the same
+ * graceful-missing-asset pattern already used for the intro video in
+ * js/ui/intro-video.js. Only one track plays at a time; switching tracks
+ * (via `js/screens.js`'s `onScreenChange`, or game completion) crossfades
+ * rather than cutting instantly.
  */
 
 import { getAudioSettings, onAudioSettingsChange } from './audio-settings.js';
 import { onStateChange } from './game-state.js';
+import { onScreenChange, getCurrentScreen } from './screens.js';
 
-const MUSIC_SRC = './background-music.mp3';
+const MUSIC_FADE_SECONDS = 1.2;
+const MUSIC_TRACK_SOURCES = {
+  menu: './Sudoku Zen.mp3',
+  gameplay: './Logic Flow.mp3',
+};
 
 // Safari (until fairly recently) only exposes this under a vendor
 // prefix. Older/locked-down browsers may have neither — captured once so
@@ -36,8 +44,8 @@ const AudioContextCtor =
 let audioContext = null;
 let sfxMasterGain = null;
 let musicGain = null;
-let musicElement = null;
-let musicAvailable = false;
+let musicTracks = null; // { menu: Track, gameplay: Track }, built once the engine initializes
+let activeTrackName = null; // 'menu' | 'gameplay' | null
 let engineInitialized = false;
 
 function ensureContextRunning() {
@@ -145,55 +153,144 @@ function applySfxGain() {
 }
 
 function applyMusicGain() {
+  // The master `musicGain` node still tracks the volume slider directly
+  // (matches applySfxGain's reasoning: an in-flight fade updates live).
+  // Each track's *own* gain node (created in createMusicTrack) is purely
+  // the 0/1 "is this the active track" fade value — the two multiply
+  // together in the audio graph, so neither has to know about the other.
   if (!musicGain) return;
   musicGain.gain.value = getAudioSettings().musicVolume;
 }
 
-function updateMusicPlayback() {
-  if (!musicElement || !musicAvailable) return;
-  const { musicEnabled } = getAudioSettings();
-  const canPlay = musicEnabled && typeof document !== 'undefined' && document.visibilityState === 'visible';
-  if (canPlay) {
-    ensureContextRunning();
-    musicElement.play().catch(() => {});
-  } else {
-    musicElement.pause();
-  }
-}
+/**
+ * One background-music track: its own `<audio>` element (so each track
+ * can be independently paused/loaded without touching the other) and its
+ * own gain node used purely for fade-in/fade-out, feeding into the
+ * shared `musicGain` (the actual volume-slider control) below it.
+ */
+function createMusicTrack(src) {
+  const track = {
+    element: new Audio(encodeURI(src)),
+    gain: audioContext.createGain(),
+    available: false,
+  };
+  track.element.loop = true;
+  track.element.preload = 'auto';
+  track.gain.gain.value = 0;
 
-function loadMusic() {
-  musicElement = new Audio(MUSIC_SRC);
-  musicElement.loop = true;
-  musicElement.preload = 'auto';
-
-  // Optional asset: a 404 or a decode failure just means no background
-  // music this session, not a broken app — same policy as the intro
-  // video's missing-file handling in js/ui/intro-video.js.
-  musicElement.addEventListener('error', () => {
-    musicAvailable = false;
+  // Optional asset: a 404 or a decode failure just means this track
+  // isn't available this session, not a broken app — same policy as the
+  // intro video's missing-file handling in js/ui/intro-video.js.
+  track.element.addEventListener('error', () => {
+    track.available = false;
   });
-  musicElement.addEventListener(
+  track.element.addEventListener(
     'canplaythrough',
     () => {
-      musicAvailable = true;
-      updateMusicPlayback();
+      track.available = true;
     },
     { once: true }
   );
 
-  const musicSource = audioContext.createMediaElementSource(musicElement);
-  musicSource.connect(musicGain);
+  const source = audioContext.createMediaElementSource(track.element);
+  source.connect(track.gain);
+  track.gain.connect(musicGain);
+  return track;
 }
+
+function fadeTrackGainTo(track, targetGain, seconds) {
+  const now = audioContext.currentTime;
+  track.gain.gain.cancelScheduledValues(now);
+  track.gain.gain.setValueAtTime(track.gain.gain.value, now);
+  track.gain.gain.linearRampToValueAtTime(targetGain, now + seconds);
+}
+
+function canPlayMusicNow() {
+  return getAudioSettings().musicEnabled && typeof document !== 'undefined' && document.visibilityState === 'visible';
+}
+
+/**
+ * Switches which track is playing — 'menu', 'gameplay', or null (stop
+ * entirely, used on puzzle completion). Crossfades rather than cutting:
+ * the incoming track starts playing *before* its fade-in begins (so
+ * there's no silent gap), and the outgoing track is only paused once its
+ * fade-out has actually finished (so the cut isn't audible either).
+ * Calling this with the name already active is a harmless no-op.
+ */
+function setActiveMusicTrack(name) {
+  if (!musicTracks || activeTrackName === name) return;
+  activeTrackName = name;
+
+  for (const [trackName, track] of Object.entries(musicTracks)) {
+    if (trackName === name) {
+      if (track.available && canPlayMusicNow()) {
+        ensureContextRunning();
+        track.element.play().catch(() => {});
+        fadeTrackGainTo(track, 1, MUSIC_FADE_SECONDS);
+      }
+    } else {
+      fadeTrackGainTo(track, 0, MUSIC_FADE_SECONDS);
+      setTimeout(() => {
+        // Only pause if nothing re-activated this track while we waited
+        // out the fade (e.g. rapid screen switching).
+        if (activeTrackName !== trackName) track.element.pause();
+      }, MUSIC_FADE_SECONDS * 1000 + 50);
+    }
+  }
+}
+
+function updateMusicPlayback() {
+  // Re-applies "should the active track actually be audible right now"
+  // — called after a settings change (mute toggled) or the tab
+  // regaining visibility, neither of which changes *which* track is
+  // active, just whether it's allowed to be heard.
+  if (!musicTracks || !activeTrackName) return;
+  const track = musicTracks[activeTrackName];
+  if (!track.available) return;
+  if (canPlayMusicNow()) {
+    ensureContextRunning();
+    track.element.play().catch(() => {});
+    fadeTrackGainTo(track, 1, MUSIC_FADE_SECONDS);
+  } else {
+    fadeTrackGainTo(track, 0, MUSIC_FADE_SECONDS);
+    setTimeout(() => track.element.pause(), MUSIC_FADE_SECONDS * 1000 + 50);
+  }
+}
+
+function loadMusicTracks() {
+  musicTracks = {
+    menu: createMusicTrack(MUSIC_TRACK_SOURCES.menu),
+    gameplay: createMusicTrack(MUSIC_TRACK_SOURCES.gameplay),
+  };
+}
+
+/**
+ * The menu "family" of screens (main menu, Statistics, High Scores) all
+ * share the menu track — they're all reached from, and lead back to,
+ * the same context, and switching tracks every time you tap into
+ * Statistics and back would be more distracting than helpful. Start and
+ * Intro get no music of their own (Start is silent until the very first
+ * gesture; Intro is a brief, self-contained moment). Game gets the
+ * gameplay track — matches "fade in once a new level is started."
+ */
+const SCREEN_MUSIC_TRACK = {
+  menu: 'menu',
+  statistics: 'menu',
+  highscores: 'menu',
+  game: 'gameplay',
+};
 
 function handleVisibilityChange() {
   if (typeof document === 'undefined') return;
   if (document.visibilityState === 'hidden') {
-    if (musicElement) musicElement.pause();
+    if (musicTracks) {
+      for (const track of Object.values(musicTracks)) track.element.pause();
+    }
   } else {
     // "Settings and app state allow" = the music toggle is still on and
-    // the file actually loaded earlier; updateMusicPlayback() re-checks
-    // both rather than blindly resuming just because the tab is visible
-    // again.
+    // the active track actually loaded earlier; updateMusicPlayback()
+    // re-checks both rather than blindly resuming just because the tab
+    // is visible again.
     updateMusicPlayback();
   }
 }
@@ -209,6 +306,10 @@ function initAudioReactions() {
 
     if (state.status === 'complete' && prevStatus !== 'complete') {
       playCompletion();
+      // "Loops until level completion" — stop rather than let it keep
+      // looping under the completion dialog; the next screen change
+      // (Menu or a fresh New Game) picks the right track back up.
+      setActiveMusicTrack(null);
     } else if (state.mistakes > prevMistakes) {
       playError();
     } else if (isRealSelectionChange) {
@@ -256,7 +357,7 @@ export function initAudioEngine() {
   applySfxGain();
   applyMusicGain();
   ensureContextRunning();
-  loadMusic();
+  loadMusicTracks();
 
   onAudioSettingsChange(() => {
     applySfxGain();
@@ -265,6 +366,15 @@ export function initAudioEngine() {
   });
 
   document.addEventListener('visibilitychange', handleVisibilityChange);
+
+  // Picks the right music track for whatever screen is showing right
+  // when the engine finishes initializing (e.g. the menu, if it's
+  // already visible by the time the Start-screen gesture unlocks
+  // audio), then keeps it in sync with every screen change after.
+  onScreenChange((screenId) => {
+    setActiveMusicTrack(SCREEN_MUSIC_TRACK[screenId] ?? null);
+  });
+  setActiveMusicTrack(SCREEN_MUSIC_TRACK[getCurrentScreen()] ?? null);
 
   initAudioReactions();
 }

@@ -5,6 +5,167 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-28 — Phase 14: UX/Audio Polish and Three Real Bug Fixes
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+A direct user-feedback round (not a numbered "Prompt"), covering audio,
+visual polish, and an explicit "test play to verify no bugs." Logged as
+the new Phase 14 in `TASKS.md`, shifting Final QA to Phase 15 — same
+insert-and-shift convention used for prior unplanned phases.
+
+**Missing assets, flagged up front:** the user described `Logic
+Flow.mp3` (gameplay music) and `Sudoku Zen.mp3` (menu music) as already
+being "in repo main directory." Checked the actual filesystem and full
+git history before writing any code — neither file exists anywhere.
+Per `CLAUDE.md`'s binary-asset policy, nothing was fabricated in their
+place; the full two-track playback system was built and verified with
+both tracks absent (the same graceful-optional-asset pattern already
+proven for `background-music.mp3` in Phase 9), ready to work the moment
+the real files are supplied with those exact names. Told the user this
+directly before starting the rest of the work, rather than silently
+building around a gap or blocking on it.
+
+**What was built:**
+
+- **Two-track contextual music** (`js/audio.js`, substantially rewritten
+  from Phase 9's single-track model): each track (`menu` → "Sudoku
+  Zen.mp3", `gameplay` → "Logic Flow.mp3") gets its own `<audio>`
+  element and its own gain node purely for fade in/out, both feeding
+  into the existing shared `musicGain` (the actual volume-slider
+  control) — so a crossfade is just ramping one track's gain to 0 while
+  ramping the other's to 1, without either needing to know the other
+  exists. `js/screens.js` gained a small `onScreenChange(listener)`
+  subscription hook (mirrors the existing `onStateChange` pattern) so
+  `audio.js` can pick the right track without `screens.js` knowing
+  anything about audio. Menu/Statistics/High Scores share the "menu"
+  track (switching every time you glance at Statistics would be more
+  distracting than helpful); Game gets "gameplay"; puzzle completion
+  explicitly stops music rather than leaving it looping under the
+  completion dialog. `sw.js`'s optional-asset list and `CACHE_NAME` were
+  updated to match (`v1` → `v2`, per its own documented versioning
+  policy) — verified the service worker still installs cleanly with
+  both new (currently-404ing) filenames.
+- **Menu fade-in from black**: a fixed, full-screen black overlay
+  (`#menu-fade-overlay`) that appears and fades to transparent whenever
+  `finishIntro()` runs — whether the video played to completion or was
+  skipped, both count as "the intro just finished." Skipped entirely
+  (not just sped up) under `prefers-reduced-motion: reduce`.
+- **`logo.png` on the Start screen**, above the "Sudoku by Inspire"
+  heading — `alt=""` since the heading already conveys the same brand
+  name textually (the image is a decorative reinforcement, not new
+  information — the correct accessible-name pattern for that situation).
+- **Typography/menu polish**: heavier, tighter brand heading
+  (`font-weight: 800`, negative letter-spacing), a touch more size on
+  body/prompt text, subtle shadow depth on menu buttons, tightened
+  footer spacing — all CSS-only, no new font files. Considered
+  self-hosting a distinct webfont for more visual character, but ruled
+  it out: sourcing and verifying licensing for a new binary asset within
+  this session carries real risk for a "nice to have," while the
+  existing `system-ui` stack already renders each platform's own
+  highest-quality native font — the safer, zero-risk path was extracting
+  more visual quality from weight/spacing/hierarchy instead.
+
+**Three real bugs found and fixed** (the user's "test play to verify no
+bugs" instruction was taken literally — these were found by actually
+measuring the rendered page with Playwright, not just eyeballing
+screenshots):
+
+1. **Page-level scrolling on desktop** (and some mobile widths). Root
+   cause: Phase 11's `#screen-game { display: grid; ... }` desktop/
+   landscape layout rules use an ID selector, which is *more specific*
+   than the base `.screen[hidden] { display: none }` rule — so the
+   hidden game screen kept its full ~720px layout height behind
+   whatever screen was actually showing, inflating the page. Confirmed
+   directly: `getComputedStyle(#screen-game).display` was `"grid"` even
+   with `hidden` set. Fixed with an explicit `#screen-game[hidden] {
+   display: none }` override (specificity now wins on its own terms,
+   regardless of what other `#screen-game` rules exist or get added
+   later). Separately, desktop's `#app { margin: var(--space-5) auto }`
+   centering trick was independently leaking ~40px of collapsed margin
+   into `documentElement.scrollHeight` (confirmed by comparing
+   `document.documentElement.scrollHeight` against `document.body.
+   scrollHeight` — 840 vs. 800) — replaced with flexbox centering on
+   `body`, which doesn't have the same collapse behavior. Added a global
+   backstop on top of both fixes: `html, body { overflow: hidden }`
+   plus `max-height: 100dvh; overflow-y: auto` on every `.screen`, so
+   even a future regression stays contained to one screen's own scroll
+   instead of growing the whole page again.
+2. **Board grid lines nearly invisible in 7 of 8 theme/mode
+   combinations.** `.board`'s 1px cell gaps used `--color-border` as
+   their color — measured at only 1.3-2.4:1 contrast against
+   `--color-panel` across themes (WCAG's minimum for non-text UI
+   boundaries is 3:1), so the inner grid essentially disappeared into
+   the panel color everywhere except Light mode, confirmed visually
+   before the fix in every theme's board screenshot. Fixed by reusing
+   `--color-text-secondary` instead — already verified elsewhere (Phase
+   11's contrast audit) to clear 4.5:1 against `--color-panel` in all 8
+   combinations, so no new color values needed hand-tuning.
+3. **Digits rendered ~15px off-center horizontally.** The exact same
+   *class* of bug as #1, one level down: `.cell-notes { display: grid }`
+   also beat the default `[hidden] { display: none }` for a "hidden"
+   notes grid, which stayed present as a same-height flex sibling next
+   to `.cell-value` inside each cell — skewing the flex centering by
+   roughly the notes grid's own width. Measured precisely with
+   Playwright (comparing each digit's rendered center to its cell's
+   center) before and after: ~15px off before, ~1px (font-rendering
+   rounding, not a real bug) after adding `.cell-notes[hidden]`/
+   `.cell-value[hidden]` overrides. Worth calling out as a pattern for
+   future CSS: **any element given its own explicit non-default
+   `display` value needs an explicit `[hidden] { display: none }`
+   sibling rule** — the browser's default `[hidden]` styling silently
+   loses to an author rule of equal-or-lower specificity due to CSS
+   origin precedence (author beats user-agent regardless of specificity
+   ties), and this is now the *second* time that exact mechanism caused
+   a real, user-visible bug in this codebase.
+
+**Checks run:**
+
+- `node --check` across all 46 `.js` files: clean.
+- `npm test`: 181/181 passing, unchanged (no pure-logic module touched
+  this phase — everything was CSS, markup, or the browser-only
+  `js/audio.js`/`js/screens.js`, none of which have or need dedicated
+  unit tests, consistent with this project's established
+  browser-only-module precedent).
+- Full Playwright playtest: all 4 difficulties generated and labeled
+  correctly, complete input surface exercised (select, digit entry,
+  notes toggle, erase, undo, hint with confirmation, pause/resume via
+  Escape), a full puzzle solved to completion, reload + Continue Game
+  correctly disabled afterward, Clear Data flow, all 8 theme/mode
+  combinations checked for zero page overflow, and a 320px keyboard-only
+  pass (Enter to start, Tab+Enter to open New Game, Escape to cancel
+  with focus restored) — zero console/page errors across the entire run.
+- Precise pixel-measurement checks (not just visual screenshots) for
+  both the scrolling fix (`documentElement.scrollHeight` vs.
+  `innerHeight`, exact match after the fix) and the centering fix
+  (per-digit offset from cell center, sub-2px after the fix).
+
+**Remaining limitations:**
+
+- `Logic Flow.mp3` and `Sudoku Zen.mp3` still don't exist in the repo —
+  the entire two-track system is unheard, verified only at the
+  code-path level (no throws, correct track selected per screen, correct
+  crossfade timing math). Needs a real listen once the files are
+  supplied.
+- The intro video's silence ("Main intro video has no audio :(") is
+  acknowledged but not actionable from this codebase — it's the user's
+  own binary asset, and `CLAUDE.md`'s policy is to never
+  fabricate/replace/overwrite it. If audio is ever added to that file,
+  no code change is needed (the video isn't force-muted by a hidden
+  audio-availability check, just given the `muted` HTML attribute for
+  autoplay-policy reasons — same as before this phase).
+- Given how the "hidden but still displayed" bug pattern showed up
+  twice, ran a preemptive audit of every other element toggled via
+  `.hidden` in JS (`.pause-overlay`, `.menu-fade-overlay`,
+  `.connection-status`, `.update-banner`, `#highscores-empty`) against
+  its CSS: the first four already have correct `[hidden]` overrides
+  (added defensively in earlier phases), and `#highscores-empty`
+  (`.game-status`) has no conflicting `display` rule to begin with, so
+  the browser's default `[hidden]` behavior already works there
+  unaided. No third instance found.
+
+---
+
 ## 2026-07-28 — Phase 13: Production Deployment Readiness
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`

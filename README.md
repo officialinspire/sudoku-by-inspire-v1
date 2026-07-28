@@ -93,18 +93,26 @@ in this repo, and must never be fabricated or overwritten by anyone
 editing this codebase (see `CLAUDE.md`'s asset policy):
 
 - `./inspiresoftwareintro.mp4` — the intro video played after the start
-  screen.
-- `./logo.png` — displayed in the main-menu footer.
+  screen (currently silent — no audio track).
+- `./logo.png` — displayed on the Start screen and in the main-menu
+  footer.
 
 The app degrades gracefully if either is ever missing (skipping the
-intro screen / hiding the footer logo) rather than breaking.
+intro screen / hiding the logo) rather than breaking.
 
-A third, **optional** asset — `./background-music.mp3` — is not present
-in this repo today and is not required. If supplied later, drop it in
-the repo root as-is: `js/audio.js` detects and loops it automatically,
-respects the Music volume/mute setting, and requires no code changes.
-Its absence never causes an error, a broken install, or blocked service
-worker installation (see `sw.js`'s optional-asset precaching).
+Two more **optional** background-music assets are not present in this
+repo today and are not required:
+
+- `./Sudoku Zen.mp3` — fades in on the main menu (and Statistics/High
+  Scores, which share the same "menu" music context) once it exists.
+- `./Logic Flow.mp3` — fades in when a new game starts, loops for the
+  rest of that game, and stops on completion.
+
+If supplied later, drop them in the repo root with exactly those
+filenames: `js/audio.js` detects and loops each independently, respects
+the Music volume/mute setting, and requires no code changes. Either
+file's absence never causes an error, a broken install, or blocked
+service worker installation (see `sw.js`'s optional-asset precaching).
 
 PWA icons (192×192, 512×512, and a maskable 512×512) are not supplied
 yet either — see `icons/README.md` for exactly what's needed and how to

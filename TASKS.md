@@ -403,7 +403,58 @@ real device, not fully coverable by automation):
       steps + optional CLI), a `.nojekyll` explanation, and
       `inspireclothing.art` integration options.
 
-## Phase 14 — Final QA Against Acceptance Criteria
+## Phase 14 — UX/Audio Polish and Bug Fixes ✅ (2026-07-28)
+
+User feedback round, not a new architectural phase — but it directly
+surfaced and fixed three genuine, real defects (not just polish), so it's
+logged here in full rather than folded silently into another phase.
+
+- [x] Two-track contextual background music: `./Sudoku Zen.mp3` for the
+      menu family of screens, `./Logic Flow.mp3` for gameplay, each
+      crossfading in/out on screen change or completion (`js/audio.js`
+      rewritten onto a per-track-gain-node model; `js/screens.js` gained
+      an `onScreenChange` hook). Neither file exists in the repo yet
+      (see Outstanding/Blocked) — code path fully ready, verified with
+      no errors, nothing audible until supplied.
+- [x] Menu fades in from black after the intro video finishes or is
+      skipped (`.menu-fade-overlay`, reduced-motion skips it entirely).
+- [x] `logo.png` added to the Start screen title card.
+- [x] Main menu visual polish: refined typography (weight/letter-
+      spacing/sizing), button depth (shadow + existing hover/active),
+      tightened footer spacing.
+- [x] **Real bug fixed:** page-level scrolling on desktop/some mobile
+      widths. Root cause: `#screen-game`'s `display: grid` rules (from
+      Phase 11's side-panel layout) had higher CSS specificity than
+      `.screen[hidden] { display: none }`, so the hidden game screen
+      stayed laid out at full height behind whatever screen was actually
+      showing. Fixed with an explicit `#screen-game[hidden]` override;
+      also replaced `#app`'s margin-based desktop centering (which was
+      separately leaking ~40px via margin collapse) with flexbox
+      centering, and gave every `.screen` its own bounded
+      `max-height: 100dvh; overflow-y: auto` so the outer page
+      (`html, body { overflow: hidden }`) never scrolls even if some
+      future screen's content ever runs long.
+- [x] **Real bug fixed:** board grid lines were nearly invisible in 7 of
+      8 theme/mode combinations (measured 1.3-2.4:1 contrast, well under
+      WCAG's 3:1 minimum for non-text UI boundaries) — switched the
+      cell-gap color from `--color-border` to the already-audited
+      `--color-text-secondary` (>=4.5:1 everywhere).
+- [x] **Real bug fixed:** entered/given digits were rendered ~15px off-
+      center horizontally. Same root cause as the scrolling bug, one
+      level down: `.cell-notes[hidden]` had no override for `.cell-notes
+      { display: grid }`, so a "hidden" notes grid stayed present as a
+      same-size flex sibling next to `.cell-value`, skewing the flex
+      centering. Fixed with `.cell-notes[hidden]`/`.cell-value[hidden]`
+      overrides; verified centered within ~1px (font-rendering rounding)
+      across multiple cells.
+- [x] Full playtest: all 4 difficulties, full input surface (select/
+      digit/notes/erase/undo/hint/pause/resume), completion, reload +
+      Continue, Clear Data, 8 theme/mode combinations, 320px keyboard-
+      only — zero console/page errors. `npm test`: 181/181 unchanged
+      (no application logic touched, only markup/styles/the audio
+      module). `node --check`: all 46 JS files clean.
+
+## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and
       check it off with evidence (manual test note in
@@ -416,3 +467,8 @@ real device, not fully coverable by automation):
       (2026-07-28) and wired into the Phase 1 intro screen / menu footer.
 - [ ] Still waiting on app icon source image(s) for the PWA manifest
       (needed for Phase 10).
+- [ ] Still waiting on `./Sudoku Zen.mp3` (menu music) and
+      `./Logic Flow.mp3` (gameplay music), requested 2026-07-28 (Phase
+      14) — neither exists in the repo despite being referenced as
+      already uploaded; code is fully wired and ready the moment they
+      land (see `js/audio.js` and `README.md`'s Assets section).

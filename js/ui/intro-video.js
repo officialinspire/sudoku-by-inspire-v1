@@ -2,10 +2,37 @@ import { showScreen, getCurrentScreen } from '../screens.js';
 
 const video = document.getElementById('intro-video');
 const skipBtn = document.getElementById('skip-intro-btn');
+const fadeOverlay = document.getElementById('menu-fade-overlay');
+
+const FADE_DURATION_MS = 800;
+
+/**
+ * A brief black-screen fade revealing the menu, whether the video ended
+ * naturally or was skipped — both are "the intro just finished" from the
+ * player's point of view, so both get the same transition rather than
+ * only the natural-end path. Skipped entirely under reduced motion
+ * (not just sped up) rather than trying to interrupt a CSS transition
+ * that may not even be declared in that case — see styles.css's
+ * .menu-fade-overlay, whose transition only exists inside
+ * `@media (prefers-reduced-motion: no-preference)`.
+ */
+function playMenuFadeIn() {
+  if (!fadeOverlay) return;
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  fadeOverlay.hidden = false;
+  fadeOverlay.classList.add('is-visible');
+  void fadeOverlay.offsetWidth; // force a reflow so "visible" registers as a real starting state
+  fadeOverlay.classList.remove('is-visible');
+  setTimeout(() => {
+    fadeOverlay.hidden = true;
+  }, FADE_DURATION_MS);
+}
 
 function finishIntro() {
   video.pause();
   showScreen('menu');
+  playMenuFadeIn();
 }
 
 export function initIntroScreen() {

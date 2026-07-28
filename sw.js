@@ -22,7 +22,7 @@
  * devtools -> Application -> Service Workers -> Unregister, and/or
  * Application -> Storage -> "Clear site data."
  */
-const CACHE_NAME = 'inspire-sudoku-shell-v1';
+const CACHE_NAME = 'inspire-sudoku-shell-v2';
 
 // The minimum set of files the app cannot boot without. Listed
 // explicitly and installed with cache.addAll(), which is all-or-nothing:
@@ -40,12 +40,19 @@ const CACHE_NAME = 'inspire-sudoku-shell-v1';
 const CORE_ASSETS = ['./', './index.html', './index.js', './styles.css', './manifest.webmanifest'];
 
 // Root assets the user supplies (see CLAUDE.md's asset policy) that are
-// nice to have offline but must never block installation if absent —
-// background-music.mp3 in particular is *expected* to be missing right
-// now (see js/audio.js, Phase 9). Each is fetched and cached
+// nice to have offline but must never block installation if absent — the
+// two named music tracks in particular are *expected* to be missing
+// until supplied (see js/audio.js). Each is fetched and cached
 // independently in the loop below specifically so one 404 can't take the
-// others down with it the way cache.addAll() would.
-const OPTIONAL_ROOT_ASSETS = ['./inspiresoftwareintro.mp4', './logo.png', './background-music.mp3'];
+// others down with it the way cache.addAll() would. Filenames with
+// spaces are passed through encodeURI() the same way js/audio.js does,
+// so both agree on the exact same cached request URL.
+const OPTIONAL_ROOT_ASSETS = [
+  './inspiresoftwareintro.mp4',
+  './logo.png',
+  encodeURI('./Sudoku Zen.mp3'),
+  encodeURI('./Logic Flow.mp3'),
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

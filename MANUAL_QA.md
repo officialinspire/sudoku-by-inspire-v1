@@ -202,13 +202,25 @@ least once:
       device/browser without vibration support (most desktop browsers);
       on a supporting mobile device, a mistake should produce a short
       buzz when enabled.
-- [ ] **Missing music**: confirm no `./background-music.mp3` file exists
-      in the repo (it doesn't, by design — see `CLAUDE.md`'s asset
-      policy). The app should never show an error, never break audio
-      for SFX, and the Music toggle should simply have nothing audible
-      to play. If a real music file is later supplied, re-check that it
-      loops and respects the volume slider and mute toggle.
-- [ ] Backgrounding the tab (switching away) pauses music if it was
+- [ ] **Two-track background music** (once `./Sudoku Zen.mp3` and
+      `./Logic Flow.mp3` are supplied — see `README.md`'s Assets
+      section):
+  - "Sudoku Zen" fades in on the main menu, and stays playing across
+    Statistics/High Scores (same "menu" music context) without
+    restarting or cutting when moving between those three screens.
+  - Starting a new game crossfades to "Logic Flow," which loops for the
+    rest of that game.
+  - Completing the puzzle fades the gameplay track out (it doesn't keep
+    looping under the completion dialog).
+  - Returning to the menu (or starting another game) fades the correct
+    track back in.
+  - No audible click/pop/gap at any of these transitions — they should
+    crossfade smoothly, not cut instantly.
+- [ ] **Missing music** (the current state of this repo — neither file
+      exists yet, by design, see `CLAUDE.md`'s asset policy): the app
+      should never show an error, never break SFX, and the Music toggle
+      should simply have nothing audible to play at any screen.
+- [ ] Backgrounding the tab (switching away) pauses whichever track was
       playing; returning to the tab resumes it only if the Music toggle
       is still on.
 

@@ -6,6 +6,13 @@
 
 html, body {
   height: 100%;
+  /* This app never scrolls as a page — each .screen below is its own
+     bounded, individually-scrollable region instead (see .screen's own
+     max-height/overflow-y). Locking it here is the outer backstop: even
+     if some future change makes a screen taller than intended, the
+     *page* still can't grow/scroll, so the bug stays contained to one
+     screen's internal scrollbar instead of shifting the whole app. */
+  overflow: hidden;
 }
 
 body {
@@ -420,6 +427,13 @@ button {
   justify-content: center;
   gap: var(--space-3);
   min-height: 100dvh;
+  max-height: 100dvh;
+  /* The one sanctioned place content can ever scroll: if a screen's
+     content is genuinely too tall for the viewport (e.g. a long high
+     scores list on a short device), it scrolls within itself — the
+     outer page (locked via html/body's overflow: hidden above) never
+     does. */
+  overflow-y: auto;
   padding-top: max(var(--space-4), env(safe-area-inset-top));
   padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
   padding-left: max(var(--space-3), env(safe-area-inset-left));
@@ -432,9 +446,24 @@ button {
   display: none;
 }
 
+/* #screen-game[hidden] specifically: the >=1024px and short-landscape-
+   phone grid layouts below both set `#screen-game { display: grid }`
+   on an ID selector, which is *more* specific than `.screen[hidden]`
+   above (one class+attribute vs. one ID) and would otherwise win even
+   while hidden — silently laying the game screen out at full height
+   (~720px) behind whatever screen is actually showing, inflating page
+   height and causing exactly the page-level scrolling this rule exists
+   to prevent. This ID+attribute selector has higher specificity than
+   a bare `#screen-game`, so it reliably wins regardless of which other
+   #screen-game rule appears later in the file. */
+#screen-game[hidden] {
+  display: none;
+}
+
 .brand {
-  font-size: 1.75rem;
-  font-weight: 700;
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   margin: 0;
 }
 
@@ -443,11 +472,17 @@ button {
 }
 
 .brand--compact {
-  font-size: 1.25rem;
+  font-size: 1.35rem;
+}
+
+.start-logo {
+  width: min(65%, 14rem);
+  margin: 0 auto var(--space-2);
 }
 
 .start-prompt {
   color: var(--color-text-secondary);
+  font-size: 1.05rem;
   margin: 0;
 }
 
@@ -499,23 +534,29 @@ button {
   color: var(--color-accent-contrast);
   border: none;
   border-radius: var(--radius-md);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   cursor: pointer;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  box-shadow: 0 2px 6px var(--shadow-color);
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .menu-nav button:disabled {
   background: var(--color-border);
   color: var(--color-text-secondary);
+  box-shadow: none;
   cursor: not-allowed;
 }
 
 .menu-footer {
-  margin-top: var(--space-5);
+  margin-top: var(--space-4);
 }
 
 .menu-logo {
-  max-width: 10rem;
+  max-width: 9rem;
   margin: 0 auto;
+  opacity: 0.9;
 }
 
 /* ---------- Game screen ---------- */
@@ -574,7 +615,17 @@ button {
   aspect-ratio: 1 / 1;
   margin: 0 auto;
   gap: 1px;
-  background: var(--color-border);
+  /* Was --color-border, which is deliberately subtle for chrome like
+     button/dialog outlines — measured at only 1.3-2.4:1 contrast
+     against --color-panel across themes here, well under WCAG's 3:1
+     minimum for meaningful non-text UI boundaries, and the cell grid
+     was essentially invisible in most themes as a result (confirmed
+     visually in every theme except Light). --color-text-secondary is
+     already verified elsewhere (see the Phase 11 contrast audit) to
+     clear 4.5:1 against --color-panel in all 8 theme/mode combinations,
+     so reusing it here guarantees a genuinely visible grid everywhere
+     without hand-tuning a new color per theme. */
+  background: var(--color-text-secondary);
   border: 2px solid var(--color-text);
   border-radius: var(--radius-sm);
   overflow: hidden;
@@ -648,6 +699,21 @@ button {
   width: 100%;
   height: 100%;
   padding: 2px;
+}
+
+/* Same class of bug as #screen-game[hidden] (see that rule's comment):
+   an explicit `display: grid` above beats the browser's default
+   `[hidden] { display: none }` UA rule for equal-specificity ties in
+   an author stylesheet, so a "hidden" notes grid was staying laid out
+   at full cell size — a same-width invisible flex sibling next to
+   .cell-value that silently pushed the visible digit off-center
+   (confirmed: ~15px left of true center). */
+.cell-notes[hidden] {
+  display: none;
+}
+
+.cell-value[hidden] {
+  display: none;
 }
 
 .cell-note-digit {
@@ -1139,6 +1205,31 @@ button {
   color: var(--color-text-secondary);
 }
 
+/* ---------- Intro-to-menu fade ---------- */
+
+.menu-fade-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.menu-fade-overlay[hidden] {
+  display: none;
+}
+
+.menu-fade-overlay.is-visible {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .menu-fade-overlay {
+    transition: opacity 0.8s ease;
+  }
+}
+
 /* ---------- Connection status + update banner ---------- */
 
 .connection-status {
@@ -1211,19 +1302,35 @@ button {
     grid-template-columns: repeat(4, 1fr);
   }
 
+  /* Centers #app as a "floating card" via flexbox rather than the more
+     obvious `margin: auto` — a block element's vertical auto-margins
+     can collapse through an unconstrained parent (confirmed here: it
+     was inflating documentElement.scrollHeight ~40px past the actual
+     viewport, a real if invisible cause of unwanted page scroll).
+     Flex-item margins don't collapse the same way, which is the actual
+     reason for this approach, not just centering. */
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
   #app {
+    width: calc(100% - var(--space-5) * 2);
     max-width: 60rem;
-    margin: var(--space-5) auto;
-    min-height: calc(100dvh - var(--space-5) * 2);
+    height: calc(100dvh - var(--space-5) * 2);
+    margin: 0;
     background: var(--color-panel);
     border-radius: var(--radius-lg);
     box-shadow: 0 1px 3px var(--shadow-color), 0 12px 32px var(--shadow-color);
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
     transition: background-color 0.2s ease;
   }
 
   .screen {
-    min-height: calc(100dvh - var(--space-5) * 2);
+    min-height: 100%;
+    max-height: 100%;
   }
 }
 
