@@ -1,0 +1,16 @@
+# Dependencies (this project has none today, but `npm test` uses Node's
+# built-in test runner only — if a devDependency is ever added, its
+# node_modules/ must never be committed).
+node_modules/
+
+# OS/editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
+
+# Local env files, if anything ever needs one (this app has no backend
+# and no secrets today, but this is cheap, standard insurance).
+.env
+.env.*

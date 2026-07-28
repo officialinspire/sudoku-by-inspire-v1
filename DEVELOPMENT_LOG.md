@@ -5,6 +5,171 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-28 — Phase 13: Production Deployment Readiness
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+Matches `TASKS.md`'s existing Phase 13 (GitHub Pages Deployment)
+directly — no renumbering needed this time.
+
+**Important constraint honored this phase:** the prompt explicitly said
+not to push or change remote repository settings without permission.
+Every file change below is committed locally to this branch as usual,
+but **the commit has not been pushed**, and GitHub Pages has **not**
+been enabled — both are real, external, hard-to-reverse actions (a
+push is visible to others; enabling Pages exposes a live public URL)
+that this project's own working agreement (`CLAUDE.md`) and this
+prompt's explicit instruction both require a human's go-ahead for.
+Deployment steps are fully documented and ready to run; none were run.
+
+**What was built/verified:**
+
+- **Absolute-path audit**: scripted `grep` across every HTML
+  `href`/`src`, every CSS `url()`, every JS `import`/`fetch`, the
+  manifest, and `sw.js` for anything starting with a bare `/` — zero
+  matches. Every path in this repo was already relative (`./...` or
+  `../...`), built that way deliberately since Phase 1, so this was
+  confirmation of existing discipline, not a fix.
+- **`.nojekyll`** (empty file, repo root) — tells GitHub Pages to skip
+  its default Jekyll build step.
+- **`.gitignore`** — `node_modules/`, OS/editor cruft, `.env*`. This
+  project has zero dependencies today (`npm test` uses only Node's
+  built-in test runner), so there's nothing to actually ignore yet, but
+  it's cheap insurance against the first future `npm install` landing
+  in a commit by accident.
+- **Simulated-subpath deployment check**: served the repo through a
+  local static server with a `/sudoku-by-inspire-v1/` URL prefix
+  (mirroring the real shape of a GitHub Pages project-site URL —
+  `https://<owner>.github.io/<repo>/`) and drove it with Playwright:
+  confirmed the manifest resolves under the subpath, the service
+  worker's registered `scope` is confined to the subpath (never the
+  origin root), every core and optional asset precached under the
+  correct subpath-prefixed URL, a complete game played start-to-finish
+  with zero failed network requests and zero console errors. This is
+  the same verification technique used in Phase 10's PWA work, re-run
+  here specifically as this phase's deployment-readiness gate.
+- **Full pre-deployment audit**, per the prompt's explicit checklist:
+  - `npm test`: 181/181 passing.
+  - `node --check` across all 46 `.js` files: clean.
+  - `sw.js`'s `CORE_ASSETS`/`OPTIONAL_ROOT_ASSETS` cross-checked against
+    what's actually on disk: all 5 core files exist, both existing
+    optional assets (`logo.png`, `inspiresoftwareintro.mp4`) exist,
+    `background-music.mp3` correctly does not.
+  - Secrets/local-machine-path grep across every source file: no
+    matches (the only "secret"/"token" hits were CSS "design token"
+    terminology and unrelated English prose).
+  - Largest tracked file is the intro video at 276KB — nowhere near any
+    size concern.
+  - `git log --follow` on `logo.png` and `inspiresoftwareintro.mp4`
+    each show exactly one commit (the user's original upload) — neither
+    has ever been touched by any phase since, confirmed by file-type
+    signature and checksum as still valid, unmodified PNG/MP4 files.
+  - `grep` for `https?://` across every runtime file (HTML, CSS, JS,
+    manifest, service worker): zero matches — confirmed zero external
+    runtime dependencies, consistent with CLAUDE.md's requirement.
+- **`README.md`** fully rewritten (previously still Phase 0's
+  placeholder "planning complete, application code not yet started"
+  text) — overview, local development, a controls table, themes/modes,
+  assets (including the optional-music and PWA-icon status), tests, PWA/
+  offline verification steps, local-data behavior, cache reset/update
+  instructions, exact GitHub Pages deployment steps (UI + optional CLI),
+  `inspireclothing.art` integration options, suggested repository
+  topics, and a troubleshooting section.
+
+**Explanation (why repository subpaths break absolute URLs, what
+GitHub Pages serves, when Actions are unnecessary, service-worker scope
+vs. deployment path, connecting a custom domain later):**
+
+- *Why repository subpaths break absolute URLs*: a path starting with
+  `/` (like `/index.js` or `/styles.css`) is resolved by the browser
+  against the current **origin** (scheme + host + port) — always the
+  domain root, no matter how deep the current page's own URL is nested.
+  `https://user.github.io/sudoku-by-inspire-v1/index.html` referencing
+  `/styles.css` would actually request
+  `https://user.github.io/styles.css` — one level too high, landing
+  outside the repo's own subfolder entirely, a 404. A **relative** path
+  (`./styles.css`) is resolved against the *current document's own URL*
+  instead, so it correctly lands at
+  `https://user.github.io/sudoku-by-inspire-v1/styles.css`. This is
+  also exactly why a page that works perfectly when opened at a domain
+  root (or via `file://`, or via a local dev server with nothing else
+  under it) can silently break the moment it's hosted one folder deeper
+  — the bug is invisible until the hosting path actually changes.
+- *What GitHub Pages serves*: literally the files in the chosen
+  branch/folder, over HTTP(S), completely unprocessed except for the
+  optional Jekyll build step (skipped here via `.nojekyll`) — there is
+  no server-side code execution, no environment variables, no backend
+  of any kind. That's precisely why this app is a perfect fit for it:
+  it's already "just static files that happen to talk to each other via
+  relative URLs," which is all Pages can (or needs to) serve.
+- *When Actions are unnecessary*: GitHub Actions exists to run a
+  process — most commonly a build step — before publishing. A
+  project with no build step has nothing for Actions to *do* on the way
+  to Pages; "deploy from a branch" publishes the repository's own files
+  directly, with one less moving part (no workflow YAML to maintain, no
+  Actions minutes consumed, no extra point of failure) than an
+  Actions-based deploy would add for zero benefit. The moment a real
+  build step exists — a bundler, a TypeScript compile, anything that
+  produces output *different* from the source files — Actions becomes
+  the right tool, because "deploy from a branch" can only publish what's
+  literally committed, not a build artifact.
+- *Service-worker scope vs. deployment path*: a service worker's
+  `scope` defaults to the directory containing the script it was
+  registered from, and can never be broader than that (a worker at
+  `/sudoku-by-inspire-v1/sw.js` can control pages under
+  `/sudoku-by-inspire-v1/` but never anything outside it, even on the
+  same origin) — this project's registration
+  (`navigator.serviceWorker.register('./sw.js', { scope: './' })`, in
+  `js/sw-register.js`) is written relative to wherever `index.html`
+  itself was loaded from specifically so this resolves correctly
+  whether that's a domain root or a repository subpath, without any
+  environment-specific configuration. Verified directly this phase: the
+  simulated-subpath check above confirmed `registration.scope` came
+  back as the full subpath URL, not the origin root.
+- *Connecting a custom domain later*: GitHub Pages can serve this exact
+  same repository from a custom (sub)domain instead of `github.io`
+  purely via DNS + a `CNAME` file — no application code changes needed,
+  because the app's relative-path architecture already works
+  identically at any origin. The domain owner adds a DNS `CNAME` record
+  pointing the desired subdomain at `<owner>.github.io`, and either
+  commits a `CNAME` file containing that domain to the repo root or sets
+  it via Settings → Pages → Custom domain (which creates the file
+  automatically); GitHub then provisions a TLS certificate for it
+  automatically once DNS propagates. This is real, live-domain
+  infrastructure — exactly the class of action this phase deliberately
+  did not perform without explicit permission.
+
+**Checks run:**
+
+- `npm test`: 181/181 passing (unchanged from Phase 12 — no application
+  code changed this phase, only deployment/documentation artifacts).
+- `node --check` across all 46 `.js` files: clean.
+- Full absolute-path grep audit: clean (see above).
+- Simulated-subpath Playwright deployment check: all assertions passed,
+  zero failed requests, zero console errors.
+
+**Remaining manual actions (deliberately not performed this phase):**
+
+- Push this branch / merge to the default branch.
+- Enable GitHub Pages (Settings → Pages → Deploy from a branch) — exact
+  steps are in `README.md`'s Deployment section.
+- Run `MANUAL_QA.md`'s full checklist against the real, live Pages URL
+  once deployed (this phase only verified a *simulated* subpath
+  locally — a real deployment is still worth its own pass, especially
+  for real-device video/audio playback and real screen-reader use,
+  neither of which this sandboxed environment can confirm).
+- Supply PWA icons (`icons/README.md`) and, if desired later, a real
+  `background-music.mp3` — both optional, both already handled
+  gracefully in their absence.
+- Decide on and implement an `inspireclothing.art` integration option
+  (see `README.md`'s three options) once that site's own platform is
+  known — deliberately not assumed or chosen in this repo.
+- Add the suggested repository topics (`sudoku`, `javascript`, `pwa`,
+  `offline-first`, `indie-game`, `inspire`) via Settings → General →
+  Topics — a repository-settings change, so left for the user.
+
+---
+
 ## 2026-07-28 — Phase 12: Full Engineering Audit — Tests and Manual QA
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`

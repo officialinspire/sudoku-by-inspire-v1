@@ -369,11 +369,39 @@ real device, not fully coverable by automation):
       file + one full Playwright-driven end-to-end smoke run — zero
       failures found; see `DEVELOPMENT_LOG.md` for exact counts.
 
-## Phase 13 — GitHub Pages Deployment
+## Phase 13 — GitHub Pages Deployment ✅ (2026-07-28, not yet deployed — see below)
 
-- [ ] Verify no absolute-root paths anywhere (grep audit).
-- [ ] GitHub Pages workflow or branch config for subpath hosting.
-- [ ] Deployed smoke test at the actual Pages subpath URL.
+- [x] Verify no absolute-root paths anywhere — scripted grep audit across
+      every HTML attribute, CSS `url()`, JS import/fetch, the manifest,
+      and `sw.js`: zero absolute-root references found anywhere.
+- [x] Confirmed GitHub Pages' built-in "deploy from a branch" is
+      sufficient — no build step exists or is needed, so no GitHub
+      Actions workflow was added (would be unjustified complexity for a
+      zero-build static site; see `README.md`'s Deployment section for
+      the exact UI/CLI steps, and what a *future* justified workflow
+      would look like if a real build step is ever added).
+- [x] Added `.nojekyll` (skip GitHub Pages' default Jekyll processing —
+      unneeded for this repo, standard zero-downside precaution) and a
+      minimal `.gitignore`.
+- [x] Simulated-subpath smoke test: served the repo under a
+      `/sudoku-by-inspire-v1/` prefix (mimicking the real Pages project-
+      site URL shape) via Playwright — manifest, service worker scope,
+      full precache list, and a complete played-through game all
+      resolved correctly with zero failed requests and zero console
+      errors. **Not yet deployed to a live `github.io` URL** — Pages
+      hasn't been enabled (a remote repository-settings change, out of
+      scope without explicit permission — see `DEVELOPMENT_LOG.md`).
+- [x] Full pre-deployment audit: 181/181 tests passing, all 46 JS files
+      syntax-clean, `sw.js`'s precache list matches what's actually on
+      disk, no secrets/local machine paths/accidental large files, the
+      optional music file remains genuinely optional, `logo.png`/
+      `inspiresoftwareintro.mp4` confirmed never modified since the
+      user's original upload (single commit in their `git log`), and
+      zero external runtime dependencies (`grep` for `https?://` across
+      every runtime file: no matches).
+- [x] `README.md` rewritten with a full deployment section (exact UI
+      steps + optional CLI), a `.nojekyll` explanation, and
+      `inspireclothing.art` integration options.
 
 ## Phase 14 — Final QA Against Acceptance Criteria
 
