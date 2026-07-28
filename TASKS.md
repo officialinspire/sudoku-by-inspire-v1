@@ -188,7 +188,57 @@ real device, not fully coverable by automation):
   5, empty, notes 2, 4, 7") — content was designed for this but not
   run through an actual screen reader yet
 
-## Phase 6 — Persistence: Autosave, Continue, Settings
+## Phase 6 — Gameplay Tools & Completion Flow ✅ (2026-07-28)
+
+- [x] `toggleNote(index, value)` in `js/game-state.js` — the one place
+      notes are mutated; `applyNumberInput` delegates to it in notes
+      mode rather than duplicating the logic. Rejects fixed *and*
+      already-filled cells, preserves unrelated notes by construction
+      (single-bit XOR).
+- [x] Bounded undo history: `MAX_HISTORY_SIZE = 50` (exported,
+      documented), oldest entries dropped once exceeded. Undo covers
+      entry, erase, notes, and hint actions (all four route through the
+      same `pushHistory`).
+- [x] Hint: `useHint()` reveals the selected cell's solution value
+      (clears its notes, clears the value from peer notes, same as a
+      normal entry), plus `HINT_SCORE_PENALTY` as scoring metadata for
+      the future real formula. Gated behind a confirmation `<dialog>`
+      (`js/ui/hint-dialog.js`) — the Hint button itself is
+      state-computed disabled/enabled, never exposing the solution to
+      decide that.
+- [x] Timer redesign: timestamp-anchored segments (`elapsedSeconds`
+      confirmed-so-far + live `now() - segmentStartedAt`) instead of
+      tick-counting, immune to `setInterval` drift/throttling. Pauses
+      via a composable reason-`Set` (`suspendTimer`/`resumeTimer`) for
+      independent, simultaneous causes: explicit pause (full stop +
+      pause overlay), a blocking dialog (Settings, difficulty picker,
+      hint confirmation), a hidden tab (`visibilitychange`, timer-only —
+      no overlay just for switching tabs), and completion (terminal).
+- [x] Pause overlay (from Phase 5) confirmed to fully obscure the board
+      (`position: fixed; inset: 0`) — carried forward, not rebuilt.
+- [x] Mistake tracking (from Phase 5) untouched; now paired with a new
+      **optional immediate-error-checking setting**
+      (`js/game-settings.js`, versioned localStorage, same pattern as
+      `js/theme.js`) — mistakes are always counted internally regardless
+      of the setting, but the red "wrong entry" styling only renders
+      live when the setting is on.
+- [x] Completion dialog (`js/ui/completion-dialog.js`) replacing the old
+      plain-text "Solved!" message: difficulty, elapsed time, a clearly
+      labeled provisional score (`js/completion.js`'s `estimateScore`,
+      explicitly not the final Phase 8 scoring formula), mistakes,
+      hints, generated Share Results text (`buildShareText`, copyable
+      via the Clipboard API with a visible-textarea fallback), New Game
+      (reopens the difficulty picker), and Menu.
+- [x] Audited: no solution value is ever written into a DOM attribute,
+      dataset, or other inspectable location for an unrevealed cell —
+      verified both by code review and an automated browser check.
+- [x] Settings is now reachable from the game screen itself (a header
+      gear button), not just the main menu — needed for the immediate-
+      error-checking setting and the "blocking dialog pauses the timer"
+      behavior to be exercisable/useful mid-game; this was a real gap
+      found while testing, not part of the original plan.
+
+## Phase 7 — Persistence: Autosave, Continue, Settings
 
 - [ ] `js/storage.js` — thin localStorage wrapper (namespaced keys,
       versioned schema for future-proofing, same safe-fallback pattern
@@ -198,20 +248,20 @@ real device, not fully coverable by automation):
 - [ ] Remaining settings persistence (audio, input prefs) alongside the
       appearance settings already persisted in Phase 2.
 
-## Phase 7 — Statistics, Best Times, High Scores
+## Phase 8 — Statistics, Best Times, High Scores
 
 - [ ] Track games played/won, streaks, per-difficulty best time.
 - [ ] Score formula + high-score tracking per difficulty.
 - [ ] Statistics screen UI.
 
-## Phase 8 — Audio (Music + SFX)
+## Phase 9 — Audio (Music + SFX)
 
 - [ ] `js/audio.js` — music loop playback + SFX playback, independent mute/
       volume controls, respects settings persistence.
 - [ ] Lightweight SFX assets sourced/created (small file sizes, offline-
       bundled, no CDN).
 
-## Phase 9 — Offline / PWA
+## Phase 10 — Offline / PWA
 
 - [ ] `manifest.webmanifest` with relative `start_url`/`scope` (subpath-safe).
 - [ ] App icons (sizes per manifest spec).
@@ -220,7 +270,7 @@ real device, not fully coverable by automation):
 - [ ] `js/sw-register.js` registration with relative scope.
 - [ ] Verified offline load via devtools network throttling to "Offline."
 
-## Phase 10 — Accessibility Polish
+## Phase 11 — Accessibility Polish
 
 - [ ] Full keyboard-only playthrough audit.
 - [ ] ARIA labels/roles audit on all interactive controls.
@@ -228,13 +278,13 @@ real device, not fully coverable by automation):
 - [ ] `prefers-reduced-motion` audit (animations/transitions gated).
 - [ ] Contrast re-check post-theme-work.
 
-## Phase 11 — GitHub Pages Deployment
+## Phase 12 — GitHub Pages Deployment
 
 - [ ] Verify no absolute-root paths anywhere (grep audit).
 - [ ] GitHub Pages workflow or branch config for subpath hosting.
 - [ ] Deployed smoke test at the actual Pages subpath URL.
 
-## Phase 12 — Final QA Against Acceptance Criteria
+## Phase 13 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and
       check it off with evidence (manual test note in

@@ -1,10 +1,13 @@
 import { getState, onStateChange, selectCell, getPeerIndices } from '../game-state.js';
+import { getGameSettings, onGameSettingsChange } from '../game-settings.js';
 
 const boardEl = document.getElementById('board');
 const timerEl = document.getElementById('game-timer');
 const mistakesEl = document.getElementById('game-mistakes');
+const hintsEl = document.getElementById('game-hints');
 const difficultyEl = document.getElementById('game-difficulty-label');
 const notesToggleBtn = document.getElementById('btn-notes-toggle');
+const hintBtn = document.getElementById('btn-hint');
 const pauseOverlay = document.getElementById('pause-overlay');
 
 const cells = [];
@@ -72,6 +75,7 @@ function describeCell(index, value, isFixed, notesBitmask) {
 
 function render(state) {
   const hasGame = state.puzzle !== null;
+  const { immediateErrorChecking } = getGameSettings();
   boardEl.classList.toggle('is-empty', !hasGame);
 
   const related = hasGame && state.selectedIndex !== null ? new Set(getPeerIndices(state.selectedIndex)) : null;
@@ -90,7 +94,7 @@ function render(state) {
     const isRelated = !isSelected && related !== null && related.has(index);
     const isMatch = !isSelected && selectedValue !== 0 && value === selectedValue;
     const isConflict = !isFixed && entry !== 0 && state.conflicts.has(index);
-    const isError = !isFixed && entry !== 0 && entry !== state.solution[index];
+    const isError = immediateErrorChecking && !isFixed && entry !== 0 && entry !== state.solution[index];
 
     el.classList.toggle('is-fixed', isFixed);
     el.classList.toggle('is-selected', isSelected);
@@ -142,10 +146,25 @@ function render(state) {
   }
   if (timerEl) timerEl.textContent = formatTime(state.elapsedSeconds);
   if (mistakesEl) mistakesEl.textContent = String(state.mistakes);
+  if (hintsEl) hintsEl.textContent = String(state.hintsUsed);
 
   if (notesToggleBtn) {
     notesToggleBtn.setAttribute('aria-pressed', String(state.notesMode));
     notesToggleBtn.textContent = state.notesMode ? 'Notes: On' : 'Notes: Off';
+  }
+
+  if (hintBtn) {
+    // Nothing to hint without a selected, editable, still-incorrect
+    // cell — computed from state, never by reading (or writing) the
+    // solution into any DOM attribute a player could inspect to cheat.
+    const selectedIndex = state.selectedIndex;
+    const canHint =
+      hasGame &&
+      state.status === 'playing' &&
+      selectedIndex !== null &&
+      state.puzzle[selectedIndex] === 0 &&
+      state.entries[selectedIndex] !== state.solution[selectedIndex];
+    hintBtn.disabled = !canHint;
   }
 
   if (pauseOverlay) pauseOverlay.hidden = state.status !== 'paused';
@@ -154,5 +173,6 @@ function render(state) {
 export function initBoardView() {
   buildBoard();
   onStateChange(render);
+  onGameSettingsChange(() => render(getState()));
   render(getState());
 }

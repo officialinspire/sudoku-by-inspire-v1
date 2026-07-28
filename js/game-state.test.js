@@ -7,12 +7,18 @@ import {
   startGame,
   selectCell,
   applyNumberInput,
+  toggleNote,
   eraseSelectedCell,
   toggleNotesMode,
+  useHint,
+  HINT_SCORE_PENALTY,
+  MAX_HISTORY_SIZE,
   undo,
   moveSelection,
   pauseGame,
   resumeGame,
+  suspendTimer,
+  resumeTimer,
   getPeerIndices,
 } from './game-state.js';
 import { rowColToIndex } from './sudoku-engine.js';
@@ -55,6 +61,15 @@ function freshGameResult(overrides = {}) {
 // real setInterval running against the test process.
 function newGame(overrides) {
   startGame(freshGameResult(overrides), 'easy', { autoStartTimer: false });
+}
+
+// A controllable fake clock for timer tests — avoids any test needing
+// to actually wait on real wall-clock time.
+function fakeClock(startAt = 0) {
+  let now = startAt;
+  const clock = () => now;
+  clock.advance = (ms) => { now += ms; };
+  return clock;
 }
 
 beforeEach(() => {
@@ -350,5 +365,184 @@ describe('single notify path', () => {
     applyNumberInput(10); // invalid value, no cell selected either
     unsubscribe();
     assert.equal(calls, 0);
+  });
+});
+
+describe('toggleNote', () => {
+  test('sets and clears a candidate bit, preserving unrelated notes', () => {
+    toggleNote(1, 3);
+    toggleNote(1, 6);
+    let notes = getState().notes[1];
+    assert.equal(notes & (1 << 2), 1 << 2); // digit 3
+    assert.equal(notes & (1 << 5), 1 << 5); // digit 6
+
+    toggleNote(1, 3); // clear just digit 3
+    notes = getState().notes[1];
+    assert.equal(notes & (1 << 2), 0);
+    assert.equal(notes & (1 << 5), 1 << 5); // digit 6 untouched
+  });
+
+  test('rejects a fixed clue', () => {
+    toggleNote(0, 5);
+    assert.equal(getState().notes[0], 0);
+  });
+
+  test('rejects an already-filled cell', () => {
+    selectCell(1);
+    applyNumberInput(solution[1]);
+    toggleNote(1, 4);
+    assert.equal(getState().notes[1], 0);
+  });
+
+  test('is what applyNumberInput delegates to in notes mode', () => {
+    selectCell(1);
+    toggleNotesMode();
+    applyNumberInput(7);
+    assert.equal(getState().notes[1] & (1 << 6), 1 << 6);
+  });
+});
+
+describe('bounded undo history', () => {
+  test('caps at MAX_HISTORY_SIZE, dropping the oldest entries', () => {
+    // Each toggleNote call pushes one history snapshot.
+    for (let i = 0; i < MAX_HISTORY_SIZE + 10; i++) {
+      toggleNote(1, (i % 9) + 1);
+    }
+    assert.equal(getState().history.length, MAX_HISTORY_SIZE);
+  });
+});
+
+describe('useHint', () => {
+  test('reveals the correct value and increments hintsUsed without counting a mistake', () => {
+    selectCell(1);
+    const ok = useHint();
+    const state = getState();
+    assert.equal(ok, true);
+    assert.equal(state.entries[1], solution[1]);
+    assert.equal(state.hintsUsed, 1);
+    assert.equal(state.mistakes, 0);
+  });
+
+  test('clears the hinted cell\'s notes and removes the value from peer notes', () => {
+    const peerIndex = getPeerIndices(1)[0];
+    toggleNote(1, solution[1]);
+    toggleNote(peerIndex, solution[1]);
+    selectCell(1);
+    useHint();
+    const state = getState();
+    assert.equal(state.notes[1], 0);
+    assert.equal(state.notes[peerIndex] & (1 << (solution[1] - 1)), 0);
+  });
+
+  test('does nothing without a selection', () => {
+    assert.equal(useHint(), false);
+    assert.equal(getState().hintsUsed, 0);
+  });
+
+  test('does nothing on a fixed clue', () => {
+    selectCell(0);
+    assert.equal(useHint(), false);
+  });
+
+  test('does nothing if the cell is already correct', () => {
+    selectCell(1);
+    applyNumberInput(solution[1]);
+    assert.equal(useHint(), false);
+    assert.equal(getState().hintsUsed, 0);
+  });
+
+  test('is undoable', () => {
+    selectCell(1);
+    useHint();
+    undo();
+    const state = getState();
+    assert.equal(state.entries[1], 0);
+    assert.equal(state.hintsUsed, 0);
+  });
+
+  test('can complete the puzzle', () => {
+    for (let i = 1; i < 80; i++) {
+      selectCell(i);
+      applyNumberInput(solution[i]);
+    }
+    // Every cell but the last (index 80) is now correctly filled.
+    assert.notEqual(getState().status, 'complete');
+    selectCell(80);
+    useHint();
+    assert.equal(getState().status, 'complete');
+  });
+
+  test('HINT_SCORE_PENALTY is a positive number available as scoring metadata', () => {
+    assert.equal(typeof HINT_SCORE_PENALTY, 'number');
+    assert.ok(HINT_SCORE_PENALTY > 0);
+  });
+});
+
+describe('timer', () => {
+  test('elapsed time accrues from a fake clock without any real interval', () => {
+    const clock = fakeClock(0);
+    startGame(freshGameResult(), 'easy', { autoStartTimer: false, now: clock });
+    assert.equal(getState().elapsedSeconds, 0);
+    clock.advance(3500);
+    assert.equal(getState().elapsedSeconds, 3);
+  });
+
+  test('pausing freezes elapsed time; resuming continues accruing from there', () => {
+    const clock = fakeClock(0);
+    startGame(freshGameResult(), 'easy', { autoStartTimer: false, now: clock });
+    clock.advance(5000);
+    pauseGame();
+    assert.equal(getState().elapsedSeconds, 5);
+
+    clock.advance(60000); // time passes while paused
+    assert.equal(getState().elapsedSeconds, 5); // not counted
+
+    resumeGame();
+    clock.advance(2000);
+    assert.equal(getState().elapsedSeconds, 7);
+  });
+
+  test('a suspension reason freezes elapsed time without changing status', () => {
+    const clock = fakeClock(0);
+    startGame(freshGameResult(), 'easy', { autoStartTimer: false, now: clock });
+    clock.advance(4000);
+    suspendTimer('dialog');
+    assert.equal(getState().status, 'playing'); // no overlay/pause — timer-only suspension
+    clock.advance(10000);
+    assert.equal(getState().elapsedSeconds, 4); // frozen while suspended
+
+    resumeTimer('dialog');
+    clock.advance(1000);
+    assert.equal(getState().elapsedSeconds, 5);
+  });
+
+  test('multiple simultaneous suspension reasons only resume once all are cleared', () => {
+    const clock = fakeClock(0);
+    startGame(freshGameResult(), 'easy', { autoStartTimer: false, now: clock });
+    clock.advance(2000);
+    suspendTimer('hidden');
+    suspendTimer('dialog');
+    clock.advance(5000);
+
+    resumeTimer('hidden'); // one reason cleared, one remains
+    clock.advance(5000);
+    assert.equal(getState().elapsedSeconds, 2); // still frozen — 'dialog' still holds it
+
+    resumeTimer('dialog');
+    clock.advance(3000);
+    assert.equal(getState().elapsedSeconds, 5);
+  });
+
+  test('completion freezes elapsed time', () => {
+    const clock = fakeClock(0);
+    startGame(freshGameResult(), 'easy', { autoStartTimer: false, now: clock });
+    for (let i = 1; i < 81; i++) {
+      selectCell(i);
+      applyNumberInput(solution[i]);
+      clock.advance(100);
+    }
+    const elapsedAtCompletion = getState().elapsedSeconds;
+    clock.advance(60000);
+    assert.equal(getState().elapsedSeconds, elapsedAtCompletion);
   });
 });

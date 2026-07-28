@@ -1,32 +1,18 @@
 import { showScreen } from '../screens.js';
 import { generatePuzzle, DIFFICULTIES } from '../sudoku-generator.js';
-import { startGame, onStateChange, pauseGame } from '../game-state.js';
+import { startGame, pauseGame } from '../game-state.js';
+import { openSettingsDialog } from './settings.js';
 
 const statusEl = document.getElementById('game-status');
 const backBtn = document.getElementById('btn-game-back');
-
-let previousStatus = null;
+const gameSettingsBtn = document.getElementById('btn-game-settings');
 
 function renderStatus(message) {
   statusEl.textContent = message;
 }
 
-function formatTime(totalSeconds) {
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
-}
-
-// Completion is announced here (once, on the transition into 'complete')
-// rather than the board renderer doing it on every render — this module
-// owns #game-status, board-view.js owns the grid/header/toolbar.
-onStateChange((state) => {
-  if (state.status === 'complete' && previousStatus !== 'complete') {
-    const mistakeWord = state.mistakes === 1 ? 'mistake' : 'mistakes';
-    renderStatus(`Solved! Time ${formatTime(state.elapsedSeconds)}, ${state.mistakes} ${mistakeWord}.`);
-  }
-  previousStatus = state.status;
-});
+// Completion is announced by js/ui/completion-dialog.js's modal, not
+// here — #game-status stays focused on generation progress/result.
 
 export async function startNewGame(difficultyId = 'easy') {
   renderStatus('Generating puzzle…');
@@ -55,5 +41,9 @@ export function initGameScreen() {
   backBtn.addEventListener('click', () => {
     pauseGame();
     showScreen('menu');
+  });
+
+  gameSettingsBtn.addEventListener('click', () => {
+    openSettingsDialog();
   });
 }

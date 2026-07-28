@@ -85,7 +85,12 @@
             <span class="game-meta-label">Mistakes</span>
             <span id="game-mistakes">0</span>
           </span>
+          <span class="game-meta-item">
+            <span class="game-meta-label">Hints</span>
+            <span id="game-hints">0</span>
+          </span>
         </div>
+        <button id="btn-game-settings" type="button" class="btn-secondary game-back-btn" aria-label="Settings">&#9881;</button>
       </div>
 
       <p id="game-status" class="game-status" aria-live="polite"></p>
@@ -95,6 +100,7 @@
       <div class="board-toolbar">
         <button id="btn-notes-toggle" type="button" class="btn-secondary toolbar-btn" aria-pressed="false">Notes: Off</button>
         <button id="btn-erase" type="button" class="btn-secondary toolbar-btn">Erase</button>
+        <button id="btn-hint" type="button" class="btn-secondary toolbar-btn" disabled>Hint</button>
       </div>
 
       <div id="number-pad" class="number-pad" role="group" aria-label="Number pad">
@@ -157,6 +163,14 @@
         </label>
       </fieldset>
       <p id="mode-current-hint" class="settings-hint" aria-live="polite"></p>
+
+      <fieldset class="settings-group">
+        <legend>Gameplay</legend>
+        <label class="option-tile">
+          <input type="checkbox" id="setting-immediate-error-checking">
+          <span>Immediate error checking</span>
+        </label>
+      </fieldset>
 
       <section class="settings-preview" aria-label="Appearance preview">
         <h3 class="settings-subheading">Preview</h3>
@@ -229,6 +243,57 @@
         <button type="submit" value="start" class="btn-primary">Start</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="hint-dialog" class="settings-dialog" aria-labelledby="hint-title">
+    <form method="dialog" class="settings-form">
+      <h2 id="hint-title">Use a Hint?</h2>
+      <p>This reveals the correct value for the selected cell and counts against your score.</p>
+      <div class="settings-actions">
+        <button type="submit" value="cancel" class="btn-secondary">Cancel</button>
+        <button type="submit" value="confirm" class="btn-primary">Use Hint</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="completion-dialog" class="settings-dialog" aria-labelledby="completion-title">
+    <div class="settings-form">
+      <h2 id="completion-title">Puzzle Solved!</h2>
+
+      <dl class="completion-stats">
+        <div class="completion-stat">
+          <dt>Difficulty</dt>
+          <dd id="completion-difficulty">—</dd>
+        </div>
+        <div class="completion-stat">
+          <dt>Time</dt>
+          <dd id="completion-time">0:00</dd>
+        </div>
+        <div class="completion-stat">
+          <dt>Mistakes</dt>
+          <dd id="completion-mistakes">0</dd>
+        </div>
+        <div class="completion-stat">
+          <dt>Hints</dt>
+          <dd id="completion-hints">0</dd>
+        </div>
+        <div class="completion-stat">
+          <dt>Score</dt>
+          <dd id="completion-score">0</dd>
+        </div>
+      </dl>
+      <p class="settings-hint">Score is a provisional estimate — final scoring lands in a future phase.</p>
+
+      <label class="share-label" for="completion-share-text">Share results</label>
+      <textarea id="completion-share-text" class="share-textarea" readonly rows="3"></textarea>
+      <button type="button" id="btn-copy-results" class="btn-secondary">Copy Results</button>
+      <p id="copy-confirmation" class="settings-hint" aria-live="polite"></p>
+
+      <div class="settings-actions">
+        <button type="button" id="btn-completion-menu" class="btn-secondary">Menu</button>
+        <button type="button" id="btn-completion-new-game" class="btn-primary">New Game</button>
+      </div>
+    </div>
   </dialog>
 
   <script type="module" src="./index.js"></script>

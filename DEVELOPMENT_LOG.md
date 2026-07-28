@@ -5,6 +5,215 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-28 — Phase 6: Gameplay Tools and Completion Flow
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+This prompt's own "Phase 6" (gameplay tools/completion) doesn't match
+`TASKS.md`'s prior Phase 6 (Persistence). Same pattern as Prompts 3-5:
+inserted as the actual Phase 6, Persistence and everything after shift
+down by one (now Phases 7-13).
+
+**What was built:**
+
+- **`toggleNote(index, value)`** (`js/game-state.js`): pulled the notes-
+  toggling logic out of `applyNumberInput` into its own function with
+  its own guards — status playing, valid index/value, not a fixed clue,
+  **and not already filled** (new: previously, toggling notes on a
+  filled-but-not-fixed cell would silently accumulate note bits that
+  were never rendered but never cleaned up either — harmless in
+  practice since `eraseSelectedCell` already zeroed notes, but wasteful,
+  inconsistent state that could resurface confusingly). `applyNumberInput`
+  now delegates to it in notes mode instead of duplicating the logic.
+- **Bounded undo history**: `MAX_HISTORY_SIZE = 50` (exported for
+  transparency/testing), enforced in `pushHistory` by shifting the
+  oldest snapshot off once the cap is exceeded. Entry, erase, notes, and
+  (new) hint actions all route through the same `pushHistory`, so undo
+  covers all four uniformly rather than needing per-action-type logic.
+- **`useHint()`**: reveals `solution[selectedIndex]`, treated exactly
+  like a normal entry afterward (clears that cell's notes, clears the
+  value from peer notes) except it never counts as a mistake and
+  increments `hintsUsed` instead. `HINT_SCORE_PENALTY` is exported as
+  scoring metadata — Phase 8 (Statistics) owns the real formula, this
+  just records what a hint costs at the moment it's used. Gated behind
+  a confirmation `<dialog>` (`js/ui/hint-dialog.js`); the action itself
+  stays a plain, directly-testable function with no confirmation logic
+  baked in — that's a UI concern layered on top.
+- **Timer redesign**: elapsed time is now timestamp-anchored
+  (`state.elapsedSeconds` = confirmed seconds from completed segments,
+  plus live `now() - segmentStartedAt` while a segment is running)
+  instead of counted by a `setInterval` callback incrementing +1 each
+  tick. Multiple independent pause causes compose through a `Set` of
+  opaque suspension reasons (`suspendTimer('hidden')`,
+  `suspendTimer('dialog')`) rather than a single boolean two callers
+  could stomp on — the timer only actually resumes once *every* reason
+  clears. `pauseGame()`/`resumeGame()` (explicit user pause) additionally
+  stop/start the underlying `setInterval` itself, not just gate it,
+  since an explicit pause can last indefinitely and there's no reason to
+  keep a live interval ticking uselessly the whole time; suspension
+  reasons (dialog/hidden-tab) are expected to be brief, so they only
+  gate the interval's callback, leaving the interval itself running.
+- **Immediate error checking setting** (`js/game-settings.js`, new,
+  versioned localStorage, mirrors `js/theme.js`'s pattern exactly but as
+  its own file/key — gameplay preferences vs. appearance preferences are
+  different concerns): mistakes are *always* counted internally
+  (`state.mistakes` doesn't know or care about this setting); the
+  setting only controls whether `board-view.js` renders the red
+  "wrong entry" styling live. Wired into a new "Gameplay" group in the
+  Settings dialog.
+- **Completion dialog** (`js/ui/completion-dialog.js`, new) replaces the
+  old plain-text "Solved!" message in `#game-status`: difficulty,
+  elapsed time, mistakes, hints, a score (`js/completion.js`'s
+  `estimateScore` — explicitly labeled in the UI as a provisional
+  placeholder, not the real Phase 8 formula), and generated Share
+  Results text (`buildShareText`) with a Copy Results button
+  (`navigator.clipboard`, falling back to "select the visible text
+  by hand" if the Clipboard API is unavailable or denied — never a dead
+  end either way). New Game reopens the difficulty picker; Menu returns
+  to the main menu.
+- **Never expose solution values in DOM attributes**: audited
+  `board-view.js` and the new hint/completion code — the Hint button's
+  enabled state, `is-error` styling, and everything else that needs to
+  know a cell's correct value only ever does that computation in JS
+  memory, never by writing it into a `data-*` attribute or similar a
+  player could read via devtools. Verified with an automated check that
+  serializes every still-empty cell's HTML and confirms no solution
+  digit appears in it.
+
+**A real product gap found during browser testing, not part of the
+original plan:** Settings was only reachable from the main menu. That
+directly undermines two of this phase's own features — the immediate-
+error-checking setting is far more useful to toggle mid-game than from
+the menu, and "a blocking dialog pauses the timer" has nothing to
+demonstrate itself against if no dialog can ever open while a game is in
+progress. Added a Settings (gear) button to the game screen's header,
+wired to the same `openSettingsDialog()` Phase 2 already built — no new
+dialog needed, just a second way to reach the existing one.
+
+**Test results:**
+
+```
+# tests 101   (30 engine + 15 generator + 48 game-state + 8 completion)
+# pass 101
+# fail 0
+```
+
+18 new `game-state.test.js` tests cover: `toggleNote` (sets/clears bits,
+preserves unrelated notes, rejects fixed and filled cells, confirms
+`applyNumberInput` delegates to it in notes mode); bounded history
+(pushing `MAX_HISTORY_SIZE + 10` times caps at exactly
+`MAX_HISTORY_SIZE`); `useHint` (reveals the correct value without
+counting a mistake, clears the hinted cell's and peers' notes, rejects
+no-selection/fixed/already-correct, is undoable, can trigger completion,
+and that `HINT_SCORE_PENALTY` is real metadata); and the timer (elapsed
+time accrues from an injectable fake clock with zero real intervals;
+pausing freezes it and resuming continues from where it left off, not
+from zero; a suspension reason freezes it without touching `status`;
+multiple simultaneous suspension reasons only release once *all* clear;
+completion freezes it permanently). New `completion.test.js` (8 tests)
+covers `estimateScore` (harder difficulty scores higher for identical
+performance, mistakes/hints each reduce it, floors at 0) and
+`buildShareText` (contains every expected field, correct singular/
+plural wording, and is a pure function — same input always produces the
+same output).
+
+**Browser verification** (headless Chromium, 21 checks): Hint button
+correctly disabled with no selection and enabled once an editable,
+incorrect cell is selected; the confirm dialog reveals the value and
+increments the counter; Cancel does nothing; Ctrl+Z undoes a hint
+(value cleared, counter reverts); immediate-error-checking OFF hides the
+red styling while still counting the mistake internally, ON shows it
+again for the same entry; the timer is provably frozen (identical
+displayed value before/after) across a 2-second real wait with the
+Settings dialog open, and frozen via `suspendTimer('hidden')` directly;
+the completion dialog shows the correct difficulty/mistakes/hints/a
+numeric score, generates consistent share text, Copy Results shows
+confirmation text, Menu and New Game both work; and the DOM-solution-
+leak audit above. Zero unexpected console errors throughout (the one
+pre-existing video-codec message aside). Screenshots spot-checked in
+Paper/light: the new header (difficulty/time/mistakes/hints/settings
+gear), the hint confirmation dialog, and the completion dialog all read
+cleanly.
+
+**Design concepts worth explaining** (also see inline comments in
+`js/game-state.js`):
+
+- *Set/array representation for notes*: a 9-bit integer per cell (bit
+  `d-1` = digit `d` is a candidate) rather than a `Set<number>` or a
+  9-element boolean array. The main win is peer cleanup: removing a
+  placed digit from every peer's notes is `notes[peer] &= ~bit` — one
+  cheap bitwise op per peer — instead of a `Set.delete` or an array
+  search-and-splice repeated 20 times per placement. It's also trivially
+  serializable as a plain number for the localStorage autosave the next
+  phase adds, with no custom (de)serialization for a `Set`.
+- *Snapshots vs. action history*: undo stores full snapshots (`entries`,
+  `notes`, `selectedIndex`, `mistakes`, `hintsUsed` at that moment), not
+  a log of "what action happened." Snapshots make `undo()` trivial and
+  unconditionally correct — pop, restore, done — regardless of which of
+  four different action types produced that snapshot. An action-log
+  design would need an inverse operation defined for every action type
+  (undo an entry vs. undo a hint vs. undo a note-toggle each look
+  different) and would be easy to get subtly wrong for one of them.
+  Snapshots cost more memory per entry (two 81-element array copies),
+  which is exactly why bounding history size matters here in a way it
+  wouldn't for a pure action log.
+- *Interval lifecycle*: `startTimer()`/`stopTimer()` manage exactly one
+  `setInterval`, always torn down (`clearInterval` + null the handle)
+  before a new one is created — `startGame()`, and now `pauseGame()`/
+  `resumeGame()`, all funnel through this pair rather than ever calling
+  `setInterval` directly, which is what makes "avoid duplicate
+  intervals" structurally true instead of just tested-and-hoped-for. The
+  interval's callback does almost nothing (`if (canSegmentRun())
+  notify()`) — it doesn't compute or store elapsed time itself, so
+  whether it's running, throttled by a backgrounded tab, or briefly
+  delayed under load has zero effect on the *correctness* of the elapsed
+  value the next `getState()` call returns, only on how promptly the UI
+  repaints it.
+- *Visibility events*: `js/ui/controls.js` is the only place that
+  reads `document.hidden`/`visibilitychange` — `game-state.js` never
+  touches `document` at all, receiving only an opaque `'hidden'` string
+  via `suspendTimer`/`resumeTimer`. That's what keeps the timer logic
+  fully Node-testable (no DOM, no fake `document` needed in tests) while
+  still letting the real app react to real tab-visibility changes.
+- *Pause state*: two genuinely different mechanisms, both reachable
+  through the timer, deliberately not merged into one. `status: 'paused'`
+  is a full, potentially long-lived, user-visible state — it stops the
+  interval outright and shows the obscuring overlay. Suspension reasons
+  are brief, incidental interruptions (a 2-second dialog, a tab glance)
+  that shouldn't cost the player time but also shouldn't interrupt the
+  game with an overlay for something that minor. Conflating them would
+  mean either dialogs triggering a jarring pause screen, or an explicit
+  pause leaving a pointless interval running for however long the
+  player leaves it paused.
+- *Completion-state transitions*: `finishIfSolved()` (used by both
+  `applyNumberInput` and `useHint`, previously duplicated between them)
+  is the single place `status` becomes `'complete'` — checked via
+  `isSolved()` on the merged board, never by counting empty cells or any
+  other proxy. Once complete, `commitSegment()` + `stopTimer()` run
+  immediately, so elapsed time is frozen at the exact moment of
+  completion and can never tick further no matter how long the
+  completion dialog stays open afterward.
+
+**Remaining limitations:**
+
+- The completion score is explicitly a placeholder formula
+  (`SCORE_BASE * scoreMultiplier - mistakes*20 - hintsUsed*50`, floored
+  at 0) — labeled as such in the UI itself. Phase 8 (Statistics) owns
+  the real formula and will very likely replace this outright rather
+  than tune it.
+- Hint has no explicit keyboard shortcut (mouse/touch via the button
+  only) — not in this phase's requirements, and unlike undo there's no
+  "already fully built, just needs a trigger" argument for adding one
+  unrequested.
+- `js/game-settings.js` isn't unit-tested via `node --test` — like
+  `theme.js`, it touches `localStorage` directly and has no meaningful
+  pure logic to isolate from that; verified via the browser checks
+  above instead, consistent with how `theme.js` was handled in Phase 2.
+- Real device/screen-reader verification for the new Hint/completion UI
+  remains open, same category of limitation already logged for Phase 5.
+
+---
+
 ## 2026-07-28 — Phase 5: Playable Sudoku Board and Input System
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`

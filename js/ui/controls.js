@@ -7,6 +7,8 @@ import {
   undo,
   pauseGame,
   resumeGame,
+  suspendTimer,
+  resumeTimer,
   getState,
 } from '../game-state.js';
 
@@ -98,6 +100,16 @@ function handleKeydown(event) {
 
 export function initControls() {
   document.addEventListener('keydown', handleKeydown);
+
+  // A backgrounded tab shouldn't cost the player time (or expose their
+  // in-progress board in a screenshot/preview thumbnail while they're
+  // away) — suspend the timer's "hidden" reason on visibilitychange
+  // rather than fully pausing (no overlay pop-up just from switching
+  // tabs, which would be a jarring surprise for a brief glance away).
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) suspendTimer('hidden');
+    else resumeTimer('hidden');
+  });
 
   // Event delegation for the number pad: one listener for all 9 digit
   // buttons rather than 9 separate handlers.
