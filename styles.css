@@ -23,6 +23,13 @@ img {
 
 button {
   font: inherit;
+  /* Every button in this app is a control, never a place to select and
+     copy text — prevents the accidental "double-tap selects the label"
+     text-highlight some browsers show on repeated taps, without
+     touching readable content elsewhere (paragraphs, stat values, the
+     share textarea) which stays normally selectable. */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* ================================================================
@@ -190,6 +197,39 @@ button {
   --shadow-color: rgba(0, 0, 0, 0.6);
 }
 
+/* Subtle ambient drift, Cyber theme only — two soft glows slowly easing
+   between corners, restrained enough to read as "this interface is
+   alive" rather than a distraction. Declared only inside the
+   no-preference query so it never even exists for a reduced-motion
+   visitor (on top of the blanket override in the Motion section, which
+   would otherwise just freeze it mid-frame rather than never starting
+   it). No hue/brightness flashing, no strobing — a slow, continuous
+   ease between two fixed points. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-theme="cyber"][data-mode="dark"] body {
+    background-image: radial-gradient(circle at 15% 15%, rgba(34, 211, 238, 0.09), transparent 45%),
+      radial-gradient(circle at 85% 85%, rgba(34, 211, 238, 0.07), transparent 45%);
+    background-repeat: no-repeat;
+    animation: cyber-drift 26s ease-in-out infinite alternate;
+  }
+
+  [data-theme="cyber"][data-mode="light"] body {
+    background-image: radial-gradient(circle at 15% 15%, rgba(6, 106, 133, 0.06), transparent 45%),
+      radial-gradient(circle at 85% 85%, rgba(6, 106, 133, 0.05), transparent 45%);
+    background-repeat: no-repeat;
+    animation: cyber-drift 26s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes cyber-drift {
+  from {
+    background-position: 0% 0%, 100% 100%;
+  }
+  to {
+    background-position: 12% 8%, 88% 92%;
+  }
+}
+
 /* ---- Woodgrain: warm natural browns (CSS gradients, no images) ---- */
 
 [data-theme="woodgrain"][data-mode="light"] {
@@ -290,7 +330,12 @@ button {
 
   --color-success: #7fbf5a;
   --color-warning: #e0a63c;
-  --color-error: #e2695a;
+  /* Lightened from #e2695a — that value only reached 3.91:1 against
+     --color-panel, below WCAG AA's 4.5:1 for normal text (caught by
+     Phase 11's contrast audit). #ec8878 keeps the same warm coral hue
+     family as this theme's --color-accent/--color-entry-player while
+     reaching 5.10:1. */
+  --color-error: #ec8878;
 
   --color-cell-selected: #453f31;
   --color-cell-related: #34322b;
@@ -318,6 +363,44 @@ button {
 :focus-visible {
   outline: 3px solid var(--color-focus);
   outline-offset: 2px;
+}
+
+/* ---------- Hover & active states ----------
+   Hover is gated behind (hover: hover) and (pointer: fine) — without
+   that, touch browsers apply :hover on tap and it can stay "stuck"
+   until the next unrelated tap, which reads as a visual glitch rather
+   than a hover cue that was never really possible on a touchscreen.
+   :active isn't gated the same way: a brief press-down cue is useful
+   feedback on both a mouse click and a touch tap. Board cells only get
+   the brightness half of the active treatment, never the scale — they
+   sit edge-to-edge in a seamless grid, and scaling one down would open
+   a visible gap against its neighbors instead of reading as "pressed." */
+@media (hover: hover) and (pointer: fine) {
+  .menu-nav button:not(:disabled):hover,
+  .number-btn:hover,
+  .cell:not(:disabled):hover,
+  .btn-primary:not(:disabled):hover,
+  .btn-secondary:not(:disabled):hover,
+  .difficulty-filter-btn:hover,
+  .option-tile:hover,
+  .skip-btn:hover {
+    filter: brightness(0.96);
+  }
+}
+
+.cell:not(:disabled):active {
+  filter: brightness(0.92);
+}
+
+.menu-nav button:not(:disabled):active,
+.number-btn:not(:disabled):active,
+.btn-primary:not(:disabled):active,
+.btn-secondary:not(:disabled):active,
+.difficulty-filter-btn:active,
+.option-tile:active,
+.skip-btn:active {
+  filter: brightness(0.9);
+  transform: scale(0.97);
 }
 
 /* ---------- App frame ---------- */
@@ -386,10 +469,16 @@ button {
   right: max(var(--space-3), env(safe-area-inset-right));
   min-height: var(--touch-target-min);
   padding: var(--space-2) var(--space-3);
-  background: var(--color-surface);
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
+  /* Deliberately NOT theme tokens: this sits on top of arbitrary video
+     frames, not this app's own background, so it needs guaranteed
+     contrast against whatever color happens to be playing underneath
+     it rather than whatever a given theme pack's surface/text/border
+     tokens resolve to. */
+  background: rgba(0, 0, 0, 0.7);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.7);
   border-radius: var(--radius-md);
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -539,6 +628,12 @@ button {
 
 .cell-value.is-error {
   color: var(--color-error);
+  /* A non-color cue alongside the color change — a colorblind player
+     can still see the wavy underline (the classic "spell-check" cue)
+     even if the red-vs-black color shift itself is hard to distinguish. */
+  text-decoration: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: currentColor;
 }
 
 .cell.is-fixed .cell-value {
@@ -636,6 +731,8 @@ button {
   align-items: center;
   justify-content: center;
   gap: var(--space-3);
+  padding: max(var(--space-3), env(safe-area-inset-top)) max(var(--space-3), env(safe-area-inset-right))
+    max(var(--space-3), env(safe-area-inset-bottom)) max(var(--space-3), env(safe-area-inset-left));
   background: rgba(0, 0, 0, 0.65);
   color: #ffffff;
 }
@@ -877,6 +974,29 @@ button {
 
 /* ---------- Completion dialog ---------- */
 
+/* A small, one-shot "celebration" cue on the dialog's own heading — no
+   confetti particles or extra DOM, just a brief scale+fade-in on the
+   text that's already there. Declared only inside the no-preference
+   media query (rather than relying solely on the global reduced-motion
+   override further up) so a reduced-motion visitor's browser never even
+   computes the animation, not just skips visibly running it. */
+@media (prefers-reduced-motion: no-preference) {
+  #completion-title.celebrate {
+    animation: completion-celebrate 0.5s ease-out;
+  }
+}
+
+@keyframes completion-celebrate {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .completion-stats {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -1104,5 +1224,131 @@ button {
 
   .screen {
     min-height: calc(100dvh - var(--space-5) * 2);
+  }
+}
+
+/* ---------- Wide desktop: board + controls side panel ----------
+   At >=1024px there's enough spare horizontal room that stacking the
+   toolbar and number pad below a centered board just wastes it, and
+   pushes the controls a long mouse-travel distance from the board.
+   Rearranged as a two-column grid instead — board on the left spanning
+   both control rows, toolbar/number pad forming a control "side panel"
+   on the right, in the same top-to-bottom DOM/reading order they
+   already had (so focus order doesn't jump around relative to what's
+   visually below what). Scoped to #screen-game specifically, NOT the
+   shared .screen-game class — Statistics/High Scores reuse that class
+   for its base flex layout but have a completely different set of
+   children, and would break under this grid's named areas. */
+@media (min-width: 1024px) {
+  #screen-game {
+    display: grid;
+    grid-template-columns: minmax(20rem, 32rem) minmax(14rem, 18rem);
+    grid-template-areas:
+      "header  header"
+      "status  status"
+      "board   toolbar"
+      "board   numpad";
+    column-gap: var(--space-4);
+    row-gap: var(--space-3);
+    align-items: start;
+    justify-content: center;
+    width: 100%;
+  }
+
+  #screen-game .game-header {
+    grid-area: header;
+    width: 100%;
+    margin: 0;
+  }
+
+  #screen-game .game-status {
+    grid-area: status;
+    width: 100%;
+    max-width: none;
+    text-align: left;
+  }
+
+  #screen-game #board {
+    grid-area: board;
+    width: 100%;
+    margin: 0;
+  }
+
+  #screen-game .board-toolbar {
+    grid-area: toolbar;
+    flex-direction: column;
+    width: 100%;
+    margin: 0;
+  }
+
+  #screen-game #number-pad {
+    grid-area: numpad;
+    grid-template-columns: repeat(3, 1fr);
+    width: 100%;
+    margin: 0;
+  }
+}
+
+/* ---------- Short landscape phones: same side-by-side idea, smaller ----------
+   A phone in landscape is wide but short — stacking the number pad
+   below a full-width board can push it past the visible viewport
+   entirely, forcing a scroll to reach it mid-game. The two-column
+   layout above solves exactly this, just sized down: the board caps to
+   a share of viewport *height* (the scarce dimension here) instead of
+   width. Gated on orientation+height together so it only ever matches
+   genuinely short landscape viewports, never a landscape tablet (which
+   has plenty of height to spare and keeps the normal desktop/mobile
+   single-column flow up to the 1024px rule above). */
+@media (orientation: landscape) and (max-height: 500px) {
+  #screen-game {
+    display: grid;
+    grid-template-columns: min(55vh, 20rem) minmax(12rem, 16rem);
+    grid-template-areas:
+      "header  header"
+      "status  status"
+      "board   toolbar"
+      "board   numpad";
+    column-gap: var(--space-3);
+    row-gap: var(--space-2);
+    align-items: start;
+    justify-content: center;
+    padding-top: var(--space-2);
+    padding-bottom: var(--space-2);
+  }
+
+  #screen-game .game-header {
+    grid-area: header;
+    width: 100%;
+    margin: 0;
+  }
+
+  #screen-game .game-status {
+    grid-area: status;
+    width: 100%;
+    max-width: none;
+    min-height: 0;
+    font-size: 0.8rem;
+  }
+
+  #screen-game #board {
+    grid-area: board;
+    width: 100%;
+    margin: 0;
+  }
+
+  /* Left as a row here (unlike the >=1024px panel above) — height is
+     the scarce dimension at this breakpoint, and three stacked buttons
+     would cost roughly 3x the vertical space of one row of three. */
+  #screen-game .board-toolbar {
+    grid-area: toolbar;
+    width: 100%;
+    margin: 0;
+  }
+
+  #screen-game #number-pad {
+    grid-area: numpad;
+    grid-template-columns: repeat(3, 1fr);
+    width: 100%;
+    margin: 0;
   }
 }

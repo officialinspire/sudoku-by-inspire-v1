@@ -5,6 +5,237 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-28 — Phase 11: Accessibility, Mobile Polish, and Desktop Mode
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+This prompt's own "Phase 10" (accessibility/UX pass) is `TASKS.md`'s
+Phase 11 (Accessibility Polish) — matches it directly, no renumbering
+needed.
+
+**What was built:**
+
+- **`js/ui/cell-aria.js`** — `getCellAriaLabel(index, state)`, a pure,
+  fully-tested function (14 tests) that is now the single source of
+  truth for a board cell's accessible name: row/column, `clue` vs
+  `editable`, its value (`given`/`entered`) or `empty` plus any notes,
+  `conflicts with another cell` when either a peer clash or (with
+  immediate error checking on) a wrong entry applies, `selected`, and —
+  only on the selected, editable cell, where it's actually relevant — a
+  concise `press 1 through 9 to enter a value`/`...to toggle a note`
+  instruction. `js/ui/board-view.js`'s old private `describeCell` helper
+  is gone; it now calls this directly on every render.
+- **`js/ui/difficulty-filter.js`** rewritten onto the real WAI-ARIA tabs
+  pattern: each button gets `role="tab"` + `aria-controls` pointing at a
+  new `role="tabpanel"` results container, only the selected tab has
+  `tabindex="0"` (roving tabindex — the other three are skipped when
+  Tabbing through the page, exactly like a native tab widget), and
+  Left/Right/Home/End move both focus and selection between tabs.
+- **Responsive layout**: audited 320px portrait, phone landscape, tablet
+  portrait/landscape, desktop, and ultrawide via Playwright screenshots
+  at each size — no horizontal overflow anywhere already. Added two new
+  breakpoints, both scoped to `#screen-game` specifically (not the
+  shared `.screen-game` class, which Statistics/High Scores also use for
+  an unrelated base layout, and would have broken under these grids):
+  - `@media (min-width: 1024px)`: board and the toolbar/number-pad
+    controls side by side as a genuine desktop "side panel," using CSS
+    Grid named areas — no HTML restructuring needed, since Grid can
+    place existing sibling elements into named areas directly.
+  - `@media (orientation: landscape) and (max-height: 500px)`: the same
+    two-column idea, sized down, specifically for short landscape
+    phones — before this, reaching the number pad in landscape required
+    scrolling past ~870px of stacked content; measured and confirmed the
+    new layout fits entirely within a 375px-tall viewport with zero
+    scroll (a first version still needed ~421px until the toolbar was
+    left as a row instead of a stacked column — vertical space is the
+    scarce resource at this breakpoint, so three stacked buttons costing
+    3x one row's height was the actual problem, not the board).
+- **Safe-area insets**: `.pause-overlay` (a fixed full-screen element)
+  was missing them entirely — added, matching the pattern already used
+  by `.screen`/`.skip-btn`/`.connection-status`/`.update-banner`.
+- **Hover/active/focus-visible states**: added explicit `:hover` (gated
+  behind `@media (hover: hover) and (pointer: fine)` — without that,
+  touch browsers apply `:hover` on tap and it can stay visually "stuck"
+  until an unrelated tap elsewhere) and `:active` press-down feedback
+  (brightness dim, plus a small scale-down for standalone buttons —
+  board cells get brightness only, since scaling one down in a
+  seamless edge-to-edge grid would open a visible gap against its
+  neighbors) across every button-like control.
+- **Text-selection prevention**: `button { user-select: none; }` — one
+  blanket rule, since every button in this app is a control, never
+  readable prose to select/copy. Leaves paragraphs, stat values, and the
+  completion dialog's share textarea normally selectable.
+- **Intro Skip button**: switched from theme tokens to a fixed dark
+  scrim + white text, independent of the active theme — it sits on top
+  of arbitrary video frames, not this app's own themed background, so it
+  needs guaranteed contrast against whatever's playing underneath it
+  rather than whatever a theme pack's surface/text/border tokens happen
+  to resolve to.
+- **Non-color conflict/error cue**: `.cell-value.is-error` now gets a
+  wavy underline (the familiar "spell-check" convention) alongside its
+  color change, on top of the conflict ring's already-structural
+  (color-independent) presence/absence cue.
+- **Contrast re-check**: scripted a WCAG AA contrast audit across all 8
+  theme/mode combinations for every significant text/background pairing
+  in the app (body text, secondary text, button text, given/player
+  digits, error/success/warning text, note digits). Found one genuine
+  failure — Paper/dark's `--color-error` (`#e2695a`) against its panel
+  background at 3.91:1, below the 4.5:1 AA threshold for normal text —
+  and fixed it by lightening to `#ec8878` (5.10:1), staying in the same
+  warm coral hue family as that theme's existing accent/entry-player
+  tokens rather than introducing an unrelated color.
+- **Completion celebration**: the completion dialog's "Puzzle Solved!"
+  heading gets a one-shot scale+fade-in (`.celebrate` class, toggled
+  off/reflowed/back-on so it re-triggers on back-to-back completions) —
+  no confetti particles or new DOM, just a brief cue on text that was
+  already there.
+- **Cyber background animation**: two soft radial-gradient glows slowly
+  drifting between opposite corners of the viewport, in both Cyber
+  light and dark modes, declared *only* inside
+  `@media (prefers-reduced-motion: no-preference)` — not just relying on
+  the existing blanket `prefers-reduced-motion: reduce` override further
+  up the file, which would still compute and then freeze the animation
+  rather than never declaring it at all.
+
+**Explanation (accessible names, focus vs. selection, native semantics,
+`aria-live`, dialog focus restoration, reduced-motion media queries,
+responsive layout decisions):**
+
+- *Accessible names*: the "accessible name" is the string a screen
+  reader actually announces for an element — computed from, in priority
+  order, `aria-label`/`aria-labelledby`, then native semantics (a
+  `<label>` for a form control, visible button text), then other
+  fallbacks. Board cells have no useful visible text of their own to
+  fall back to (a bare digit doesn't say "row 3 column 5"), which is
+  exactly why `getCellAriaLabel` exists — it's the entire accessible
+  name for each of the 81 `role="gridcell"` buttons, recomputed fresh
+  every render so it can never drift from what's visually shown.
+- *Focus vs. selection*: these are two different concepts that happen to
+  usually move together in this app. "Selection" is `game-state.js`'s
+  `selectedIndex` — pure application state, no DOM involved. "Focus" is
+  the browser's own concept of which element receives keyboard input
+  next. `js/ui/board-view.js` explicitly moves DOM focus to match
+  `selectedIndex` on every render (`selectedEl.focus()`) so a sighted
+  keyboard user's focus ring and a screen reader's announced position
+  both track the same cell the game logic considers selected — but nothing
+  requires this; a future feature could select a cell programmatically
+  without touching focus at all, precisely because the two are kept
+  separate rather than conflated into one concept.
+- *Native semantics*: every interactive element in this app is a real
+  `<button>`, `<input type="radio/checkbox/range">`, or `<dialog>` —
+  ARIA is added on top to supplement what these already give for free
+  (keyboard operability, correct default role, built-in focus handling),
+  never to replace it with a `<div role="button">` reimplementation. The
+  one deliberately-not-fully-native piece is the board itself
+  (`role="grid"`/`role="gridcell"` on flat sibling buttons rather than a
+  full `grid`>`row`>`gridcell` hierarchy) — building genuine `row`
+  elements would need either restructuring the DOM away from a clean
+  9x9 CSS Grid or duplicating row/column bookkeeping the CSS Grid
+  already handles implicitly; the explicit row/column text in every
+  cell's accessible name is the deliberate compensating choice for that
+  gap, documented here rather than silently accepted.
+- *`aria-live`*: an aria-live region (`#game-status`, `#connection-status`,
+  `#copy-confirmation`, `#mode-current-hint`, `#vibration-support-hint`)
+  is how a screen reader finds out about a text change that didn't come
+  from the user's own focus moving — e.g. `#game-status`'s "Ready — Easy
+  puzzle, 43 clues" appears after puzzle generation finishes, which
+  isn't triggered by any element gaining focus, so without `aria-live`
+  a screen-reader user would never hear it at all. `polite` (used
+  everywhere here) waits for a natural pause rather than interrupting
+  whatever's currently being read, appropriate for status updates that
+  are useful but never urgent enough to justify cutting someone off.
+- *Dialog focus restoration*: every dialog in this app uses the native
+  `<dialog>` element's `showModal()`/`close()`, which — in every
+  evergreen browser this app targets — automatically remembers and
+  restores focus to whatever had it before `showModal()` was called, no
+  extra code required. Verified this directly rather than assuming it:
+  opened and closed all four buttons-that-open-a-dialog paths (Settings,
+  New Game's difficulty picker, Hint, Settings-from-the-game-screen) via
+  Playwright and confirmed `document.activeElement` was back on the
+  triggering button every time.
+- *Reduced-motion media queries*: `@media (prefers-reduced-motion:
+  reduce)` reflects an OS-level accessibility setting for users who get
+  disoriented, nauseated, or simply distracted by motion — this app
+  already had a blanket override (near-zero animation/transition
+  duration on everything) from Phase 2, which is a good safety net but
+  only *freezes* an animation that still gets declared and computed.
+  Both new animations added this phase (the Cyber background drift, the
+  completion celebration) are additionally declared inside the *inverse*
+  query, `@media (prefers-reduced-motion: no-preference)` — for a
+  reduced-motion visitor, the animation rule doesn't exist in the
+  cascade at all, not just get neutralized after the fact. Verified with
+  Playwright's `reducedMotion: 'reduce'` context option, confirming
+  `getComputedStyle(document.body).animationName` resolves to `'none'`.
+- *Responsive layout decisions*: the two new breakpoints
+  (`min-width: 1024px` and `orientation: landscape` + `max-height: 500px`)
+  are both about the same underlying idea — reflow the board and its
+  controls from a single stacked column into two side-by-side columns
+  once there's enough width relative to height to make that worthwhile —
+  applied at two different physical situations (a genuinely wide desktop
+  window vs. a short landscape phone) with different sizing math for
+  each, since a landscape phone's *height* is the scarce resource while
+  a desktop window's *width* is the abundant one. Scoping both to
+  `#screen-game` by id (not the `.screen-game` class shared with
+  Statistics/High Scores) was a deliberate, necessary choice — those
+  other two screens have a completely different set of child elements,
+  and CSS Grid's named `grid-template-areas` only place children that
+  have a matching `grid-area` assigned; anything else falls back to
+  implicit auto-placement, which would have visually scrambled those
+  screens had the rule been scoped to the shared class instead.
+
+**Checks run:**
+
+- `node --check` on every new/modified JS file — all clean; `styles.css`
+  brace-balance check.
+- `npm test`: **177/177 passing** (163 carried over + 14 new
+  `cell-aria.test.js` tests), across 57 suites.
+- Scripted WCAG AA contrast audit across all 8 theme/mode combinations
+  for 11 text/background pairings each (88 checks) — 1 failure found and
+  fixed (Paper/dark `--color-error`), all 88 pass after the fix.
+- Playwright verification, organized as a keyboard-and-screen-reader-
+  oriented inspection per the prompt's own instruction:
+  - Focus restoration confirmed after closing all four
+    button-triggered dialogs.
+  - A fully keyboard-only playthrough: Tab to New Game, Enter to open
+    the difficulty dialog, Escape to cancel it (native `<dialog>`
+    behavior), reopen and start a game, arrow keys to move board
+    selection, a digit keypress to enter a value, Escape to pause,
+    Enter on the focused Resume button to resume — no mouse events used
+    anywhere in this pass.
+  - Difficulty filter: confirmed `role="tab"` on every button, roving
+    tabindex (`[0, -1, -1, -1]` before any interaction), and that
+    ArrowRight moves both `aria-selected` and the visible panel content
+    to the next tab.
+  - `getCellAriaLabel` spot-checked directly in the live DOM (not just
+    unit tests): a fixed clue's `aria-label` includes "clue" and
+    "given"; a selected empty editable cell's includes "editable",
+    "selected", and the entry instruction.
+  - No horizontal overflow re-confirmed at 320px and 1920px on the game
+    screen specifically (the most layout-dense screen) after all this
+    phase's CSS changes.
+  - Full 4-theme x 2-mode visual sweep of the game screen — no console/
+    page errors in any of the 8 combinations, spot-checked several
+    screenshots for visual correctness.
+
+**Remaining limitations:**
+
+- The board's ARIA structure is `role="grid"`/`role="gridcell"` on flat
+  sibling buttons rather than a complete `grid`>`row`>`gridcell`
+  hierarchy (see the native-semantics explanation above) — a deliberate,
+  documented tradeoff, not an oversight, but a stricter ARIA audit tool
+  would still flag the missing `row` level.
+- No automated screen-reader-software testing (VoiceOver/NVDA/JAWS)
+  was performed — verification here is DOM/ARIA-attribute-level
+  (confirming the right roles, states, and accessible-name strings exist
+  and update correctly) via Playwright, not an actual assistive
+  technology's rendering of them. A real screen-reader pass by the user
+  is still worth doing before calling this fully done.
+- The >=1024px and short-landscape-phone grid layouts are new and only
+  tested at a handful of specific viewport sizes; an unusual in-between
+  size could theoretically reveal a gap this pass didn't sample.
+
+---
+
 ## 2026-07-28 — Phase 10: Offline-First PWA Behavior
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`

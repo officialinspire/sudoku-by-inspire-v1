@@ -5,6 +5,7 @@ import { estimateScore, formatElapsedTime, buildShareText } from '../completion.
 import { openDifficultyDialog } from './difficulty-dialog.js';
 
 const dialog = document.getElementById('completion-dialog');
+const titleEl = document.getElementById('completion-title');
 const difficultyEl = document.getElementById('completion-difficulty');
 const timeEl = document.getElementById('completion-time');
 const mistakesEl = document.getElementById('completion-mistakes');
@@ -27,6 +28,17 @@ function showCompletion(state) {
   scoreEl.textContent = String(estimateScore(state, config));
   shareTextarea.value = buildShareText(state, config);
   copyConfirmation.textContent = '';
+
+  // Re-trigger the celebration animation even on back-to-back completions:
+  // removing the class, forcing a reflow, then re-adding is the standard
+  // way to restart a CSS animation that's already at its end state — the
+  // animation itself only actually runs when reduced motion isn't
+  // requested (see styles.css's .celebrate keyframes), so this is a
+  // harmless no-op class toggle for players who've turned that off.
+  titleEl.classList.remove('celebrate');
+  void titleEl.offsetWidth;
+  titleEl.classList.add('celebrate');
+
   dialog.showModal();
 }
 

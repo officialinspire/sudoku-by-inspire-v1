@@ -137,14 +137,14 @@
         <h2 class="brand brand--compact">Statistics</h2>
       </div>
 
-      <div id="statistics-difficulty-filter" class="difficulty-filter" role="tablist" aria-label="Difficulty">
+      <div id="statistics-difficulty-filter" class="difficulty-filter" role="tablist" aria-label="Difficulty" data-panel="stats-panel">
         <button type="button" class="difficulty-filter-btn" data-difficulty="easy" aria-selected="true">Easy</button>
         <button type="button" class="difficulty-filter-btn" data-difficulty="intermediate" aria-selected="false">Intermediate</button>
         <button type="button" class="difficulty-filter-btn" data-difficulty="advanced" aria-selected="false">Advanced</button>
         <button type="button" class="difficulty-filter-btn" data-difficulty="insane" aria-selected="false">Insane</button>
       </div>
 
-      <dl class="stats-grid">
+      <dl id="stats-panel" class="stats-grid" role="tabpanel" tabindex="0" aria-label="Statistics for the selected difficulty">
         <div class="stats-item"><dt>Games Started</dt><dd id="stat-games-started">0</dd></div>
         <div class="stats-item"><dt>Games Completed</dt><dd id="stat-games-completed">0</dd></div>
         <div class="stats-item"><dt>Completion Rate</dt><dd id="stat-completion-rate">0%</dd></div>
@@ -164,15 +164,17 @@
         <h2 class="brand brand--compact">High Scores</h2>
       </div>
 
-      <div id="highscores-difficulty-filter" class="difficulty-filter" role="tablist" aria-label="Difficulty">
+      <div id="highscores-difficulty-filter" class="difficulty-filter" role="tablist" aria-label="Difficulty" data-panel="highscores-panel">
         <button type="button" class="difficulty-filter-btn" data-difficulty="easy" aria-selected="true">Easy</button>
         <button type="button" class="difficulty-filter-btn" data-difficulty="intermediate" aria-selected="false">Intermediate</button>
         <button type="button" class="difficulty-filter-btn" data-difficulty="advanced" aria-selected="false">Advanced</button>
         <button type="button" class="difficulty-filter-btn" data-difficulty="insane" aria-selected="false">Insane</button>
       </div>
 
-      <ol id="highscores-list" class="highscores-list"></ol>
-      <p id="highscores-empty" class="game-status" hidden>No scores yet for this difficulty — go solve a puzzle!</p>
+      <div id="highscores-panel" role="tabpanel" tabindex="0" aria-label="High scores for the selected difficulty">
+        <ol id="highscores-list" class="highscores-list"></ol>
+        <p id="highscores-empty" class="game-status" hidden>No scores yet for this difficulty — go solve a puzzle!</p>
+      </div>
     </section>
 
   </div>

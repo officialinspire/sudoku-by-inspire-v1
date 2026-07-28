@@ -1,5 +1,6 @@
 import { getState, onStateChange, selectCell, getPeerIndices } from '../game-state.js';
 import { getGameSettings, onGameSettingsChange } from '../game-settings.js';
+import { getCellAriaLabel } from './cell-aria.js';
 
 const boardEl = document.getElementById('board');
 const timerEl = document.getElementById('game-timer');
@@ -60,19 +61,6 @@ function formatTime(totalSeconds) {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-function describeCell(index, value, isFixed, notesBitmask) {
-  const row = Math.floor(index / 9) + 1;
-  const col = (index % 9) + 1;
-  if (value !== 0) {
-    return `Row ${row}, column ${col}, ${isFixed ? 'given' : 'entered'} ${value}`;
-  }
-  const noted = [];
-  for (let d = 1; d <= 9; d++) if (notesBitmask & (1 << (d - 1))) noted.push(d);
-  return noted.length > 0
-    ? `Row ${row}, column ${col}, empty, notes ${noted.join(', ')}`
-    : `Row ${row}, column ${col}, empty`;
-}
-
 function render(state) {
   const hasGame = state.puzzle !== null;
   const { immediateErrorChecking } = getGameSettings();
@@ -83,6 +71,7 @@ function render(state) {
     hasGame && state.selectedIndex !== null
       ? state.puzzle[state.selectedIndex] || state.entries[state.selectedIndex]
       : 0;
+  const ariaState = { ...state, immediateErrorChecking };
 
   for (let index = 0; index < 81; index++) {
     const { el, valueEl, notesEl, noteDigits } = cells[index];
@@ -126,7 +115,7 @@ function render(state) {
       notesEl.hidden = notesBitmask === 0;
     }
 
-    el.setAttribute('aria-label', describeCell(index, value, isFixed, hasGame ? state.notes[index] : 0));
+    el.setAttribute('aria-label', getCellAriaLabel(index, ariaState));
   }
 
   // Keep DOM focus following the selected cell (arrow-key navigation

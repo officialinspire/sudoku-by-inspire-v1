@@ -303,13 +303,51 @@ real device, not fully coverable by automation):
       this environment; the automated equivalents cover the same
       scenarios — see DEVELOPMENT_LOG.md for details).
 
-## Phase 11 — Accessibility Polish
+## Phase 11 — Accessibility Polish ✅ (2026-07-28)
 
-- [ ] Full keyboard-only playthrough audit.
-- [ ] ARIA labels/roles audit on all interactive controls.
-- [ ] Visible focus-state audit across all themes.
-- [ ] `prefers-reduced-motion` audit (animations/transitions gated).
-- [ ] Contrast re-check post-theme-work.
+- [x] Full keyboard-only playthrough audit — Tab order, dialog Escape/
+      close paths, board arrow-key navigation + digit entry, pause/
+      resume via Escape, all verified via Playwright driving the
+      keyboard exclusively (no mouse events).
+- [x] ARIA labels/roles audit on all interactive controls — new
+      `getCellAriaLabel(index, state)` (`js/ui/cell-aria.js`) is the
+      single source of truth for board-cell accessible names; the
+      difficulty filter tabs now have correct `role="tab"`/
+      `role="tabpanel"` structure with roving tabindex and arrow-key
+      navigation, matching the WAI-ARIA tabs pattern.
+- [x] Visible focus-state audit across all themes — `:focus-visible`
+      confirmed present and legible in all 4 theme packs × 2 modes;
+      added explicit hover/active states (mouse-hover gated behind
+      `(hover: hover) and (pointer: fine)` so touch doesn't get stuck
+      "hover" states) so focus isn't the only interactive-state cue.
+- [x] `prefers-reduced-motion` audit — the new Cyber background drift
+      and completion-dialog celebration animation are both declared
+      *inside* `@media (prefers-reduced-motion: no-preference)` (not
+      just relying on the existing blanket override), confirmed via
+      Playwright's `reducedMotion: 'reduce'` emulation to compute to
+      `animation-name: none`.
+- [x] Contrast re-check post-theme-work — scripted WCAG AA audit across
+      all 8 theme/mode combinations found and fixed one real failure
+      (Paper/dark's `--color-error` at 3.91:1); everything else already
+      passed. Added a non-color (wavy underline) cue alongside the
+      color-based error/conflict indicators.
+- [x] Responsive audit: 320px portrait, phone landscape, tablet
+      portrait/landscape, desktop, ultrawide — no horizontal overflow
+      found anywhere. Added a >=1024px desktop side-panel layout (board
+      + toolbar/number-pad side by side) and a short-landscape-phone
+      layout using the same technique sized down, eliminating a
+      previously-required scroll to reach the number pad in landscape.
+- [x] Safe-area inset audit — added missing insets to `.pause-overlay`
+      (a fixed full-screen element that had none).
+- [x] Accidental text-selection prevention on all button-style controls
+      (`user-select: none` on every `<button>`), without affecting
+      readable/copyable content elsewhere.
+- [x] Intro Skip button given a guaranteed-visible treatment (dark
+      scrim + white text) independent of theme, since it sits over
+      arbitrary video content rather than this app's own themed chrome.
+- [x] Small completion celebration (a one-shot scale/fade-in on the
+      completion dialog's heading) and a subtle, reduced-motion-gated
+      Cyber-theme background drift.
 
 ## Phase 12 — GitHub Pages Deployment
 
