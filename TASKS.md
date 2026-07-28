@@ -3,10 +3,10 @@
 Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 
 This checklist is the source of truth for progress. Update it at the end of
-every completed phase (see `CLAUDE.md`). Each phase will include one
-`TODO(USER)` checkpoint assigned during that phase's implementation — this
-file tracks phase-level deliverables, not the checkpoint mechanics
-themselves (those are called out live in-phase).
+every completed phase (see `CLAUDE.md`). As of 2026-07-28, phases are
+implemented in full by the assistant with thorough explanation as we go
+(no more per-phase user checkpoints — see `CLAUDE.md` → Learning Contract
+for the amendment).
 
 ## Phase 0 — Environment & Planning (this phase)
 
@@ -15,23 +15,22 @@ themselves (those are called out live in-phase).
 - [x] Confirm remote repository exists on GitHub.
 - [x] Create planning docs: `CLAUDE.md`, `PROJECT_BRIEF.md`, `TASKS.md`,
       `DEVELOPMENT_LOG.md`, `README.md`.
-- [ ] Commit and push planning docs to `claude/sudoku-inspire-setup-2jpef2`.
+- [x] Commit and push planning docs to `claude/sudoku-inspire-setup-2jpef2`.
 
-## Phase 1 — App Shell & Screen Flow
+## Phase 1 — App Shell & Screen Flow ✅ (2026-07-28)
 
-- [ ] `index.html` skeleton with the four screen containers: Start,
+- [x] `index.html` skeleton with the four screen containers: Start,
       Intro Video, Main Menu, Game (empty placeholder).
-- [ ] `js/screens.js` — simple state machine to show/hide screens.
-- [ ] Start screen responds to tap/click/keypress.
-- [ ] Intro video screen plays `./inspiresoftwareintro.mp4` with a visible
+- [x] `js/screens.js` — simple state machine to show/hide screens.
+- [x] Start screen responds to tap/click/keypress.
+- [x] Intro video screen plays `./inspiresoftwareintro.mp4` with a visible
       Skip button; gracefully skips itself if the video file is missing/
       fails to load.
-- [ ] Main menu renders nav buttons (New Game, Continue [disabled until a
+- [x] Main menu renders nav buttons (New Game, Continue [disabled until a
       save exists], Statistics, Settings) and a footer `<img>` for
       `./logo.png` (hidden gracefully if missing).
-- [ ] Base `styles.css` mobile-first layout + CSS custom-property scaffold
+- [x] Base `styles.css` mobile-first layout + CSS custom-property scaffold
       for theme packs/color modes (empty palettes, wired but not themed yet).
-- [ ] **Checkpoint:** user-implemented piece TBD when this phase starts.
 
 ## Phase 2 — Sudoku Engine (Generator + Solver)
 
@@ -42,7 +41,6 @@ themselves (those are called out live in-phase).
       (Easy/Intermediate/Advanced/Insane), guaranteeing a unique solution.
 - [ ] Unit-style manual test harness (console-driven or simple assertions)
       confirming generated puzzles solve uniquely at each difficulty.
-- [ ] **Checkpoint:** user-implemented piece TBD when this phase starts.
 
 ## Phase 3 — Board Rendering (DOM + CSS Grid)
 
@@ -52,7 +50,6 @@ themselves (those are called out live in-phase).
 - [ ] Number pad UI + notes-mode toggle UI.
 - [ ] Wire board-view to board-model (render reflects model state, no
       duplicated state).
-- [ ] **Checkpoint:** user-implemented piece TBD when this phase starts.
 
 ## Phase 4 — Input Controls (Keyboard, Mouse, Touch)
 
@@ -61,7 +58,6 @@ themselves (those are called out live in-phase).
 - [ ] Keyboard navigation (arrow keys, digit keys, notes toggle key,
       delete/backspace, escape).
 - [ ] Touch target sizing/spacing verified on small viewports.
-- [ ] **Checkpoint:** user-implemented piece TBD when this phase starts.
 
 ## Phase 5 — Persistence: Autosave, Continue, Settings
 
@@ -70,14 +66,12 @@ themselves (those are called out live in-phase).
 - [ ] Autosave in-progress game state (debounced).
 - [ ] "Continue Game" wiring from main menu.
 - [ ] Settings persistence (theme, color mode, audio, input prefs).
-- [ ] **Checkpoint:** user-implemented piece TBD when this phase starts.
 
 ## Phase 6 — Statistics, Best Times, High Scores
 
 - [ ] Track games played/won, streaks, per-difficulty best time.
 - [ ] Score formula + high-score tracking per difficulty.
 - [ ] Statistics screen UI.
-- [ ] **Checkpoint:** user-implemented piece TBD when this phase starts.
 
 ## Phase 7 — Themes & Color Modes
 
@@ -88,7 +82,6 @@ themselves (those are called out live in-phase).
 - [ ] `js/theme.js` — applies + persists theme/mode, respects `prefers-
       color-scheme` for System.
 - [ ] Contrast check across all 12 theme×mode combinations.
-- [ ] **Checkpoint:** user-implemented piece TBD when this phase starts.
 
 ## Phase 8 — Audio (Music + SFX)
 
@@ -96,7 +89,6 @@ themselves (those are called out live in-phase).
       volume controls, respects settings persistence.
 - [ ] Lightweight SFX assets sourced/created (small file sizes, offline-
       bundled, no CDN).
-- [ ] **Checkpoint:** user-implemented piece TBD when this phase starts.
 
 ## Phase 9 — Offline / PWA
 
@@ -106,7 +98,6 @@ themselves (those are called out live in-phase).
       all core assets; versioned cache with safe upgrade path.
 - [ ] `js/sw-register.js` registration with relative scope.
 - [ ] Verified offline load via devtools network throttling to "Offline."
-- [ ] **Checkpoint:** user-implemented piece TBD when this phase starts.
 
 ## Phase 10 — Accessibility Polish
 
@@ -115,7 +106,6 @@ themselves (those are called out live in-phase).
 - [ ] Visible focus-state audit across all themes.
 - [ ] `prefers-reduced-motion` audit (animations/transitions gated).
 - [ ] Contrast re-check post-theme-work.
-- [ ] **Checkpoint:** user-implemented piece TBD when this phase starts.
 
 ## Phase 11 — GitHub Pages Deployment
 
@@ -132,5 +122,7 @@ themselves (those are called out live in-phase).
 
 ## Outstanding / Blocked
 
-- [ ] Waiting on user-supplied assets: `./inspiresoftwareintro.mp4`,
-      `./logo.png`, and app icon source image(s) for the PWA manifest.
+- [x] `./inspiresoftwareintro.mp4` and `./logo.png` supplied by user
+      (2026-07-28) and wired into the Phase 1 intro screen / menu footer.
+- [ ] Still waiting on app icon source image(s) for the PWA manifest
+      (needed for Phase 9).

@@ -46,27 +46,28 @@ to the user if a request conflicts with one:
 
 ## Learning Contract
 
-This is a teaching project. The user is learning by building alongside the
-assistant. Every phase follows this pattern:
+This is a teaching project. The user is learning by following along as the
+assistant builds. **Amended 2026-07-28:** the original contract had the
+user write one checkpoint per phase themselves. That was proving to be a
+blocker (syntax/logic not yet solid enough to move independently), so by
+explicit user request the contract is now:
 
 1. **Before editing:** summarize the phase's goal and which files will be
    touched.
-2. **Implement the foundation** for the phase — most of the scaffolding,
-   wiring, and boilerplate — but leave **one meaningful checkpoint**
-   (roughly 10–20 minutes of focused coding) for the user to write
-   themselves.
-3. **Mark the checkpoint** clearly with a `TODO(USER)` comment at the exact
-   spot, and separately state:
-   - the exact file/function involved,
-   - the requirements for what it must do,
-   - the test/acceptance criteria for "done."
-4. **Stop.** Do not complete the checkpoint on the user's behalf, even
-   partially, even as a "draft they can replace." Wait for them to return.
-5. **On return:** review their code constructively — explain any bugs in
-   plain language (what breaks, why, under what input) before proposing a
-   fix. Then finish out the rest of that phase.
-6. **After every completed phase:** update `TASKS.md` (check off items) and
+2. **Implement the entire phase**, including what would previously have
+   been the user's checkpoint. No more `TODO(USER)` stubs.
+3. **Explain thoroughly as you go:** for each meaningful piece of code,
+   state in plain language what it does and *why* it's built that way
+   (the alternatives considered, the constraint that ruled them out). The
+   goal is that the user still understands the app deeply, even though
+   they're not typing the logic themselves.
+4. **After every completed phase:** update `TASKS.md` (check off items) and
    append a dated entry to `DEVELOPMENT_LOG.md`.
+
+Superseded (kept for history, no longer in effect): the original
+checkpoint-per-phase pattern — implement most of a phase, leave one
+10–20 minute `TODO(USER)` checkpoint marked in the code, stop and wait,
+then review the user's code on return before finishing the phase.
 
 ## Code Style
 
