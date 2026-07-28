@@ -431,9 +431,223 @@ button {
 
 /* ---------- Game screen ---------- */
 
+.screen-game {
+  justify-content: flex-start;
+  gap: var(--space-3);
+}
+
+.game-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  width: min(100%, 32rem);
+  margin: 0 auto;
+}
+
+.game-back-btn {
+  min-height: var(--touch-target-min);
+  padding: var(--space-2) var(--space-3);
+}
+
+.game-meta {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.game-meta-item {
+  font-size: 0.95rem;
+  color: var(--color-text);
+}
+
+.game-meta-label {
+  display: block;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+}
+
 .game-status {
   color: var(--color-text-secondary);
   max-width: 26rem;
+  min-height: 1.2em;
+}
+
+/* ---------- Sudoku board ---------- */
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  grid-template-rows: repeat(9, 1fr);
+  width: min(100%, 32rem);
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
+  gap: 1px;
+  background: var(--color-border);
+  border: 2px solid var(--color-text);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  transition: opacity 0.2s ease;
+}
+
+.board.is-empty {
+  opacity: 0.35;
+}
+
+.cell {
+  all: unset;
+  box-sizing: border-box;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  background: var(--color-panel);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.cell:disabled {
+  cursor: default;
+}
+
+.cell:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+/* Strong 3x3 box boundaries — a visibly heavier rule than the 1px grid
+   gap between ordinary cells, using the same high-contrast token as
+   text so it reads clearly in every theme. */
+.cell.grid-line-left {
+  border-left: 2px solid var(--color-text);
+}
+
+.cell.grid-line-top {
+  border-top: 2px solid var(--color-text);
+}
+
+.cell-value {
+  font-size: clamp(0.9rem, 4vw, 1.4rem);
+  font-weight: 600;
+  color: var(--color-entry-player);
+}
+
+.cell-value.is-error {
+  color: var(--color-error);
+}
+
+.cell.is-fixed .cell-value {
+  color: var(--color-clue-fixed);
+  font-weight: 700;
+}
+
+.cell-notes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  width: 100%;
+  height: 100%;
+  padding: 2px;
+}
+
+.cell-note-digit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(0.5rem, 1.6vw, 0.65rem);
+  color: var(--color-notes);
+  line-height: 1;
+}
+
+/* Priority when more than one applies: related < match < selected —
+   declared in that order so later rules win on the shared `background`
+   property. Conflicts use box-shadow (a different property) so that
+   signal never has to compete for the cascade. */
+.cell.is-related {
+  background: var(--color-cell-related);
+}
+
+.cell.is-match {
+  background: var(--color-cell-match);
+}
+
+.cell.is-selected {
+  background: var(--color-cell-selected);
+}
+
+.cell.is-conflict {
+  box-shadow: inset 0 0 0 2px var(--color-error);
+}
+
+/* ---------- Board toolbar & number pad ---------- */
+
+.board-toolbar {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+  width: min(100%, 32rem);
+  margin: 0 auto;
+}
+
+.toolbar-btn {
+  flex: 1;
+}
+
+#btn-notes-toggle[aria-pressed="true"] {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  border-color: var(--color-accent);
+}
+
+.number-pad {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--space-2);
+  width: min(100%, 32rem);
+  margin: 0 auto;
+}
+
+.number-btn {
+  min-height: var(--touch-target-min);
+  min-width: var(--touch-target-min);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 1.15rem;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* ---------- Pause overlay ---------- */
+
+.pause-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  background: rgba(0, 0, 0, 0.65);
+  color: #ffffff;
+}
+
+.pause-overlay[hidden] {
+  display: none;
+}
+
+.pause-overlay p {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0;
 }
 
 /* ---------- Shared buttons (Settings dialog) ---------- */

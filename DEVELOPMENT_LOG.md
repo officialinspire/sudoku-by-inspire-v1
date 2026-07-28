@@ -5,6 +5,212 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-28 — Phase 5: Playable Sudoku Board and Input System
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+Earlier planning had this as two future phases (Board Rendering, then
+Input Controls). Delivered as one, because they're not actually
+separable in practice — a click both selects *and* needs to re-render,
+a keypress both mutates *and* needs to re-render, and building the
+renderer first with no way to change state (or the inputs first with no
+renderer to show the result) would mean touching the same seams twice.
+`TASKS.md` reflects this: Phase 5 is now "Playable Sudoku Board & Input
+System," and Phases 6-12 (Persistence onward) shift down by one.
+
+**What was built:**
+
+- **`js/game-state.js`** (new): the single source of truth for an
+  in-progress game. Every mutating function (`selectCell`,
+  `applyNumberInput`, `eraseSelectedCell`, `toggleNotesMode`, `undo`,
+  `moveSelection`, `pauseGame`/`resumeGame`) ends by calling one
+  internal `notify()` — the one hook the UI (and, later, autosave)
+  subscribes to via `onStateChange()`. Composes the Phase 3 engine
+  (`isValidPlacement`, `isSolved`) rather than reimplementing conflict/
+  completion logic. Notes are stored as a 9-bit integer per cell
+  (bit `d-1` = digit `d` is a candidate) rather than a `Set` or array,
+  mainly because it makes "clear this digit from every peer's notes"
+  a single `&= ~bit` per peer instead of a search-and-splice.
+- **`applyNumberInput(value)`**: the phase's central flow, checked in
+  order — reject a non-1-9 value, reject if no game is in progress,
+  reject if no cell is selected, reject if the selected cell is a fixed
+  clue — then record undo history, then branch on notes mode (toggle a
+  candidate bit) vs. normal mode (write the entry, clear that cell's own
+  notes, clear the placed digit from every peer's notes, count a mistake
+  if it doesn't match the stored solution), then run exactly one
+  conflict recheck and one completion check, then `notify()` once. No
+  intermediate state change is ever announced separately.
+- **`js/game-state.test.js`**: 30 tests, one per state-transition
+  concern in the phase's requirements list — guards, both entry modes,
+  peer-note cleanup, mistake counting, conflict detection, completion
+  detection, undo, selection movement/clamping, pause/resume, and (its
+  own dedicated test) that exactly one `notify()` fires per mutation,
+  and zero fire for a rejected no-op input.
+- **`js/ui/board-view.js`** (new): builds the 81 cell buttons once, then
+  a single `render(state)` function recomputes every cell's classes and
+  text from the current state snapshot on every state change — fixed
+  clue vs. player entry vs. notes-in-progress, selected/related/
+  matching-value/conflict/error, all freshly derived, never read back
+  from the DOM. A single delegated click listener on the board container
+  resolves which cell was clicked from the event, rather than 81
+  individual listeners.
+- **`js/ui/controls.js`** (new): keyboard (1-9, Backspace/Delete, all 4
+  arrow keys, N for notes, Escape to pause/resume) and number-pad/erase/
+  notes-toggle clicks (also event-delegated for the pad). Guarded so
+  none of it fires while a `<dialog>` is open or a form field has focus.
+- **`js/ui/difficulty-dialog.js`** (new) + markup: New Game now opens a
+  difficulty picker — reusing the exact `<dialog>` + option-tile pattern
+  from the Phase 2 Settings dialog — before generating, instead of
+  always defaulting to Easy as it did as a Phase 4 placeholder.
+- **`js/ui/game-screen.js`**: now calls `game-state.js`'s `startGame()`
+  once generation resolves, and announces completion once, on the
+  transition into `status === 'complete'`, reading `elapsedSeconds`/
+  `mistakes` from state rather than anything rendered.
+- CSS: a responsive 9×9 grid (`width: min(100%, 32rem)`,
+  `aspect-ratio: 1/1`), heavier borders on 3×3 box edges via
+  `grid-line-left`/`grid-line-top` classes computed once at cell-build
+  time, and the board-state tokens reserved back in Phase 2
+  (`--color-cell-selected/-related/-match`, `--color-clue-fixed`,
+  `--color-entry-player`, `--color-notes`) finally put to use. Conflicts
+  render as an inset `box-shadow` ring (a different CSS property from
+  the tint backgrounds) specifically so a conflicting cell's signal
+  never has to fight a `background` cascade against selected/related/
+  match — and so it's never color-alone, matching the Phase 2 rule.
+
+**A real rendering bug caught by browser testing, not code review:**
+`board-view.js`'s first draft only updated a cell's note-digit `<span>`
+text inside the "cell is empty" render branch. When a cell went from
+"has notes" to "has a real value," the notes container was correctly
+hidden (`notesEl.hidden = true`), but the note-digit text nodes
+underneath it were never cleared — invisible today, but no longer
+actually reflecting `state.notes[index]`, which is exactly the failure
+mode "render must derive from state, not from what the DOM already
+says" is meant to prevent. An automated browser check caught it
+directly (asserting on note-digit text content after a value was
+entered, not just container visibility). Fixed by moving the note-digit
+text update outside the if/else so it always runs from
+`state.notes[index]`, regardless of which branch renders next.
+
+**A deliberate scope decision beyond the phase's literal control list:**
+`history`/undo was explicitly required in central state, and
+"record undo history before mutation" was an explicit step of
+`applyNumberInput`'s flow — so a real, tested `undo()` function exists.
+The phase's keyboard-control list didn't mention a trigger for it,
+though, and building a fully working, tested undo mechanism with no way
+for a real user to ever reach it would be a half-finished feature. Added
+Ctrl/Cmd+Z as the trigger — a standard, low-risk, zero-new-UI binding —
+rather than leaving it silently unreachable or adding unrequested button
+chrome.
+
+**Test results:**
+
+```
+# tests 75   (30 engine + 15 generator + 30 game-state)
+# pass 75
+# fail 0
+```
+
+**Browser verification** (headless Chromium, two scripts): difficulty
+dialog → New Game → board renders with the correct clue count for Easy;
+click-to-select + 20-peer "related" highlighting + DOM focus following
+selection; number pad entry and Erase; keyboard digit entry, arrow
+navigation, Backspace; notes mode toggling candidates and being cleared
+by a real entry (after the bug fix above); two equal values in the same
+row flagged `is-conflict`; Escape → pause overlay → Resume; completion
+driven by directly mutating the running app's live `game-state` module
+instance via `page.evaluate(() => import(...))` to reach an
+almost-solved board without 40+ manual clicks, then finishing it with
+one real UI click and confirming the "Solved!" message and
+`isSolved()`-based detection; Back to Menu. Separately: 320px viewport
+has no horizontal overflow and number-pad buttons measure ≥44px;
+desktop board cells measure ≥44px; selecting a fixed clue correctly
+highlights other same-value cells as `is-match`. All checks pass; zero
+unexpected console errors (the one pre-existing video-codec message
+aside). Screenshots spot-checked in Cyber/dark (mobile) and Woodgrain/
+light (desktop) — 3×3 boundaries read clearly, notes/selection/matching
+states are visually distinct in both.
+
+**Design concepts worth explaining** (also see inline comments in
+`js/game-state.js` and `js/ui/board-view.js`):
+
+- *State-driven rendering*: `board-view.js`'s `render(state)` treats
+  `state` as the complete truth and recomputes every visual property
+  from it on every call — never reads a cell's current class list or
+  text to decide what it should become next. This is what makes the bug
+  above possible to *state* precisely (a code path that skipped
+  recomputing one piece of DOM from state) and easy to fix by making
+  every path derive from state unconditionally, rather than needing to
+  reason about what the DOM might already contain from a previous
+  render.
+- *Event delegation*: one `click` listener on the board container (and
+  one on the number pad) instead of 81 (or 9) individual listeners.
+  The handler reads `event.target.closest('.cell')` to find which
+  specific cell was clicked at the moment of the click, rather than each
+  cell needing its own closure capturing its own index. Fewer listeners
+  to create, and cells added/rebuilt later wouldn't need new bindings.
+- *Selected-cell logic*: `selectedIndex` lives in `game-state.js`, not
+  in the DOM (no "which element has a CSS class" queries) and not
+  duplicated into `board-view.js`'s own variable — there is exactly one
+  place selection is remembered, and the renderer reads it fresh every
+  time along with everything derived from it (related peers, matching
+  value).
+- *Normal entry vs. notes mode*: same entry point
+  (`applyNumberInput`), same guards, then a single branch. Notes mode
+  toggles one bit and stops — no mistake counting, no peer cleanup, no
+  completion check, because a pencil mark is a guess-in-progress, not an
+  answer. Normal mode does all of that, and additionally clears the
+  target cell's own notes (an answered cell doesn't need candidates
+  anymore) and removes the placed digit from every peer's notes (a
+  digit placed in a peer cell is no longer a candidate anywhere it
+  conflicts).
+- *Peer cells*: "the 20 cells sharing a row, column, or box, excluding
+  self" is defined exactly once (`getPeerIndices`, exported from
+  `game-state.js`) and reused for both peer-note cleanup during input
+  and "related cell" highlighting in the renderer. Two different
+  features reading the same definition, rather than two independent
+  implementations of "peer" that could quietly drift apart.
+- *Why one update/render path prevents inconsistent UI*: every mutating
+  function funnels through the same handful of steps and ends in the
+  same `notify()`. If `applyNumberInput` and, say, a hypothetical
+  separate "clear notes on entry" helper each independently decided
+  when to tell the UI to re-render, it would be possible for the DOM to
+  reflect a state that existed briefly *between* those two updates —
+  notes cleared but the mistake not yet counted, or vice versa. With one
+  path, a subscriber only ever sees complete, self-consistent snapshots,
+  never a partial one — which is also exactly what made the "one
+  `notify()` per mutation" test in `game-state.test.js` meaningful to
+  write.
+
+**Remaining limitations:**
+
+- Board cells on very narrow phones (measured ~31px at 320px viewport)
+  fall below the general 44px touch-target guideline — this is an
+  inherent consequence of fitting 9 cells across a screen that narrow,
+  not an oversight; the number pad (the more error-prone target for a
+  fat-finger tap) is held to ≥44px. Every mainstream Sudoku app makes
+  this same trade-off.
+- The `history`/undo mechanism is capped only by memory (no maximum
+  depth) — fine for a single game session, but Phase 6 (autosave) should
+  decide whether history needs trimming or resetting before persisting.
+- `hintsUsed` exists in state as required but nothing increments it yet
+  — no hint feature was in this phase's scope; the field is reserved,
+  not wired to anything.
+- The elapsed-time clock is a plain `setInterval`, not deeply unit-
+  tested for real-time accuracy (tests use `autoStartTimer: false` and
+  assert state transitions, not wall-clock ticking) — consistent with
+  how Phase 4's generation timing was verified (benchmarked/manually
+  checked rather than asserted against tight real-time bounds in the
+  main suite).
+- Two manual-checklist items are explicitly unverified here and need a
+  human on a real device: actual touch-tap accuracy (emulated Chromium
+  touch isn't a real finger), and a real screen-reader pass over the
+  board's `aria-label`s (designed for it, not run through one yet).
+- Difficulty-dialog "Cancel" and the native `<dialog>` Escape-to-close
+  both correctly leave `game-state` untouched (no game was started) —
+  verified by code inspection, not a dedicated automated check.
+
+---
+
 ## 2026-07-28 — Phase 4: Puzzle Generation and Difficulty Model
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`

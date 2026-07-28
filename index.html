@@ -69,8 +69,50 @@
       </footer>
     </section>
 
-    <section id="screen-game" class="screen" tabindex="-1" aria-label="Game" hidden>
+    <section id="screen-game" class="screen screen-game" tabindex="-1" aria-label="Game" hidden>
+      <div class="game-header">
+        <button id="btn-game-back" type="button" class="btn-secondary game-back-btn">&larr; Menu</button>
+        <div class="game-meta">
+          <span class="game-meta-item">
+            <span class="game-meta-label">Difficulty</span>
+            <span id="game-difficulty-label">—</span>
+          </span>
+          <span class="game-meta-item">
+            <span class="game-meta-label">Time</span>
+            <span id="game-timer">0:00</span>
+          </span>
+          <span class="game-meta-item">
+            <span class="game-meta-label">Mistakes</span>
+            <span id="game-mistakes">0</span>
+          </span>
+        </div>
+      </div>
+
       <p id="game-status" class="game-status" aria-live="polite"></p>
+
+      <div id="board" class="board" role="grid" aria-label="Sudoku board"></div>
+
+      <div class="board-toolbar">
+        <button id="btn-notes-toggle" type="button" class="btn-secondary toolbar-btn" aria-pressed="false">Notes: Off</button>
+        <button id="btn-erase" type="button" class="btn-secondary toolbar-btn">Erase</button>
+      </div>
+
+      <div id="number-pad" class="number-pad" role="group" aria-label="Number pad">
+        <button type="button" class="number-btn" data-digit="1">1</button>
+        <button type="button" class="number-btn" data-digit="2">2</button>
+        <button type="button" class="number-btn" data-digit="3">3</button>
+        <button type="button" class="number-btn" data-digit="4">4</button>
+        <button type="button" class="number-btn" data-digit="5">5</button>
+        <button type="button" class="number-btn" data-digit="6">6</button>
+        <button type="button" class="number-btn" data-digit="7">7</button>
+        <button type="button" class="number-btn" data-digit="8">8</button>
+        <button type="button" class="number-btn" data-digit="9">9</button>
+      </div>
+
+      <div id="pause-overlay" class="pause-overlay" hidden>
+        <p>Paused</p>
+        <button id="btn-resume" type="button" class="btn-primary">Resume</button>
+      </div>
     </section>
 
   </div>
@@ -154,6 +196,37 @@
       <div class="settings-actions">
         <button type="button" id="btn-reset-appearance" class="btn-secondary">Reset Appearance</button>
         <button type="submit" class="btn-primary">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="difficulty-dialog" class="settings-dialog" aria-labelledby="difficulty-title">
+    <form method="dialog" class="settings-form">
+      <h2 id="difficulty-title">New Game</h2>
+
+      <fieldset class="settings-group">
+        <legend>Choose a difficulty</legend>
+        <label class="option-tile">
+          <input type="radio" name="new-game-difficulty" value="easy" checked>
+          <span>Easy</span>
+        </label>
+        <label class="option-tile">
+          <input type="radio" name="new-game-difficulty" value="intermediate">
+          <span>Intermediate</span>
+        </label>
+        <label class="option-tile">
+          <input type="radio" name="new-game-difficulty" value="advanced">
+          <span>Advanced</span>
+        </label>
+        <label class="option-tile">
+          <input type="radio" name="new-game-difficulty" value="insane">
+          <span>Insane</span>
+        </label>
+      </fieldset>
+
+      <div class="settings-actions">
+        <button type="submit" value="cancel" class="btn-secondary">Cancel</button>
+        <button type="submit" value="start" class="btn-primary">Start</button>
       </div>
     </form>
   </dialog>

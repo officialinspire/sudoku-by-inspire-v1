@@ -112,26 +112,83 @@ for the amendment).
       to Easy (no difficulty picker yet — that's Phase 5's board/menu
       UI territory).
 
-## Phase 5 — Board Rendering (DOM + CSS Grid)
+## Phase 5 — Playable Sudoku Board & Input System ✅ (2026-07-28)
 
-- [ ] `js/ui/board-view.js` — renders the 9x9 grid via DOM/CSS Grid, 3x3
-      box borders, given vs. editable cell styling, selected/peer/error
-      highlighting (using the `--color-cell-*`/`--color-clue-fixed`/
-      `--color-entry-player`/`--color-notes` tokens from Phase 2 — pair
-      each state with a structural cue, not color alone).
-- [ ] Number pad UI + notes-mode toggle UI.
-- [ ] Wire board-view to board-model (render reflects model state, no
-      duplicated state).
+Originally split across two future phases (Board Rendering, then Input
+Controls) in earlier planning; delivered as one combined, fully playable
+phase instead — rendering and input are tightly coupled enough (a click
+selects, a keypress mutates, both re-render from the same state) that
+building them separately would have meant wiring the same seams twice.
 
-## Phase 6 — Input Controls (Keyboard, Mouse, Touch)
+- [x] `js/game-state.js` (new) — central, UI-independent game state and
+      every mutation (`selectCell`, `applyNumberInput`, `eraseSelectedCell`,
+      `toggleNotesMode`, `undo`, `moveSelection`, `pauseGame`/`resumeGame`).
+      One `notify()` call per mutation is the single render/save path —
+      see DEVELOPMENT_LOG.md for why that single-path design matters.
+      State: `puzzle`, `solution`, `entries`, `notes` (81-cell bitmasks),
+      `selectedIndex`, `difficulty`, `elapsedSeconds`, `mistakes`,
+      `hintsUsed`, `history`, `status`, `notesMode`, `generationMeta`.
+- [x] `js/game-state.test.js` — 30 tests covering every state transition:
+      guards (invalid value/no selection/fixed cell), normal vs. notes
+      mode, peer-note cleanup, mistake counting, conflict detection,
+      completion detection, undo, selection movement/clamping, pause/
+      resume, and that exactly one notify happens per mutation.
+- [x] `js/ui/board-view.js` (new) — 9×9 CSS Grid, strong 3×3 boundaries,
+      focusable `<button>` cells, fully state-derived rendering (fixed
+      clues, player entries, notes mini-grid, selected/related/matching/
+      conflict/error, all recomputed from state every render — including
+      a bug caught by browser testing where note-digit *text* wasn't
+      being cleared on value entry even though the notes container was
+      correctly hidden, i.e. state said one thing and the DOM still said
+      another underneath it).
+- [x] `js/ui/controls.js` (new) — number pad + Erase + Notes toggle (event
+      delegation, not 9+ separate listeners), keyboard (1-9, Backspace/
+      Delete, arrow-key movement, N for notes, Escape to pause/resume,
+      Ctrl/Cmd+Z for undo — see DEVELOPMENT_LOG.md for why undo's binding
+      goes beyond the phase's literal control list), all guarded so game
+      keys don't fire while a dialog is open or a form field has focus.
+- [x] `js/ui/difficulty-dialog.js` (new) + dialog markup — New Game now
+      opens a difficulty picker (reusing the Settings dialog's
+      `<dialog>`/option-tile pattern) before generating, instead of
+      always defaulting to Easy.
+- [x] `js/ui/game-screen.js` — extended to call `startGame()` once
+      generation finishes, and to announce completion
+      (`isSolved()`-driven, not DOM text) once, on the state transition
+      into `'complete'`.
+- [x] Touch: `touch-action: manipulation` on interactive board/pad
+      elements, board cells and number pad sized per the responsive grid
+      (44px+ where the grid math allows — see Remaining Limitations),
+      tap = click, no hover-dependent functionality.
+- [x] Manual QA checklist below, for real-device verification beyond
+      what headless Chromium can confirm.
 
-- [ ] `js/ui/controls.js` — pointer (mouse/touch) selection + digit entry
-      via number pad.
-- [ ] Keyboard navigation (arrow keys, digit keys, notes toggle key,
-      delete/backspace, escape).
-- [ ] Touch target sizing/spacing verified on small viewports.
+**Manual keyboard/touch checklist** (✅ = automated via headless
+Playwright as part of this phase's verification; ⬜ = needs a human on a
+real device, not fully coverable by automation):
 
-## Phase 7 — Persistence: Autosave, Continue, Settings
+- ✅ Difficulty dialog → New Game generates and renders a board
+- ✅ Tap/click a cell selects it; related row/column/box cells highlight
+- ✅ Selecting a filled cell highlights other cells with the same value
+- ✅ Number pad entry writes the digit; Erase clears it
+- ✅ Notes toggle + digit marks a candidate; a real entry clears that
+  cell's notes
+- ✅ Two equal values in the same row/column/box are flagged as conflicts
+- ✅ Keyboard: digits 1-9, Backspace/Delete, all 4 arrow keys, N, Escape
+  (pause), Resume
+- ✅ Completion is detected from state/engine (`isSolved`), announced once
+- ✅ Back to Menu pauses and returns to the menu
+- ✅ 320px viewport: no horizontal overflow; number pad buttons ≥44px
+- ✅ Desktop viewport: board cells ≥44px
+- ⬜ Real touch device: tap accuracy on board cells at the smallest
+  supported width (emulated touch ≠ a real finger)
+- ⬜ Real device: on-screen keyboard doesn't appear/interfere (board
+  cells are `<button>`s, not text inputs, so it shouldn't — worth a
+  physical check)
+- ⬜ Screen reader pass over `aria-label`s on cells (e.g. "Row 3, column
+  5, empty, notes 2, 4, 7") — content was designed for this but not
+  run through an actual screen reader yet
+
+## Phase 6 — Persistence: Autosave, Continue, Settings
 
 - [ ] `js/storage.js` — thin localStorage wrapper (namespaced keys,
       versioned schema for future-proofing, same safe-fallback pattern
@@ -141,20 +198,20 @@ for the amendment).
 - [ ] Remaining settings persistence (audio, input prefs) alongside the
       appearance settings already persisted in Phase 2.
 
-## Phase 8 — Statistics, Best Times, High Scores
+## Phase 7 — Statistics, Best Times, High Scores
 
 - [ ] Track games played/won, streaks, per-difficulty best time.
 - [ ] Score formula + high-score tracking per difficulty.
 - [ ] Statistics screen UI.
 
-## Phase 9 — Audio (Music + SFX)
+## Phase 8 — Audio (Music + SFX)
 
 - [ ] `js/audio.js` — music loop playback + SFX playback, independent mute/
       volume controls, respects settings persistence.
 - [ ] Lightweight SFX assets sourced/created (small file sizes, offline-
       bundled, no CDN).
 
-## Phase 10 — Offline / PWA
+## Phase 9 — Offline / PWA
 
 - [ ] `manifest.webmanifest` with relative `start_url`/`scope` (subpath-safe).
 - [ ] App icons (sizes per manifest spec).
@@ -163,7 +220,7 @@ for the amendment).
 - [ ] `js/sw-register.js` registration with relative scope.
 - [ ] Verified offline load via devtools network throttling to "Offline."
 
-## Phase 11 — Accessibility Polish
+## Phase 10 — Accessibility Polish
 
 - [ ] Full keyboard-only playthrough audit.
 - [ ] ARIA labels/roles audit on all interactive controls.
@@ -171,13 +228,13 @@ for the amendment).
 - [ ] `prefers-reduced-motion` audit (animations/transitions gated).
 - [ ] Contrast re-check post-theme-work.
 
-## Phase 12 — GitHub Pages Deployment
+## Phase 11 — GitHub Pages Deployment
 
 - [ ] Verify no absolute-root paths anywhere (grep audit).
 - [ ] GitHub Pages workflow or branch config for subpath hosting.
 - [ ] Deployed smoke test at the actual Pages subpath URL.
 
-## Phase 13 — Final QA Against Acceptance Criteria
+## Phase 12 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and
       check it off with evidence (manual test note in
