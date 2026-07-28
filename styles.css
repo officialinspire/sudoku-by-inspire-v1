@@ -429,6 +429,13 @@ button {
   margin: 0 auto;
 }
 
+/* ---------- Game screen ---------- */
+
+.game-status {
+  color: var(--color-text-secondary);
+  max-width: 26rem;
+}
+
 /* ---------- Shared buttons (Settings dialog) ---------- */
 
 .btn-primary,

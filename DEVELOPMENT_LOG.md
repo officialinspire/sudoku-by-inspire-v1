@@ -5,6 +5,200 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-28 — Phase 4: Puzzle Generation and Difficulty Model
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+**What was built:**
+
+- **`js/sudoku-generator.js`**: sits on top of the pure engine from Phase
+  3 without modifying it. `generateSolvedBoard(random)` fills an empty
+  board via the same backtracking approach as the engine's solver, but
+  shuffles the candidate order at each cell (Fisher-Yates, driven by an
+  injectable `random`) instead of trying 1-9 in order, so repeated calls
+  produce different valid grids. `generatePuzzle(difficultyId, options)`
+  then removes clues from a fresh solved grid one at a time, in a
+  shuffled order, checking `countSolutions(puzzle, 2) === 1` after each
+  removal and undoing it if uniqueness broke — the standard technique
+  for "remove clues while guaranteeing a unique solution."
+- **`DIFFICULTIES`**: centralized config for Easy/Intermediate/Advanced/
+  Insane — `label`, `minClues`/`maxClues` (the exact bands given: 40-46/
+  34-39/28-33/22-27), `scoreMultiplier` (1 / 1.5 / 2.25 / 3.5 — a
+  monotonic v1 approximation, easy to retune), `maxAttempts`,
+  `timeBudgetMs`, and `solverEffortRange` (an approximate backtracking-
+  step range from a *separate*, step-counting solve — see below).
+  `isValidDifficultyConfig()` validates the shape, including that
+  `minClues` never drops below 17 — the proven minimum for any
+  uniquely-solvable Sudoku (McGuire, Tugemann & Civario, 2012), so
+  nothing below it could ever pass a uniqueness check regardless of
+  tuning.
+- **Fallback puzzles**: 2 per difficulty (8 total), all produced by
+  running this module's own generator (never hand-typed), captured, and
+  independently re-verified with a separate one-off script before being
+  hardcoded into `FALLBACK_PUZZLES`. `validateFallbackPuzzles()`
+  re-checks shape, that the stored solution actually solves, that every
+  given matches it, that the clue count sits in the difficulty's
+  configured range, and that `countSolutions` still reports exactly one
+  solution — run both at module-load time (a non-fatal `console.warn` if
+  anything's wrong) and as a dedicated test.
+- **`js/ui/game-screen.js`** (new) + a `#game-status` element
+  (`aria-live="polite"`) on the game screen: New Game now generates a
+  real puzzle and shows status text through it ("Generating puzzle…" →
+  "Ready — Easy puzzle, 43 clues (generated in 116ms, attempt 1)."), or
+  a fallback-specific message if live generation didn't finish in time.
+  Defaults to Easy — there's no difficulty picker yet, that belongs with
+  Phase 5's board/menu UI, not this phase's generator work.
+
+**A real bug found via benchmarking, not just review:** the first
+version of `generatePuzzle` only checked its time budget *between*
+whole attempts. Benchmarking Insane generation (see below) showed a
+*single* attempt's clue-removal pass can itself take up to ~47 seconds
+in this environment — so that outer check did nothing to stop one slow
+attempt from blocking far past the configured budget. Fixed two ways:
+the deadline is now checked before every individual removal (not just
+between attempts), and `removeCluesForUniqueness` is now `async` and
+`await`s a yield to the event loop every 6 removals, not only between
+attempts. Verified with a heartbeat-timer script: over a 2.5s Insane
+generation, a 50ms-interval heartbeat fired 5 times spread across the
+run (max gap ~691ms) instead of the thread being held for the whole
+2.5s — see "Remaining limitations" below for what that gap-size number
+means honestly.
+
+**Benchmark data used to tune the config** (mulberry32-seeded, 6-8
+trials per difficulty, this sandbox environment):
+
+| Difficulty   | Typical           | Observed max (before the mid-attempt yield fix) |
+|--------------|--------------------|---------------------------------------------------|
+| Easy         | ~15-50ms           | ~53ms |
+| Intermediate | ~20-75ms           | ~74ms |
+| Advanced     | ~60-350ms          | ~1.1s |
+| Insane       | ~250ms-6.6s        | **~46.7s** (single attempt, pre-fix) |
+
+Insane is genuinely expensive: removing clues down to 22-27 given cells
+means most of the removal pass runs with very few clues left on the
+board, and each remaining `countSolutions` check has to search a much
+larger space than an early removal (going from 81 clues to 80 is nearly
+free to verify; going from 24 to 23 is not). `timeBudgetMs`/
+`maxAttempts` per difficulty were set from this data — generous enough
+that Easy/Intermediate/Advanced essentially always succeed live
+(observed 100% live-generation rate in benchmarking), while Insane is
+expected to fall back to a bundled puzzle a meaningful fraction of the
+time in practice, which is the explicitly intended design, not a bug.
+
+**Test results** (`npm test`, engine + generator suites together):
+
+```
+# tests 45
+# suites 12
+# pass 45
+# fail 0
+```
+
+15 new tests cover: `generateSolvedBoard` produces a valid solved board
+and is deterministic under a seeded random source; every bundled
+difficulty config passes `isValidDifficultyConfig` and the four bands
+are non-overlapping and strictly harder in order; malformed configs are
+rejected (below the 17-clue floor, inverted range, non-positive
+multiplier, zero attempts, negative time budget, invalid effort range);
+`generatePuzzle` produces a uniquely-solvable puzzle within its
+configured clue range for all 4 difficulties, preserving every given;
+an unknown difficulty id rejects with `RangeError`; a seeded run is
+reproducible end-to-end (puzzle, solution, and status all identical
+across two calls); the fallback path is exercised deterministically (by
+temporarily setting `maxAttempts` to 0 and restoring it in a `finally`,
+rather than depending on real slow generation to trigger it, which would
+make the test itself slow and environment-dependent); `onStatus` fires;
+and — using real timers, not the test-speed no-op yield — a marker timer
+queued before generation starts is confirmed to fire *during*
+generation, not just after, proving the yield actually hands control
+back to the event loop. Also re-ran `js/sudoku-engine.test.js`
+unchanged (30/30) to confirm Phase 3 wasn't touched.
+Also verified end-to-end in a headless browser: Settings → New Game →
+`#game-status` text updates live and settles on a "Ready — …" message,
+no unexpected console errors (the one pre-existing video-codec message
+from Phase 1 aside). Caught and fixed a real wiring bug this way — the
+first draft of `js/ui/game-screen.js` was never actually imported by
+`js/ui/menu.js`'s New Game handler, so nothing happened on click until
+this check caught it.
+
+**Design/CS concepts worth explaining** (also see inline comments in
+`js/sudoku-generator.js`):
+
+- *Randomized backtracking*: identical algorithm to the engine's
+  `solveBoard`, with one change — candidate values at each cell are
+  shuffled before being tried, instead of attempted in ascending order.
+  Ascending-order backtracking from an empty board is deterministic (it
+  always produces the same grid); shuffling the order it tries values in
+  is what makes repeated calls produce different valid solved boards
+  while still guaranteeing a valid one comes out, since every shuffled
+  order is still just "some order to try 1-9 in."
+- *Clue removal*: removing a clue is easy; knowing it's *safe* to remove
+  is the hard part. A puzzle keeps a unique solution only as long as no
+  combination of the remaining clues allows a second valid completion —
+  that's a global property of the whole board, not something you can
+  determine by looking at the removed cell in isolation. So the only way
+  to check is to ask the solver "how many solutions does this board have
+  now?" after every single removal.
+- *Why uniqueness checks are expensive*: `countSolutions(puzzle, 2)` is
+  a full (early-stopping) backtracking search — cheap when there are
+  many clues constraining the board (few branches to explore), and
+  progressively more expensive as clues thin out (more empty cells, more
+  branching, more of the search tree has to be explored before the
+  solver can prove — or disprove — uniqueness). A puzzle at 24 clues
+  needs the same *kind* of check as one at 80 clues, but the search
+  space behind that check is enormously larger. This is a direct,
+  measured consequence, not a theoretical concern — it's the entire
+  reason Insane generation is slow in this benchmark data.
+- *Why clue count alone is insufficient*: two puzzles with identical
+  clue counts can require completely different solving techniques —
+  simple scanning for one, deep candidate-elimination chains for the
+  other — depending on *where* the clues are, not just how many there
+  are. `solverEffortRange` (steps a plain backtracking solver takes to
+  fill a generated puzzle, tracked via a separate step-counting solve
+  function rather than modifying the pure engine's solver) is recorded
+  alongside clue count as a second, still-rough signal, precisely
+  because clue count by itself is known to be an unreliable proxy for
+  how hard a puzzle actually feels to a human solver. This is
+  documented as a v1 approximation in `DIFFICULTIES`' own comment block,
+  not presented as a rigorous rating.
+- *How the time/attempt guard protects UX*: two layers, matching the two
+  places JavaScript can get "stuck" — too many attempts (bounded by
+  `maxAttempts`) and too much wall-clock time in one attempt (bounded by
+  checking `deadline` before every removal, not just before every whole
+  attempt, plus yielding to the event loop every few removals so a slow
+  attempt is chopped into several event-loop turns instead of one
+  uninterrupted stretch). Both layers exist because the first version of
+  this module only had the outer one, and benchmarking showed that alone
+  doesn't prevent a multi-second freeze — see the bug note above.
+
+**Remaining limitations:**
+
+- The yield-every-6-removals granularity bounds the *number* of
+  `countSolutions` calls between yields, not wall-clock time between
+  them — at very low clue counts a single one of those calls can itself
+  take a few hundred milliseconds (observed up to ~691ms between
+  heartbeats in the verification script above), so "never freezes" is
+  accurate in the sense of "never blocks for its full multi-second
+  duration in one stretch," not in the stricter sense of "guarantees a
+  sub-100ms response time at all times." A truly hard guarantee would
+  need the pure engine's solver itself to be interruptible mid-search,
+  which would mean threading a deadline through `sudoku-engine.js`'s
+  recursion — deliberately not done, to keep that module simple, pure,
+  and untouched from Phase 3.
+- Insane-difficulty live generation is expected to fall back to a
+  bundled puzzle a real fraction of the time in this environment (per
+  the benchmark data above) — that's the intended, documented behavior
+  of the fallback system, not a defect, but it does mean Insane games
+  will sometimes replay one of only 2 bundled puzzles rather than a
+  fresh one.
+- No difficulty picker UI yet — New Game always requests Easy. Belongs
+  with Phase 5 (board rendering/menu UI), not this phase.
+- The generated puzzle/solution isn't persisted or connected to a board
+  yet (`getCurrentGame()` just holds it in memory) — Phase 5 renders it,
+  Phase 6 will autosave it.
+
+---
+
 ## 2026-07-28 — Phase 3: Pure Sudoku Engine + Automated Tests
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`

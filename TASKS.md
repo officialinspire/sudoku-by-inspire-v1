@@ -89,14 +89,28 @@ for the amendment).
       so Node treats `.js` files as ES modules for the test runner —
       does not affect the shipped static app in any way.
 
-## Phase 4 — Puzzle Generation (Difficulty Tiers)
+## Phase 4 — Puzzle Generation (Difficulty Tiers) ✅ (2026-07-28)
 
-- [ ] `js/sudoku-generator.js` (or similar) — builds on
-      `js/sudoku-engine.js` to generate puzzles per difficulty
-      (Easy/Intermediate/Advanced/Insane), using `countSolutions` to
-      guarantee a unique solution.
-- [ ] Tests confirming generated puzzles are solvable, unique, and meet
-      each difficulty's target clue count/technique profile.
+- [x] `js/sudoku-generator.js` — builds on `js/sudoku-engine.js`:
+      randomized-backtracking solved-board generation, clue removal with
+      a `countSolutions(puzzle, 2) === 1` uniqueness guarantee, a
+      centralized `DIFFICULTIES` config (Easy/Intermediate/Advanced/
+      Insane — label, clue range, score multiplier, max attempts, time
+      budget, approximate solver-effort range), attempt/time-budget
+      guards with periodic event-loop yields (not just between
+      attempts — see DEVELOPMENT_LOG.md for why that distinction
+      mattered), and a bundled, self-validating fallback puzzle set (2
+      per difficulty, all generated and independently re-verified, none
+      hand-typed).
+- [x] `js/sudoku-generator.test.js` — 15 tests covering generated solved
+      boards, unique generated puzzles, clue-range validation,
+      difficulty-config validation, seeded-random determinism, and
+      fallback validity.
+- [x] `js/ui/game-screen.js` (new) + game screen status text
+      (`#game-status`, `aria-live="polite"`) — New Game now actually
+      triggers generation and shows live progress/result text. Defaults
+      to Easy (no difficulty picker yet — that's Phase 5's board/menu
+      UI territory).
 
 ## Phase 5 — Board Rendering (DOM + CSS Grid)
 
