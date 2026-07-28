@@ -5,6 +5,192 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-28 — Phase 9: Audio, Haptics, and User-Gesture Initialization
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+This prompt's own "Phase 8" (audio/haptics) is `TASKS.md`'s Phase 9 (Audio)
+— matches it directly, no renumbering needed this time.
+
+**What was built:**
+
+- **`js/audio-settings.js`** — persisted audio/haptics preferences
+  (`musicEnabled`, `sfxEnabled`, `vibrationEnabled`, `musicVolume`,
+  `sfxVolume`) under `inspireSudoku:v1:audioSettings`, on the same
+  versioned-storage-with-safe-fallback pattern as `theme.js` and
+  `game-settings.js`. Deliberately knows nothing about `AudioContext` —
+  that split lets the Settings dialog show/persist volume and mute state
+  even before the audio engine itself has ever been initialized.
+  Following the existing precedent set by `theme.js` and
+  `game-settings.js` (both thin settings wrappers with no dedicated test
+  file of their own, since their real logic lives in — and is tested by —
+  `storage.js`), this module has no dedicated test file either; this
+  phase's own verification is manual/browser-driven per the prompt.
+- **`js/audio.js`** — the AudioManager engine: one lazily-created, reused
+  `AudioContext`; `playClick()`, `playSelect()`, `playError()`,
+  `playCompletion()` — each a short synthesized oscillator+gain-envelope
+  tone (see below); `vibrate(pattern)`; optional looping background
+  music loaded from `./background-music.mp3` (absent in this repo — its
+  `error` listener marks it unavailable and the app carries on silently,
+  the same pattern already used for the intro video's missing-file
+  handling); pauses music on `document.visibilitychange` to hidden,
+  resumes only if the music toggle is still on and the file did load;
+  reacts to `js/game-state.js`'s `onStateChange` by diffing the previous
+  vs. current snapshot to decide when to play `select` (a real, in-play
+  selection change), `error` (mistakes count went up), or `completion`
+  (status just became `'complete'`) — game-state.js itself stays fully
+  audio-agnostic, exactly as its own header comment already promises for
+  DOM.
+- **`js/ui/audio-bindings.js`** — one delegated `document`-level click
+  listener plays the generic `click` tone for any `<button>` press,
+  excluding `.cell` board buttons (which already get their own `select`
+  tone from the state-diffing above — both firing on the same tap would
+  just double up). This covers every button in the app — number pad,
+  toolbar, dialogs, menu nav — without editing any of those individual
+  UI modules.
+- **`initAudioEngine()` wired to the Start screen's gesture handler**
+  (`index.js`), called synchronously alongside `playIntro()`, not
+  "sometime after" it — browsers only treat an `AudioContext` as
+  user-unlocked if it's created/resumed from directly inside the actual
+  call stack of a real click/keydown event; an `await` or a `.then()`
+  later loses that unlocked status in some browsers (notably Safari).
+  `initAudioEngine()` is idempotent (a no-op after the first call), so
+  nothing needs to track "did this already run" itself.
+- **Settings dialog**: new "Audio & Haptics" fieldset — Background music
+  toggle + volume slider, Sound effects toggle + volume slider, Vibration
+  toggle. The vibration checkbox is disabled (with an explanatory hint)
+  when `navigator.vibrate` doesn't exist, rather than letting the player
+  turn on a setting that can never do anything on their device/browser.
+- New CSS: `.settings-slider` for the two volume rows — reuses the
+  existing `--color-accent` via the `accent-color` property (same
+  mechanism the checkbox/radio `.option-tile`s already lean on) so native
+  range-input styling matches the rest of the theme automatically.
+
+**Bug found and fixed during this phase's verification (unrelated to
+audio, but directly blocking it):** `js/ui/intro-video.js`'s `error`
+listener on the intro `<video>` called `finishIntro()` (→
+`showScreen('menu')`) unconditionally. Browsers can start probing a
+`<video>`'s `src` for metadata the instant the page loads, independent of
+any user gesture — confirmed here, where this sandbox's headless
+Chromium can't decode the video's codec and fires that `error` event
+within tens of milliseconds of page load. That meant the app could skip
+straight from the Start screen to the main menu before the player ever
+clicked anything, silently bypassing the Start gate — and with it,
+`initAudioEngine()`, since that only runs from inside the Start screen's
+click handler. Caught by a Playwright test that reloaded the page twice
+in the same browser process (the second load's codec probe resolved fast
+enough to consistently lose the race; the first load's didn't, which is
+why this had gone unnoticed in every previous phase's verification).
+Fixed by only treating the video's `error` event as "the intro failed,
+skip to menu" while the intro screen is actually the active one
+(`getCurrentScreen() === 'intro'`) — an early probe failure that happens
+before `playIntro()` was ever called is now just ignored, and the Start
+gate can no longer be silently bypassed.
+
+**Explanation (browser autoplay restrictions, AudioContext lifecycle,
+oscillator frequency, gain envelopes, clipping prevention, feature
+detection):**
+
+- *Autoplay restrictions*: browsers block audio (and often video) from
+  playing until a real user gesture — a click or keydown, not a
+  programmatic event — has occurred on the page, specifically to stop
+  sites from ambushing visitors with sound. Critically, the unlock only
+  "counts" if the audio API call happens synchronously inside that
+  gesture's own event handler; code that runs later (even a `.then()`
+  chained off a promise started inside the handler) can lose that
+  privilege in stricter browsers. That's why `initAudioEngine()` is
+  called directly, synchronously, from the Start screen's click/keydown
+  callback in `index.js`, not queued or deferred.
+- *AudioContext lifecycle*: a fresh `AudioContext` starts in a
+  `'suspended'` state until a user gesture resumes it (some browsers
+  create it already-running post-gesture; others still require an
+  explicit `.resume()` call). It can also be auto-suspended later by the
+  browser during extended inactivity. `ensureContextRunning()` calls
+  `.resume()` (fire-and-forget — its promise settling asynchronously is
+  fine, since scheduling sounds against `audioContext.currentTime` is
+  valid either way) before every sound is scheduled, so a sound
+  attempted while suspended doesn't just silently vanish forever.
+- *Oscillator frequency*: each SFX is one (or a few, for completion) sine
+  or square wave at a chosen pitch — `click` at 620Hz (a short, neutral
+  tick), `select` sweeping 720→900Hz (a small upward "chosen" cue),
+  `error` sweeping 260→140Hz on a buzzier square wave (a downward "wrong"
+  cue), `completion` as a four-note ascending arpeggio (C5, E5, G5, C6).
+  Frequency sweeps are done with `exponentialRampToValueAtTime`, which
+  the ear perceives as a smoother pitch glide than a linear ramp.
+- *Gain envelopes*: every tone ramps its gain node from 0 up to a low
+  peak (attack) and back down to ~0 (release) rather than jumping
+  straight to full volume and back — a sound that starts or stops
+  instantly at nonzero amplitude produces an audible "click" from that
+  sudden discontinuity in the waveform, which is exactly the kind of
+  artifact a short UI blip is most likely to expose.
+- *Clipping prevention*: two layers. First, every tone's peak gain is
+  kept deliberately low (0.12–0.16) so that even several sounds
+  overlapping (e.g., a wrong digit fires `click` and `error` in the same
+  instant) sums to well under full scale. Second, both the SFX and music
+  gain chains funnel through one shared `DynamicsCompressorNode` before
+  reaching the destination — a cheap safety margin against that sum ever
+  clipping, not something load-bearing given the first layer already
+  keeps levels conservative.
+- *Feature detection*: `window.AudioContext || window.webkitAudioContext`
+  is checked once; if neither exists, the engine never creates a context
+  and every `playX()`/`vibrate()` call already checks for a live context
+  or a real `navigator.vibrate` function before doing anything — so an
+  unsupported browser gets a fully silent, error-free app rather than a
+  thrown exception. The Settings dialog does the same check for
+  vibration specifically, disabling that one toggle (with an explanatory
+  hint) rather than leaving it live with no effect.
+
+**Checks run:**
+
+- `node --check` on every new/modified JS file — all clean.
+- `npm test`: 163/163 passing, unchanged from Phase 7 (no automated
+  tests added this phase — see the audio-settings.js note above; the
+  prompt itself asked for manual/browser verification instead).
+- Browser verification (headless Chromium via Playwright) covering every
+  scenario the prompt named:
+  - **First interaction**: `initAudioEngine()` reachable and
+    `playClick()` callable with no throw immediately after the Start
+    click.
+  - **Mute/unmute**: toggling music/SFX off is reflected in
+    `getAudioSettings()` immediately.
+  - **Volume changes**: dragging both sliders persists the exact value
+    and survives a full page reload.
+  - **Hidden-tab behavior**: dispatching `visibilitychange` to hidden and
+    back to visible runs the pause/resume-check logic with no throw.
+  - **Missing music**: confirmed `./background-music.mp3` genuinely 404s
+    in this repo, and no page error results from that.
+  - **Repeated button presses**: 10 rapid Settings-dialog open/close
+    cycles produced no console or page errors.
+  - **Unsupported AudioContext**: deleted `window.AudioContext`/
+    `webkitAudioContext` before load, then clicked through Start → menu →
+    Statistics → New Game → Cancel with no errors.
+  - **Unsupported vibration**: stubbed `navigator.vibrate` to `undefined`
+    before load; confirmed the Settings checkbox is disabled with the
+    "Not supported" hint, and that triggering a real mistake (which
+    calls `vibrate()` internally via `playError()`) still doesn't throw.
+  - A full gameplay pass (select a cell, move selection, make a mistake,
+    solve the rest of the puzzle to completion) exercised the `select`/
+    `error`/`completion` state-diff paths end-to-end with no errors.
+
+**Remaining limitations:**
+
+- No actual `background-music.mp3` ships with this repo (correctly, per
+  CLAUDE.md's binary-asset policy — it's optional and not one of the two
+  protected assets); background music itself hasn't been *heard* in this
+  environment, only verified to fail absence-detection correctly. If the
+  user supplies the file later, it should Just Work via the existing
+  loader, but that's worth a quick real-browser spot-check when it lands.
+- Sound quality (the specific oscillator waveforms/frequencies chosen)
+  is a first pass, not something that can be meaningfully judged from
+  automated verification — worth a real-ears listen and adjustment pass
+  from the user when convenient.
+- No visual "now playing"/mute-state indicator outside the Settings
+  dialog (e.g. no persistent mute icon on the game screen) — not
+  requested by this phase, but worth deciding on later if it turns out
+  to matter in practice.
+
+---
+
 ## 2026-07-28 — Phase 7: Save Data, Statistics, Best Times, and High Scores
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`

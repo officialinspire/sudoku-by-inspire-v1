@@ -1,6 +1,8 @@
 import { showScreen } from './js/screens.js';
 import { initTheme } from './js/theme.js';
 import { initGameSettings } from './js/game-settings.js';
+import { initAudioSettings } from './js/audio-settings.js';
+import { initAudioEngine } from './js/audio.js';
 import { initGamePersistence } from './js/game-persistence.js';
 import { initStartScreen } from './js/ui/start-screen.js';
 import { initIntroScreen, playIntro } from './js/ui/intro-video.js';
@@ -16,9 +18,11 @@ import { initHintDialog } from './js/ui/hint-dialog.js';
 import { initCompletionDialog } from './js/ui/completion-dialog.js';
 import { initStatisticsScreen } from './js/ui/statistics-screen.js';
 import { initHighScoresScreen } from './js/ui/high-scores-screen.js';
+import { initAudioBindings } from './js/ui/audio-bindings.js';
 
 initTheme();
 initGameSettings();
+initAudioSettings();
 initGamePersistence();
 initIntroScreen();
 initMenuScreen();
@@ -33,6 +37,16 @@ initHintDialog();
 initCompletionDialog();
 initStatisticsScreen();
 initHighScoresScreen();
-initStartScreen(() => playIntro());
+initAudioBindings();
+
+// initAudioEngine() must run synchronously inside this same gesture
+// handler, not just "sometime after" it — browsers only treat an
+// AudioContext as user-unlocked if it's created/resumed within the
+// actual call stack of a real click/keydown event. Calling it here,
+// right alongside playIntro(), ties both to the exact same gesture.
+initStartScreen(() => {
+  initAudioEngine();
+  playIntro();
+});
 
 showScreen('start');

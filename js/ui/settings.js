@@ -1,5 +1,14 @@
 import { getAppearance, setTheme, setMode, resetAppearance, onAppearanceChange } from '../theme.js';
 import { getGameSettings, setImmediateErrorChecking, onGameSettingsChange } from '../game-settings.js';
+import {
+  getAudioSettings,
+  setMusicEnabled,
+  setSfxEnabled,
+  setVibrationEnabled,
+  setMusicVolume,
+  setSfxVolume,
+  onAudioSettingsChange,
+} from '../audio-settings.js';
 import { suspendTimer, resumeTimer } from '../game-state.js';
 
 const dialog = document.getElementById('settings-dialog');
@@ -8,6 +17,18 @@ const modeInputs = dialog.querySelectorAll('input[name="mode"]');
 const modeHint = document.getElementById('mode-current-hint');
 const resetBtn = document.getElementById('btn-reset-appearance');
 const immediateErrorCheckingInput = document.getElementById('setting-immediate-error-checking');
+const musicEnabledInput = document.getElementById('setting-music-enabled');
+const musicVolumeInput = document.getElementById('setting-music-volume');
+const sfxEnabledInput = document.getElementById('setting-sfx-enabled');
+const sfxVolumeInput = document.getElementById('setting-sfx-volume');
+const vibrationEnabledInput = document.getElementById('setting-vibration-enabled');
+const vibrationSupportHint = document.getElementById('vibration-support-hint');
+
+// Feature-detected once — it can't change over the page's lifetime — and
+// used both to disable the toggle and to explain why in the hint text,
+// rather than letting the player enable a setting that can never do
+// anything on this device/browser.
+const vibrationSupported = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
 
 function syncControls() {
   const { theme, mode, effectiveMode } = getAppearance();
@@ -21,6 +42,15 @@ function syncControls() {
       : '';
 
   immediateErrorCheckingInput.checked = getGameSettings().immediateErrorChecking;
+
+  const audio = getAudioSettings();
+  musicEnabledInput.checked = audio.musicEnabled;
+  musicVolumeInput.value = String(audio.musicVolume);
+  sfxEnabledInput.checked = audio.sfxEnabled;
+  sfxVolumeInput.value = String(audio.sfxVolume);
+  vibrationEnabledInput.checked = audio.vibrationEnabled;
+  vibrationEnabledInput.disabled = !vibrationSupported;
+  vibrationSupportHint.textContent = vibrationSupported ? '' : 'Not supported on this device or browser.';
 }
 
 export function initSettingsDialog() {
@@ -35,16 +65,23 @@ export function initSettingsDialog() {
     setImmediateErrorChecking(immediateErrorCheckingInput.checked);
   });
 
+  musicEnabledInput.addEventListener('change', () => setMusicEnabled(musicEnabledInput.checked));
+  musicVolumeInput.addEventListener('input', () => setMusicVolume(Number(musicVolumeInput.value)));
+  sfxEnabledInput.addEventListener('change', () => setSfxEnabled(sfxEnabledInput.checked));
+  sfxVolumeInput.addEventListener('input', () => setSfxVolume(Number(sfxVolumeInput.value)));
+  vibrationEnabledInput.addEventListener('change', () => setVibrationEnabled(vibrationEnabledInput.checked));
+
   resetBtn.addEventListener('click', () => {
     resetAppearance();
     syncControls();
   });
 
-  // Appearance/gameplay settings can change from outside the dialog
-  // (e.g. the OS scheme flips while "System" is selected) — keep the
-  // controls truthful.
+  // Appearance/gameplay/audio settings can all change from outside the
+  // dialog (e.g. the OS scheme flips while "System" is selected) — keep
+  // the controls truthful.
   onAppearanceChange(syncControls);
   onGameSettingsChange(syncControls);
+  onAudioSettingsChange(syncControls);
 
   // A blocking dialog holds the game timer, same as a hidden tab or an
   // explicit pause — correct regardless of whether a game is actually

@@ -266,12 +266,18 @@ real device, not fully coverable by automation):
 - [x] Statistics screen UI with a difficulty filter.
 - [x] High Scores screen UI with a difficulty filter.
 
-## Phase 9 — Audio (Music + SFX)
+## Phase 9 — Audio (Music + SFX) ✅ (2026-07-28)
 
-- [ ] `js/audio.js` — music loop playback + SFX playback, independent mute/
-      volume controls, respects settings persistence.
-- [ ] Lightweight SFX assets sourced/created (small file sizes, offline-
-      bundled, no CDN).
+- [x] `js/audio.js` — one shared, lazily-created `AudioContext`; music
+      loop playback (optional, graceful if the file is absent) + SFX
+      playback, independent mute/volume controls, respects settings
+      persistence (`js/audio-settings.js`).
+- [x] SFX synthesized directly with the Web Audio API (oscillator + gain
+      envelope) instead of shipped audio files — click, select, error,
+      and completion sounds, zero added binary assets, fully offline.
+- [x] Vibration toggle, feature-detected and gated independently of SFX.
+- [x] Audio/haptics controls added to the Settings dialog (music
+      enable+volume, SFX enable+volume, vibration enable).
 
 ## Phase 10 — Offline / PWA
 
