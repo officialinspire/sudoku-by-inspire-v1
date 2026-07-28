@@ -65,17 +65,40 @@ for the amendment).
 - [x] Reduced-motion respected (existing global transition-collapse
       rule extended to the new theme-switch transitions).
 
-## Phase 3 — Sudoku Engine (Generator + Solver)
+## Phase 3 — Sudoku Engine (Pure Rules + Solver) ✅ (2026-07-28)
 
-- [ ] `js/sudoku/board-model.js` — grid state representation, givens vs.
-      user entries, notes storage.
-- [ ] `js/sudoku/solver.js` — validity checker + solve/uniqueness check.
-- [ ] `js/sudoku/generator.js` — puzzle generation per difficulty
-      (Easy/Intermediate/Advanced/Insane), guaranteeing a unique solution.
-- [ ] Unit-style manual test harness (console-driven or simple assertions)
-      confirming generated puzzles solve uniquely at each difficulty.
+- [x] `js/sudoku-engine.js` — pure, UI-independent rules engine: 81-cell
+      row-major board representation, coordinate conversion
+      (`rowColToIndex`/`indexToRowCol`), row/column/box extraction,
+      board-shape validation, placement legality, candidate generation,
+      a backtracking solver (`solveBoard`), and solution counting with
+      early stopping (`countSolutions`) for later uniqueness checks. No
+      DOM/localStorage/timers — pure functions, none of which mutate
+      their input board.
+- [x] `js/sudoku-engine.test.js` — Node's built-in test runner
+      (`node --test`), 30 tests across 8 suites covering coordinate
+      conversion, board-shape validation, row/column/box extraction,
+      legal/illegal placement, a solvable board, an unsolvable
+      (conflicting-givens) board, a completed valid board, a completed
+      invalid board, early-stopping solution counting, candidate
+      calculation, and input immutability. All fixtures are built
+      programmatically (a formula-generated valid grid + deterministic
+      cell removal) rather than transcribed from a puzzle source, so
+      there's no risk of a copied puzzle secretly being wrong.
+- [x] `package.json` added (`"type": "module"`, no dependencies) purely
+      so Node treats `.js` files as ES modules for the test runner —
+      does not affect the shipped static app in any way.
 
-## Phase 4 — Board Rendering (DOM + CSS Grid)
+## Phase 4 — Puzzle Generation (Difficulty Tiers)
+
+- [ ] `js/sudoku-generator.js` (or similar) — builds on
+      `js/sudoku-engine.js` to generate puzzles per difficulty
+      (Easy/Intermediate/Advanced/Insane), using `countSolutions` to
+      guarantee a unique solution.
+- [ ] Tests confirming generated puzzles are solvable, unique, and meet
+      each difficulty's target clue count/technique profile.
+
+## Phase 5 — Board Rendering (DOM + CSS Grid)
 
 - [ ] `js/ui/board-view.js` — renders the 9x9 grid via DOM/CSS Grid, 3x3
       box borders, given vs. editable cell styling, selected/peer/error
@@ -86,7 +109,7 @@ for the amendment).
 - [ ] Wire board-view to board-model (render reflects model state, no
       duplicated state).
 
-## Phase 5 — Input Controls (Keyboard, Mouse, Touch)
+## Phase 6 — Input Controls (Keyboard, Mouse, Touch)
 
 - [ ] `js/ui/controls.js` — pointer (mouse/touch) selection + digit entry
       via number pad.
@@ -94,7 +117,7 @@ for the amendment).
       delete/backspace, escape).
 - [ ] Touch target sizing/spacing verified on small viewports.
 
-## Phase 6 — Persistence: Autosave, Continue, Settings
+## Phase 7 — Persistence: Autosave, Continue, Settings
 
 - [ ] `js/storage.js` — thin localStorage wrapper (namespaced keys,
       versioned schema for future-proofing, same safe-fallback pattern
@@ -104,20 +127,20 @@ for the amendment).
 - [ ] Remaining settings persistence (audio, input prefs) alongside the
       appearance settings already persisted in Phase 2.
 
-## Phase 7 — Statistics, Best Times, High Scores
+## Phase 8 — Statistics, Best Times, High Scores
 
 - [ ] Track games played/won, streaks, per-difficulty best time.
 - [ ] Score formula + high-score tracking per difficulty.
 - [ ] Statistics screen UI.
 
-## Phase 8 — Audio (Music + SFX)
+## Phase 9 — Audio (Music + SFX)
 
 - [ ] `js/audio.js` — music loop playback + SFX playback, independent mute/
       volume controls, respects settings persistence.
 - [ ] Lightweight SFX assets sourced/created (small file sizes, offline-
       bundled, no CDN).
 
-## Phase 9 — Offline / PWA
+## Phase 10 — Offline / PWA
 
 - [ ] `manifest.webmanifest` with relative `start_url`/`scope` (subpath-safe).
 - [ ] App icons (sizes per manifest spec).
@@ -126,7 +149,7 @@ for the amendment).
 - [ ] `js/sw-register.js` registration with relative scope.
 - [ ] Verified offline load via devtools network throttling to "Offline."
 
-## Phase 10 — Accessibility Polish
+## Phase 11 — Accessibility Polish
 
 - [ ] Full keyboard-only playthrough audit.
 - [ ] ARIA labels/roles audit on all interactive controls.
@@ -134,13 +157,13 @@ for the amendment).
 - [ ] `prefers-reduced-motion` audit (animations/transitions gated).
 - [ ] Contrast re-check post-theme-work.
 
-## Phase 11 — GitHub Pages Deployment
+## Phase 12 — GitHub Pages Deployment
 
 - [ ] Verify no absolute-root paths anywhere (grep audit).
 - [ ] GitHub Pages workflow or branch config for subpath hosting.
 - [ ] Deployed smoke test at the actual Pages subpath URL.
 
-## Phase 12 — Final QA Against Acceptance Criteria
+## Phase 13 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and
       check it off with evidence (manual test note in
@@ -152,4 +175,4 @@ for the amendment).
 - [x] `./inspiresoftwareintro.mp4` and `./logo.png` supplied by user
       (2026-07-28) and wired into the Phase 1 intro screen / menu footer.
 - [ ] Still waiting on app icon source image(s) for the PWA manifest
-      (needed for Phase 9).
+      (needed for Phase 10).

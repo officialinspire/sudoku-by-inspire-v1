@@ -1,0 +1,9 @@
+{
+  "name": "sudoku-by-inspire",
+  "private": true,
+  "type": "module",
+  "description": "A polished, offline-first Sudoku web app by INSPIRE.",
+  "scripts": {
+    "test": "node --test"
+  }
+}

@@ -5,6 +5,163 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-28 — Phase 3: Pure Sudoku Engine + Automated Tests
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+Redefined "Phase 3" to match the actual scope delivered: a pure,
+UI-independent rules engine and its test suite — not yet puzzle
+generation with difficulty tiers, which is real enough work to be its
+own phase. `TASKS.md` renumbered: Phase 3 is now the engine (done),
+Phase 4 is a new "Puzzle Generation (Difficulty Tiers)" phase (not
+started, builds on Phase 3), and everything from the old Board Rendering
+phase onward shifts down by one (now Phases 5–13).
+
+**What was built:**
+
+- **`js/sudoku-engine.js`**: board representation is a flat 81-element
+  array, row-major (`index = row * 9 + col`), 0 = empty, 1–9 = filled.
+  Exports: `rowColToIndex`, `indexToRowCol`, `getRowValues`,
+  `getColumnValues`, `getBoxValues`, `isValidBoardShape`,
+  `isValidPlacement`, `findEmptyCell`, `solveBoard`, `countSolutions`,
+  `isSolved`, `getCandidates`. No DOM, no `localStorage`, no timers, no
+  reference to anything outside the module — every function takes a
+  board (and sometimes coordinates) in and returns a new value out.
+- Validation policy, applied consistently: navigation helpers
+  (`rowColToIndex`, `getRowValues`, `isValidPlacement`, `getCandidates`,
+  etc.) `throw` on a malformed board/row/col/index/value — those are
+  programmer-contract functions, called with values that should already
+  be valid, so throwing surfaces a bug immediately. Pure predicates
+  (`isValidBoardShape`, `isSolved`) never throw — "is this valid" is
+  exactly the question they exist to answer, so malformed input is
+  simply `false`. `solveBoard`/`countSolutions` also never throw on a
+  malformed board (return their documented failure value — `null` and
+  `0` respectively) since they represent a "try to do this" operation
+  that may reasonably be called on questionable data (e.g. something
+  loaded from storage) without every call site needing a try/catch.
+- **Conflict pre-check** (`hasNoConflicts`, internal): found while
+  implementing `solveBoard` — backtracking only ever fills currently
+  *empty* cells, it never re-examines a given. So a board with two
+  conflicting givens (say, two 5s in one row) could reach "no empty
+  cells left" and get reported as solved, because nothing ever checked
+  the givens against each other. `solveBoard` and `countSolutions` both
+  check this upfront now, before backtracking starts.
+- **`js/sudoku-engine.test.js`**: Node's built-in test runner
+  (`node:test` + `node:assert/strict`), 8 `describe` blocks / 30 tests.
+  Fixtures are generated, not transcribed — a "completed valid board" is
+  built from the standard base-pattern formula for a valid Sudoku grid
+  (`value(r,c) = ((3*(r%3) + Math.floor(r/3) + c) % 9) + 1`, verified by
+  the tests themselves via `isSolved`), and a solvable puzzle is derived
+  by deterministically zeroing out cells of that same grid — so
+  solvability is guaranteed by construction and there was no risk of a
+  copied puzzle turning out to be secretly broken.
+- **`package.json`** (new): `{"type": "module", "private": true}` plus a
+  `test` script. Added solely so Node treats `.js` files as ES modules
+  for `node --test` — no dependencies, doesn't affect the shipped static
+  app (browsers never read `package.json`).
+
+**Test results** (`npm test`, i.e. `node --test`):
+
+```
+# tests 30
+# suites 8
+# pass 30
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
+
+Coverage maps directly to the required list: coordinate conversion
+(including a full 81-cell round-trip and out-of-range rejection), valid/
+invalid board shapes, row/column/box extraction (plus a check that
+extraction returns fresh arrays, not board references), legal/illegal
+placement (row, column, and box conflicts each tested separately),
+solving a solvable board (asserting the result is fully solved *and*
+every given was preserved, not just "some solved board came back"), an
+unsolvable board (two conflicting givens), a completed valid board, a
+completed invalid board (one duplicate introduced into an otherwise-
+valid completed grid), `countSolutions` stopping at its limit against a
+fully empty board — which has on the order of 10^21 solutions, so a
+5-second wall-clock assertion is a meaningful proof it didn't try to
+enumerate them all — candidate calculation (including a hand-checked
+row/column/box exclusion case), and input immutability, checked
+explicitly on `solveBoard`, `countSolutions`, and `getCandidates` by
+diffing the input array before/after each call. `node --check` also ran
+clean on both new files.
+
+**Design/CS concepts worth explaining** (also see inline comments in
+`js/sudoku-engine.js`):
+
+- *81-cell flat array over a 9×9 nested array*: a single flat array with
+  `index = row * 9 + col` avoids two levels of indirection
+  (`board[row][col]`) for every access, serializes trivially to/from
+  JSON and `localStorage` with no reshaping, and is exactly what
+  `Array.prototype.indexOf(0)` needs to find the next empty cell in one
+  call rather than a nested loop. The two representations hold the same
+  information; the flat one is just more convenient for this module's
+  access patterns.
+- *Integer division for box lookup*: `Math.floor(row / 3) * 3` maps any
+  row 0–8 down to the row where its 3×3 box starts (0, 3, or 6) — e.g.
+  row 4 → `Math.floor(4/3)*3 = 3`. The same formula on `col` gives the
+  box's starting column. A double loop over the 3 rows/columns from
+  those starting points visits exactly the 9 cells in that box. No
+  lookup table needed — it falls straight out of how the grid is
+  numbered.
+- *Pure functions*: every exported function's output depends only on
+  its arguments, and none of them modify the array passed in. That's
+  what makes `board.slice()` at the top of `solveBoard`/`countSolutions`
+  load-bearing: the algorithm mutates a local copy freely (mutation is
+  the efficient way to do backtracking — allocating a new 81-element
+  array at every recursive step would be wasteful), but the caller's
+  original array is never touched. Purity is also why the test suite
+  can freely reuse `solvablePuzzle` and `completeBoard` across dozens of
+  assertions without one test's call contaminating the next.
+- *Backtracking recursion*: `backtrackFill` finds the first empty cell,
+  tries digits 1–9 in order, and for each one that's currently legal
+  (`isValidPlacement`), places it and recurses on the *rest* of the
+  board. If that recursive call eventually returns `true`, the whole
+  chain unwinds as solved. If none of the 9 digits lead anywhere, the
+  function returns `false` and the *caller* (one level up) undoes its
+  own placement and tries its next digit — that's backtracking: instead
+  of detecting a dead end and giving up, the search retreats exactly one
+  decision and tries the next option there.
+- *Base case*: `findEmptyCell` returning nothing (`indexOf(0) === -1`)
+  means every cell is filled. Combined with the upfront conflict check,
+  "no empty cells and no conflicts" is the base case — a fully solved
+  board — and the recursion stops growing and starts returning `true`
+  back up the call stack.
+- *Copying vs. mutation*: the public API is copy-in (never touches the
+  argument), mutate-internally (the recursive helpers mutate their own
+  local clone directly, which is both simpler to write and faster than
+  threading immutable updates through 81 levels of recursion). This is
+  a common, deliberate pattern — expose an immutable-feeling API on top
+  of a mutable, efficient implementation.
+- *Early termination*: `countSolutions`' recursive helper checks
+  `state.count >= limit` both on entry and inside its digit loop. Once
+  the limit is hit, every still-open frame on the call stack sees that
+  check trip immediately and returns without exploring further branches
+  — the search doesn't finish exploring a branch it's already given up
+  on. That's the difference between finishing in milliseconds and never
+  finishing at all on a near-empty board.
+
+**Remaining limitations:**
+
+- No puzzle *generator* yet — `js/sudoku-engine.js` can solve and count
+  solutions for a given board, but nothing yet produces a puzzle with a
+  target clue count or difficulty. That's the new Phase 4.
+- The engine isn't wired into the app yet (no import from `index.js` or
+  any `js/ui/*` module) — it's a standalone, tested module until the
+  board UI (Phase 5) or generator (Phase 4) consumes it.
+- Backtracking here is a plain constraint-check solver (no constraint
+  propagation/MRV heuristics). It's fast enough for 9×9 Sudoku — the
+  test suite's hardest case (an empty board search truncated at 2
+  solutions) finishes in single-digit milliseconds — but a future
+  difficulty-aware generator may want a smarter solver if it needs to
+  solve many candidate boards quickly.
+
+---
+
 ## 2026-07-28 — Phase 2: Theme System & Responsive Design
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`
