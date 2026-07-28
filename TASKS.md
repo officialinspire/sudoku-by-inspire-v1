@@ -413,9 +413,13 @@ logged here in full rather than folded silently into another phase.
       menu family of screens, `./Logic Flow.mp3` for gameplay, each
       crossfading in/out on screen change or completion (`js/audio.js`
       rewritten onto a per-track-gain-node model; `js/screens.js` gained
-      an `onScreenChange` hook). Neither file exists in the repo yet
-      (see Outstanding/Blocked) — code path fully ready, verified with
-      no errors, nothing audible until supplied.
+      an `onScreenChange` hook). Both files were uploaded by the user
+      directly to GitHub mid-phase and merged in; verified end-to-end
+      with the real audio (see Outstanding/Blocked and the 2026-07-28
+      follow-up entry in `DEVELOPMENT_LOG.md`) — including a real timing
+      bug (track loading finishing after the screen transition that
+      wanted it playing) found and fixed only once genuine files existed
+      to test against.
 - [x] Menu fades in from black after the intro video finishes or is
       skipped (`.menu-fade-overlay`, reduced-motion skips it entirely).
 - [x] `logo.png` added to the Start screen title card.
@@ -467,8 +471,8 @@ logged here in full rather than folded silently into another phase.
       (2026-07-28) and wired into the Phase 1 intro screen / menu footer.
 - [ ] Still waiting on app icon source image(s) for the PWA manifest
       (needed for Phase 10).
-- [ ] Still waiting on `./Sudoku Zen.mp3` (menu music) and
-      `./Logic Flow.mp3` (gameplay music), requested 2026-07-28 (Phase
-      14) — neither exists in the repo despite being referenced as
-      already uploaded; code is fully wired and ready the moment they
-      land (see `js/audio.js` and `README.md`'s Assets section).
+- [x] `./Sudoku Zen.mp3` (menu music) and `./Logic Flow.mp3` (gameplay
+      music) supplied by the user (2026-07-28, Phase 14) via a direct
+      GitHub upload merged into this branch; verified real playback with
+      no console/page errors, `npm test` 181/181, full regression
+      playtest all passing (see `DEVELOPMENT_LOG.md`).

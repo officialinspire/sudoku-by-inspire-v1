@@ -88,7 +88,7 @@ across reloads and apply instantly with no page refresh.
 
 ## Assets
 
-Two binary assets are owned by the project maintainer, already present
+Four binary assets are owned by the project maintainer, already present
 in this repo, and must never be fabricated or overwritten by anyone
 editing this codebase (see `CLAUDE.md`'s asset policy):
 
@@ -96,23 +96,20 @@ editing this codebase (see `CLAUDE.md`'s asset policy):
   screen (currently silent — no audio track).
 - `./logo.png` — displayed on the Start screen and in the main-menu
   footer.
+- `./Sudoku Zen.mp3` — background music that fades in on the main menu
+  (and Statistics/High Scores, which share the same "menu" music
+  context) and loops there.
+- `./Logic Flow.mp3` — background music that fades in when a new game
+  starts, loops for the rest of that game, and fades out on completion.
 
-The app degrades gracefully if either is ever missing (skipping the
-intro screen / hiding the logo) rather than breaking.
-
-Two more **optional** background-music assets are not present in this
-repo today and are not required:
-
-- `./Sudoku Zen.mp3` — fades in on the main menu (and Statistics/High
-  Scores, which share the same "menu" music context) once it exists.
-- `./Logic Flow.mp3` — fades in when a new game starts, loops for the
-  rest of that game, and stops on completion.
-
-If supplied later, drop them in the repo root with exactly those
-filenames: `js/audio.js` detects and loops each independently, respects
-the Music volume/mute setting, and requires no code changes. Either
-file's absence never causes an error, a broken install, or blocked
-service worker installation (see `sw.js`'s optional-asset precaching).
+The app degrades gracefully if any of the four is ever missing (skipping
+the intro screen, hiding the logo, or simply staying silent for whichever
+music track is absent) rather than breaking. `js/audio.js` detects and
+loops each music track independently, respects the Music volume/mute
+setting, and requires no code changes if a file is ever swapped out.
+Either music file's absence never causes an error, a broken install, or
+blocked service worker installation (see `sw.js`'s optional-asset
+precaching).
 
 PWA icons (192×192, 512×512, and a maskable 512×512) are not supplied
 yet either — see `icons/README.md` for exactly what's needed and how to

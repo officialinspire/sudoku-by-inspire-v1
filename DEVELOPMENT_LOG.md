@@ -5,6 +5,70 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-28 — Phase 14 Follow-up: Real Music Files Merged and Verified
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+The Phase 14 entry below was written believing `Logic Flow.mp3` and
+`Sudoku Zen.mp3` didn't exist anywhere. They did — the user had uploaded
+both directly to GitHub (commit `9988845 "Add files via upload"`,
+outside this sandboxed session) while this session was still working
+from a local clone that predated the upload. Discovered when `git push`
+was rejected for a diverged remote; per the git safety protocol, fetched
+and inspected the new remote commit (`git show --stat`) before doing
+anything, confirmed it only added the two expected MP3s with the exact
+filenames `js/audio.js` was already built to look for, and merged
+non-destructively (`git merge origin/claude/sudoku-inspire-setup-2jpef2`,
+no conflicts — disjoint files).
+
+**Real-file verification performed:**
+
+- Confirmed both files decode correctly in-browser (`canplaythrough`,
+  real durations — "Sudoku Zen.mp3" reports 151.15s) and that `sw.js`
+  serves/precaches both with correct `encodeURI()`-escaped paths (space
+  in each filename).
+- Wrote a Playwright check that monkey-patches
+  `HTMLMediaElement.prototype.play` (via `page.addInitScript()`) to
+  observe, from outside the app, exactly which audio elements actually
+  get `.play()` called on them as real screen transitions happen.
+- **First run failed:** reaching the main menu never called `.play()` on
+  "Sudoku Zen.mp3" at all.
+- **Root cause (a real bug, only catchable with genuine files):**
+  `setActiveMusicTrack()` normally runs synchronously off a screen
+  transition, which is faster than a ~2.4MB MP3 finishing its
+  `canplaythrough` load — so the *first* activation call almost always
+  saw `track.available === false` and did nothing, and nothing ever
+  retried once the file became available afterward. With no real audio
+  file previously present, this path was never actually exercised, so it
+  passed every prior no-throw/structural check while being silently
+  broken.
+- **Fix** (`js/audio.js`): `createMusicTrack` now takes the track's
+  `name`, and its `canplaythrough` handler calls
+  `updateMusicPlayback()` if that track is still the active one —
+  turning the load-completion event into the missing retry.
+- Re-ran the same monkey-patch check: "Sudoku Zen.mp3" now plays on
+  reaching the menu, "Logic Flow.mp3" now plays on starting a game, zero
+  console/page errors either way.
+- Re-ran `npm test` (181/181, unchanged) and the full Phase 14 regression
+  playtest (all themes/modes, all difficulties, full input surface,
+  completion, reload/Continue, Clear Data, 320px keyboard-only) — all
+  passing, zero console/page errors.
+
+**Docs reconciled to match reality:** `README.md`'s Assets section,
+`TASKS.md`'s Phase 14 and Outstanding/Blocked entries, and
+`MANUAL_QA.md`'s §9 all previously described the music files as
+missing/pending — updated to reflect that both exist, are wired
+correctly, and are verified working end-to-end. (The Phase 14 entry
+below is left as-is, since it accurately describes what was true and
+known at the time it was written — this follow-up entry is the
+correction, not an edit to history.)
+
+**Remaining limitation, unchanged:** the intro video is still silent —
+this is the user's own binary asset and out of scope for this codebase
+to alter, per `CLAUDE.md`'s asset policy.
+
+---
+
 ## 2026-07-28 — Phase 14: UX/Audio Polish and Three Real Bug Fixes
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`

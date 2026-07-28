@@ -202,9 +202,11 @@ least once:
       device/browser without vibration support (most desktop browsers);
       on a supporting mobile device, a mistake should produce a short
       buzz when enabled.
-- [ ] **Two-track background music** (once `./Sudoku Zen.mp3` and
-      `./Logic Flow.mp3` are supplied — see `README.md`'s Assets
-      section):
+- [x] **Two-track background music** (`./Sudoku Zen.mp3` and
+      `./Logic Flow.mp3`, present in the repo — see `README.md`'s Assets
+      section). Verified 2026-07-28 both structurally and with real
+      playback (via a `play()` observer in an automated browser pass —
+      see `DEVELOPMENT_LOG.md`'s 2026-07-28 follow-up entry):
   - "Sudoku Zen" fades in on the main menu, and stays playing across
     Statistics/High Scores (same "menu" music context) without
     restarting or cutting when moving between those three screens.
@@ -216,10 +218,13 @@ least once:
     track back in.
   - No audible click/pop/gap at any of these transitions — they should
     crossfade smoothly, not cut instantly.
-- [ ] **Missing music** (the current state of this repo — neither file
-      exists yet, by design, see `CLAUDE.md`'s asset policy): the app
-      should never show an error, never break SFX, and the Music toggle
-      should simply have nothing audible to play at any screen.
+- [ ] **Missing music (regression check only)**: temporarily rename or
+      remove either MP3 and confirm the app still never shows an error,
+      never breaks SFX, and the Music toggle simply has nothing audible
+      to play for the missing track's context. (Both files are normally
+      present in this repo — see `CLAUDE.md`'s asset policy — this
+      bullet exists only to verify the documented graceful-degradation
+      path still works.)
 - [ ] Backgrounding the tab (switching away) pauses whichever track was
       playing; returning to the tab resumes it only if the Music toggle
       is still on.
