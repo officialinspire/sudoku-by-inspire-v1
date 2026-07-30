@@ -561,6 +561,49 @@ A third direct user-feedback round, continuing the same polish thread.
 - [x] `sw.js` `CACHE_NAME` bumped `v3` → `v4` for this round's HTML/CSS/
       JS changes.
 
+## Phase 14d — Mobile Music-Stops-Unexpectedly Fix ✅ (2026-07-30)
+
+A fourth direct user-feedback round, reported after real mobile play
+(not desktop, and not reproducible in this sandbox's headless testing —
+diagnosed and fixed from first principles instead).
+
+- [x] **Real bug fixed: background music silently stopped after certain
+      interactions on mobile** (opening Settings and returning to the
+      menu; selecting a number or opening the pause menu during
+      gameplay). Root cause: mobile browsers can pause an already-
+      playing `<audio>` element for reasons entirely outside the app's
+      control (a native `<dialog>` opening, a brief OS-level audio-
+      session interruption, a focus change) and this app had no
+      mechanism to notice or recover — the track just stayed silently
+      paused until some unrelated screen/settings change happened to
+      re-sync playback.
+- [x] Fix, `js/audio.js`: each track's `<audio>` element now has a
+      `pause` event listener — since this app never intentionally
+      pauses the *currently active* track (every explicit `.pause()`
+      call only targets a track that's already stopped being active, or
+      runs while the tab itself is hidden), any `pause` event on the
+      active track while `canPlayMusicNow()` is true is by definition an
+      external interruption, and gets auto-resumed immediately. A
+      low-frequency (2s) safety-net poll backs this up for the one case
+      the event can't see: a `.play()` call whose promise silently
+      rejected without ever transitioning the element *away* from
+      paused (so no `pause` event fires for it in the first place).
+      Both respect the existing mute/tab-hidden logic — verified the
+      tab-hidden path still stays silent across the full poll interval,
+      and correctly resumes only once the tab is visible again.
+- [x] Verified via Playwright: directly simulating an external
+      `.pause()` call (the same thing a mobile browser does) on both the
+      menu and gameplay tracks confirms auto-recovery within under a
+      second; reproduced the user's exact steps (open Settings mid-game,
+      change a setting, close it; select several numbers in a row) and
+      confirmed gameplay music keeps playing throughout. Fade in/out
+      behavior (Phase 14c's smoother exponential crossfade) and the
+      pause-overlay music crossfade (Phase 14b) both re-verified
+      unaffected.
+- [x] Full regression: `npm test` 181/181, all files syntax-clean, full
+      Phase 14 playtest suite passing, zero console/page errors.
+      `sw.js` `CACHE_NAME` bumped `v4` → `v5`.
+
 ## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and

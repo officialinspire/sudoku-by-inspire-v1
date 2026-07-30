@@ -5,6 +5,96 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-30 — Phase 14d: Mobile Music-Stops-Unexpectedly Fix
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+A fourth direct feedback round, reported after the user played a real
+game on a real mobile device — the first bug this session that only
+showed up outside this sandbox's desktop-only headless testing.
+
+**The report:** background music plays fine at first, but stops after
+specific interactions: opening Settings and returning to the main menu;
+selecting a number during gameplay; opening the menu during gameplay.
+Explicit ask: fix the audio logic so the correct track "plays
+consistently and loops during their appropriate times," while keeping
+the fade in/out.
+
+**Diagnosis.** Nothing in this app's own code intentionally pauses
+music in response to any of those interactions — confirmed by tracing
+every code path that touches a track's `.pause()` call (only ever the
+*outgoing* track during a crossfade, or every track while the tab is
+genuinely hidden) and every code path that could affect `activeTrackName`
+resolution (screen changes, game-state pause/resume — neither of which
+fires on "select a number" or "change a non-audio setting"). That
+absence of any first-party cause, combined with the bug only appearing
+on a real mobile browser and never in this session's desktop testing,
+points at something *external* to the app: mobile browsers are known to
+pause an already-playing `<audio>` element for reasons entirely outside
+a page's control — a native `<dialog>` opening (Settings uses
+`showModal()`), a brief OS-level audio-session interruption, even a
+focus change onto a form control. This app had no mechanism to notice
+when that happened, so a track interrupted this way just stayed silently
+paused until some unrelated screen or settings change happened to
+re-run `setActiveMusicTrack`/`updateMusicPlayback` and accidentally
+re-sync it.
+
+**Fix (`js/audio.js`):**
+
+- Each track's `<audio>` element now has a `pause` event listener. Since
+  this app's own code never intentionally pauses the *currently active*
+  track (every explicit `.pause()` call either targets a track that has
+  already stopped being `activeTrackName`, or runs specifically because
+  the tab is hidden — in which case `canPlayMusicNow()` is also false),
+  any `pause` event firing on the active track while `canPlayMusicNow()`
+  is still true can only mean something external paused it. The
+  listener just calls `.play()` again immediately.
+- A low-frequency (2s) `setInterval` backs that up for the one gap the
+  event can't cover: a `.play()` call whose promise silently rejected
+  (every call site already swallows that rejection deliberately) never
+  actually transitions the element *out of* paused, so no `pause` event
+  fires for it at all. The poll catches that case within 2 seconds
+  instead of leaving it stuck indefinitely.
+- Both mechanisms defer to the exact same `canPlayMusicNow()` check
+  already used everywhere else (mute setting + tab visibility), so
+  neither one ever fights the intentional "stay silent" cases.
+
+**Verification:**
+
+- Simulated the exact browser-level behavior directly — grabbing a
+  reference to the live `<audio>` element via a `HTMLMediaElement.
+  prototype.play` patch and calling `.pause()` on it manually, the same
+  effect a mobile OS interruption has — and confirmed both the menu
+  track and the gameplay track auto-resume within under a second.
+- Reproduced the user's literal repro steps in Playwright: started a
+  game, opened in-game Settings, changed the theme, closed the dialog —
+  gameplay music kept playing throughout (previously, with the bug
+  un-fixed via a raw `.pause()` reproduction, it would have stayed
+  silent). Selected five different numbers in a row — same result,
+  music never stops.
+- Re-verified the tab-hidden path is untouched by the new recovery
+  logic: forced `document.visibilityState` to `'hidden'`, confirmed
+  music stays paused across a full 2.5s window (crossing the safety-net
+  poll interval), then confirmed it correctly resumes only once
+  visibility flips back to `'visible'`.
+- Re-ran the Phase 14b pause-overlay crossfade test and the Phase 14c
+  smooth-fade verification: both still pass unchanged — the recovery
+  mechanism is purely additive and doesn't alter the intentional
+  crossfade/pause paths.
+- `npm test`: 181/181. `node --check` on every JS file: clean. Full
+  Phase 14 regression playtest suite: all passing, zero console/page
+  errors.
+- `sw.js` `CACHE_NAME` bumped `v4` → `v5`.
+
+**Remaining limitations:** this fix addresses the general, well-known
+class of "mobile browser silently paused our media" — it can't be
+verified against the *exact* mobile browser/OS the user hit from this
+sandbox (no real mobile device access here), but the mechanism is
+robust to the underlying cause by design: it doesn't matter *why* the
+track got paused, only that the app now notices and recovers.
+
+---
+
 ## 2026-07-30 — Phase 14c: Smoother Fades, Real Desktop Grid Fix, Menu Icons
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`

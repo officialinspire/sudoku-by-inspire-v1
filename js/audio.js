@@ -198,6 +198,24 @@ function createMusicTrack(name, src) {
     { once: true }
   );
 
+  // Mobile browsers can pause an already-playing <audio> element for
+  // reasons entirely outside this app's control — a native <dialog>
+  // opening, a brief OS-level audio-session interruption, even just
+  // switching focus to a form control. This app never intentionally
+  // pauses the *active* track (every explicit .pause() call above only
+  // ever targets a track that has already stopped being
+  // `activeTrackName`, or runs while the whole tab is hidden, in which
+  // case canPlayMusicNow() below is also false) — so if a 'pause' event
+  // ever fires on the currently-active track while nothing here asked
+  // for that, it's an external interruption, and the fix is simply to
+  // notice and resume rather than leave it silently stopped until some
+  // unrelated screen/settings change happens to re-sync playback.
+  track.element.addEventListener('pause', () => {
+    if (activeTrackName === name && canPlayMusicNow()) {
+      track.element.play().catch(() => {});
+    }
+  });
+
   const source = audioContext.createMediaElementSource(track.element);
   source.connect(track.gain);
   track.gain.connect(musicGain);
@@ -429,4 +447,20 @@ export function initAudioEngine() {
   syncActiveMusicTrack();
 
   initAudioReactions();
+
+  // Backstop for the one case the per-track 'pause' listener can't see:
+  // a .play() call that never actually started playback at all (its
+  // promise silently rejected — every call site above deliberately
+  // swallows that rejection rather than surfacing an error) has nothing
+  // to transition *away* from, so no 'pause' event ever fires for it.
+  // A low-frequency poll is a cheap, simple way to catch that case too
+  // without trying to enumerate every possible mobile-browser reason a
+  // play() attempt can silently fail.
+  setInterval(() => {
+    if (!musicTracks || !activeTrackName || !canPlayMusicNow()) return;
+    const track = musicTracks[activeTrackName];
+    if (track.available && track.element.paused) {
+      track.element.play().catch(() => {});
+    }
+  }, 2000);
 }
