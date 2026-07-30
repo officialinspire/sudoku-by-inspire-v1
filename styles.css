@@ -542,6 +542,10 @@ button {
 }
 
 .menu-nav button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
   min-height: var(--touch-target-min);
   padding: var(--space-2) var(--space-3);
   background: var(--color-accent);
@@ -554,6 +558,15 @@ button {
   cursor: pointer;
   box-shadow: 0 2px 6px var(--shadow-color);
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+/* Decorative only (each button already has a real text label the
+   screen reader announces), fixed to a compact size regardless of the
+   button's own font-size so the icon reads as a consistent glyph. */
+.menu-icon {
+  width: 1.2em;
+  height: 1.2em;
+  flex-shrink: 0;
 }
 
 /* New Game keeps the solid accent fill above — it's the one primary
@@ -648,7 +661,15 @@ button {
   width: min(100%, 32rem);
   aspect-ratio: 1 / 1;
   margin: 0 auto;
-  gap: 1px;
+  /* 2px, not 1px: a 1px CSS gap only ever renders as a true single
+     device pixel on a >=2x-DPI screen. On an ordinary 1x desktop
+     monitor the browser has to anti-alias that hairline across
+     sub-pixel coverage, which visibly washes it out — confirmed by
+     comparing rendered board screenshots at deviceScaleFactor 1 vs 2:
+     crisp at 2x, faint at 1x, even though the *color* contrast math
+     (still WCAG-passing) never changed. 2px is wide enough to render
+     as a solid line at 1x DPI too. */
+  gap: 2px;
   /* Was --color-border, which is deliberately subtle for chrome like
      button/dialog outlines — measured at only 1.3-2.4:1 contrast
      against --color-panel across themes here, well under WCAG's 3:1
@@ -660,7 +681,10 @@ button {
      so reusing it here guarantees a genuinely visible grid everywhere
      without hand-tuning a new color per theme. */
   background: var(--color-text-secondary);
-  border: 2px solid var(--color-text);
+  /* 3px to stay visibly heavier than the 2px ordinary gap above — the
+     3x3 box boundaries need to keep reading as "the bold lines" now
+     that the ordinary gap isn't a razor-thin 1px anymore. */
+  border: 3px solid var(--color-text);
   border-radius: var(--radius-sm);
   overflow: hidden;
   transition: opacity 0.2s ease;
@@ -694,15 +718,15 @@ button {
   z-index: 1;
 }
 
-/* Strong 3x3 box boundaries — a visibly heavier rule than the 1px grid
+/* Strong 3x3 box boundaries — a visibly heavier rule than the 2px grid
    gap between ordinary cells, using the same high-contrast token as
    text so it reads clearly in every theme. */
 .cell.grid-line-left {
-  border-left: 2px solid var(--color-text);
+  border-left: 3px solid var(--color-text);
 }
 
 .cell.grid-line-top {
-  border-top: 2px solid var(--color-text);
+  border-top: 3px solid var(--color-text);
 }
 
 .cell-value {

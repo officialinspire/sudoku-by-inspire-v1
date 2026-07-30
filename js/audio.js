@@ -29,7 +29,7 @@ import { getAudioSettings, onAudioSettingsChange } from './audio-settings.js';
 import { onStateChange, getState } from './game-state.js';
 import { onScreenChange, getCurrentScreen } from './screens.js';
 
-const MUSIC_FADE_SECONDS = 1.2;
+const MUSIC_FADE_SECONDS = 1.8;
 const MUSIC_TRACK_SOURCES = {
   menu: './Sudoku Zen.mp3',
   gameplay: './Logic Flow.mp3',
@@ -204,11 +204,27 @@ function createMusicTrack(name, src) {
   return track;
 }
 
+/**
+ * An exponential approach toward targetGain rather than a straight
+ * linear ramp. Linear gain ramps sound abrupt to the ear — loudness is
+ * perceived roughly logarithmically, so a constant-rate gain change
+ * reads as "holding, holding, holding... then suddenly cut/appear" near
+ * the tail end rather than a smooth crossfade. setTargetAtTime's
+ * exponential curve matches how volume actually sounds instead, and
+ * since it's just "keep moving toward wherever the target is *from
+ * wherever gain currently sits*," re-triggering it mid-fade (e.g. a
+ * fast pause/resume) blends into the new direction with no audible
+ * discontinuity — restarting a linear ramp mid-flight can't do that as
+ * cleanly. `seconds / 4` as the time constant: after 4 time constants
+ * the curve has covered ~98% of the distance to target, so the fade
+ * reads as "done" right around `seconds`, matching the old linear
+ * ramp's timing for every setTimeout that waits on MUSIC_FADE_SECONDS.
+ */
 function fadeTrackGainTo(track, targetGain, seconds) {
   const now = audioContext.currentTime;
   track.gain.gain.cancelScheduledValues(now);
   track.gain.gain.setValueAtTime(track.gain.gain.value, now);
-  track.gain.gain.linearRampToValueAtTime(targetGain, now + seconds);
+  track.gain.gain.setTargetAtTime(targetGain, now, seconds / 4);
 }
 
 function canPlayMusicNow() {

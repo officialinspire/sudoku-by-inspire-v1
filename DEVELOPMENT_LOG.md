@@ -5,6 +5,97 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-30 — Phase 14c: Smoother Fades, Real Desktop Grid Fix, Menu Icons
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+A third direct user-feedback round: smoother music transitions, another
+look at grid visibility ("display issues" specifically on desktop), more
+menu polish, and the standing "test play to verify no bugs" instruction.
+
+**Smoother music crossfades.** `js/audio.js`'s `fadeTrackGainTo()` switched
+from `linearRampToValueAtTime` to `setTargetAtTime` (an exponential
+approach toward the target), and `MUSIC_FADE_SECONDS` went from 1.2 to
+1.8. Linear gain ramps sound abrupt near the end because loudness is
+perceived roughly logarithmically, not linearly — the exponential curve
+reads as genuinely smooth, and as a bonus it handles being re-triggered
+mid-fade (e.g. a fast pause immediately after resume) without a click or
+discontinuity, since it just keeps moving toward wherever the new target
+is from wherever gain currently sits, rather than restarting a fixed-rate
+ramp. Re-verified the full menu → gameplay → pause → resume sequence with
+the same `play()`-observer technique from Phase 14b: still correct.
+
+**Real bug fixed: board grid lines washed out on standard desktop
+displays.** The user specifically said "on desktop" this time, which was
+the right clue. Phase 14's fix (switching the 1px cell-gap color to
+`--color-text-secondary`) was colorimetrically correct — but only ever
+verified via `getComputedStyle()` contrast math, never actual rendered
+pixels. Investigated by rendering the board at `deviceScaleFactor: 1`
+(an ordinary 1x desktop monitor) vs `deviceScaleFactor: 2` (Retina-class)
+and comparing screenshots: crisp at 2x, visibly faint at 1x, even though
+the underlying color value never changed. Root cause: a genuine 1px CSS
+line only ever paints as a true single device pixel at >=2x DPI; at 1x
+the browser has to anti-alias a hairline across sub-pixel coverage,
+which measurably washes out the color (confirmed with a
+`getBoundingClientRect()` gap-precision audit across 9 viewport widths —
+every gap was a mathematically exact 1px, so this was never a layout
+bug, purely a sub-pixel rendering one). Fixed by widening the ordinary
+cell gap from 1px to 2px, and the 3x3 box boundary lines from 2px to 3px
+to keep them visibly heavier than the ordinary grid. Re-verified: clean,
+solid lines at 1x DPI in every theme, gap widths a confirmed-exact 2px
+across 9 viewport sizes, digit centering unaffected (still sub-2px of
+true center).
+
+**A genuine methodology bug in this session's own testing, found along
+the way.** While investigating why the menu still looked "flat/gray" in
+screenshots despite Phase 14b's hierarchy work, discovered that every
+screenshot taken this session (including ones used to justify design
+decisions) was capturing Phase 14's `.menu-fade-overlay` fade-from-black
+*mid-transition* — the fade takes ~500-800ms to settle to the true
+background color, and this round's screenshot scripts were only waiting
+~200-300ms after reaching the menu. Confirmed by sampling actual PNG
+pixel values (not `getComputedStyle`, which never changes during the
+fade) at increasing delays: (56,56,56) at 0ms, (147,147,147) at 100ms,
+(205,205,205) at 200ms, pure (255,255,255) by ~500ms — a clean, correct,
+intentional fade the whole time, just measured too early. Fixed the
+scratch test scripts' wait times; the app itself needed no change here.
+This means some of Phase 14b's "the menu looks unfinished" framing was
+overstated — the true, settled menu was already reasonably polished
+before this round's icon work, though the icons are still a real
+improvement.
+
+**Third menu polish pass.** Added small inline SVG icons (play, clock,
+bar-chart, 5-point star, sliders) before each nav button's label —
+hand-authored geometric shapes (no traced/copied icon-library paths),
+`fill`/`stroke="currentColor"` so each one automatically matches its
+button's text color in every theme and the disabled state, `aria-hidden`
+since the buttons already carry real text labels for assistive tech. No
+new binary assets, zero runtime dependencies added.
+
+**Checks run:**
+
+- `node --check` across every `.js` file plus `sw.js`/`index.js`: clean.
+- `npm test`: 181/181, unchanged.
+- Real-audio crossfade + pause/resume verification (`play()` observer):
+  still correct under the new fade curve, zero console errors.
+- Grid-gap + digit-centering audit across 9 viewport widths (320px to
+  1920px): every gap exactly 2px, centering offset ≤1.5px everywhere.
+- 10-viewport × 4-theme overflow sweep: zero overflow cases.
+- Full Phase 14 regression playtest suite: all passing after fixing one
+  flake in the *test script itself* — a hardcoded guess digit
+  occasionally coincided with the random puzzle's actual solution at
+  that cell, so Hint was correctly disabled ("nothing to hint, this
+  entry is already right") rather than incorrectly stuck; not an app
+  bug, just a bad test fixture, fixed by computing a guaranteed-wrong
+  digit instead of hardcoding one.
+- `sw.js` `CACHE_NAME` bumped `v3` → `v4`.
+
+**Remaining limitations:** same as Phase 14b — can't confirm the intro
+video's audio is audible from this sandbox (codec limitation, not a code
+issue).
+
+---
+
 ## 2026-07-28 — Phase 14b: Pause Music, Real Video Audio, Menu Hierarchy
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`

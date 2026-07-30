@@ -174,6 +174,12 @@ least once:
       reload, and the appearance preview swatches update to match.
 - [ ] Board, dialogs, and menu text all remain legible (no
       invisible-text-on-matching-background situations).
+- [ ] Board grid lines (both the ordinary 2px cell lines and the bolder
+      3px 3x3 box boundaries) are clearly visible on an ordinary,
+      non-Retina desktop monitor, not just a high-DPI one — a 1px line
+      genuinely washes out at 1x DPI even with good color contrast,
+      which is why the grid uses 2px/3px lines (see Phase 14c,
+      2026-07-30).
 - [ ] Selected/related/matching-value cell highlighting and the
       conflict/error indicators (a colored ring plus a wavy underline
       on the wrong digit — see `styles.css`'s non-color cue) are all
@@ -220,7 +226,9 @@ least once:
     "Logic Flow" out and "Sudoku Zen" in; pressing Resume fades back to
     "Logic Flow." (Added 2026-07-28, Phase 14b.)
   - No audible click/pop/gap at any of these transitions — they should
-    crossfade smoothly, not cut instantly.
+    crossfade smoothly (an exponential ease, not a linear ramp, over
+    ~1.8s — see Phase 14c, 2026-07-30), not cut instantly or sound
+    abrupt near the end of the fade.
 - [ ] **Missing music (regression check only)**: temporarily rename or
       remove either MP3 and confirm the app still never shows an error,
       never breaks SFX, and the Music toggle simply has nothing audible

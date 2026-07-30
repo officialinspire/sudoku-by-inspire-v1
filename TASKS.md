@@ -511,6 +511,56 @@ continuation of the same polish/bug-fix thread, not new scope.
       surface, completion, reload/Continue, 320px keyboard-only) — all
       passing, zero console/page errors. `npm test`: 181/181 unchanged.
 
+## Phase 14c — Smoother Fades, Real Desktop Grid Fix, Menu Icons ✅ (2026-07-30)
+
+A third direct user-feedback round, continuing the same polish thread.
+
+- [x] Music crossfades now use `setTargetAtTime` (smooth exponential
+      approach) instead of `linearRampToValueAtTime`, and the fade
+      duration was lengthened (1.2s → 1.8s) — linear gain ramps sound
+      abrupt near the tail since loudness is perceived roughly
+      logarithmically; the exponential curve reads as a genuinely smooth
+      crossfade and gracefully absorbs being re-triggered mid-fade
+      (rapid pause/resume) without a discontinuity.
+- [x] **Real bug fixed: board grid lines washed out on standard-DPI
+      desktop monitors.** The Phase 14 contrast fix was colorimetrically
+      correct (verified ≥4.5:1) but never checked *actual rendered
+      pixels* — a 1px CSS grid gap only paints as a true single pixel on
+      a >=2x-DPI (Retina-class) screen; on an ordinary 1x monitor the
+      browser anti-aliases that hairline across sub-pixel coverage and
+      it visibly washes out, confirmed by comparing rendered screenshots
+      at `deviceScaleFactor: 1` vs `2`. Fixed by widening the ordinary
+      cell gap from 1px to 2px and the 3x3 box boundaries from 2px to
+      3px (keeping the box lines visibly heavier than the ordinary
+      grid), which renders as a solid line at any DPI.
+- [x] Third main-menu polish pass: added small inline SVG icons (play,
+      clock, bar-chart, star, sliders) to each nav button — zero new
+      binary assets, `currentColor`-filled so they auto-match every
+      theme and the disabled state, `aria-hidden` since each button
+      already has a real text label. Along the way, discovered that
+      every earlier "the menu looks flat/gray" impression this session
+      was itself a test artifact: Phase 14's `.menu-fade-overlay`
+      fade-from-black takes ~500-800ms to settle, and this round's
+      screenshot scripts were only waiting ~200-300ms before
+      capturing — i.e. genuinely catching the intentional fade
+      mid-transition, not a real rendering defect. Confirmed by sampling
+      actual PNG pixel values (not just `getComputedStyle`) over a
+      timeline: (56,56,56) at 0ms → (255,255,255) by ~500ms, a clean
+      monotonic fade matching `FADE_DURATION_MS = 800`.
+- [x] Full regression playtest re-run: `npm test` 181/181, all JS/HTML
+      syntax-clean, real-audio crossfade + pause/resume verification
+      (still correct under the new fade curve), a 9-viewport grid-gap
+      + digit-centering audit (2px gaps confirmed everywhere, centering
+      still sub-2px), the 10-viewport overflow sweep, and the full
+      Phase 14 playtest suite — all passing, zero console/page errors.
+      One flake chased down and fixed in the *test script itself* (not
+      the app): a hardcoded guess digit occasionally matched the random
+      puzzle's actual solution at that cell, making Hint correctly
+      report "nothing to hint" for an already-correct entry — not a
+      real bug, just a bad test fixture.
+- [x] `sw.js` `CACHE_NAME` bumped `v3` → `v4` for this round's HTML/CSS/
+      JS changes.
+
 ## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and
