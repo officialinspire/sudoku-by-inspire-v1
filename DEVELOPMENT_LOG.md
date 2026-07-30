@@ -5,6 +5,111 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-30 — Phase 14h: Light/Dark Palette Polish
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+A focused color pass on the base "Light" theme pack's two color modes,
+using the token system Phase 14g had just finished consolidating —
+explicitly scoped to `:root` (light) and `[data-mode="dark"]` (dark),
+not the Cyber/Woodgrain/Paper theme packs (each already has its own
+warm/parchment/dark-technical identity by design and wasn't in scope).
+
+**Why this was worth doing carefully, not just by eye:** the old light
+palette was flat and slightly cold — `--color-bg: #eef0f2` and
+`--color-panel`/`--color-surface` were both literally `#ffffff` (i.e.
+not actually distinct from each other, despite being two different
+tokens), and the old dark palette, while already reasonably good
+(`#121212` isn't literally pure black), had room to feel more
+deliberately "graphite" rather than just "dark gray." The request came
+with a specific brief: warm neutral background in a named hex range,
+distinct surfaces for cards/menus/controls/board, graphite (not pure
+black) dark mode, comfortable off-white (not harsh pure white) dark
+text, one consistent accent, refined borders/shadows, accessible
+contrast throughout.
+
+**Approach:** designed candidate palettes in HSL for controlled warm-
+neutral (light) and cool-graphite (dark) generation, then wrote a small
+WCAG contrast script (relative luminance + contrast ratio, same
+formula used in the Phase 11 and Phase 14c audits) and checked every
+text/UI-role color against every background it actually appears on
+before writing any CSS — not tuned by eye and hoped for the best.
+
+**Light mode result:**
+- `--color-bg: #f6f4ef` (outer page — the most muted of the three)
+- `--color-panel: #fcfaf8` (the #app card, dialogs — brightest/cleanest,
+  the primary content surface)
+- `--color-surface: #edeae6` (buttons, tiles, stat cards — a step more
+  muted than panel, so controls read as a distinct recessed layer
+  instead of blending into the card they sit on)
+- `--color-border: #c2b9ad` (darkened from `#d0d3d6`)
+- `--color-text: #2d261f` / `--color-text-secondary: #685e55` (warm
+  near-black / warm mid-gray, replacing flat `#1a1a1a`/`#55595e`)
+
+**Dark mode result:**
+- `--color-bg: #161618`, `--color-panel: #1f1f23`, `--color-surface:
+  #2a2a2f` — three deliberately elevated graphite steps (verified
+  distinct via contrast math, not just eyeballed)
+- `--color-border: #51515c` (lightened from `#3a3a3a` for legibility
+  against the deeper background)
+- `--color-text: #edebe8` (comfortable off-white, replacing the
+  slightly harsher `#f0f0f0`) / `--color-text-secondary: #aeaaa2`
+
+**What was deliberately left unchanged:** the accent (`#2b6cb0` light /
+`#5b9bd5` dark) and focus-ring colors — checked first whether they
+still cleared 4.5:1 against every *new* surface before deciding, and
+they did (4.52-6.10:1 across the board), so retuning them would have
+been change for its own sake, and the brief specifically asks to keep
+one consistent accent rather than adjust it alongside the neutrals.
+Board digit/state tokens (clue-fixed, entry-player, notes, cell-
+selected/related/match) were also verified against the new panel color
+and left alone — all still comfortably clear contrast, and the soft
+state-highlight tints still pair correctly with their existing
+structural cues (a ring/border, not color alone — the Phase 4 rule).
+One exception: dark-mode `--color-cell-related` was updated from
+`#232326` to `#2a2a2f` to stay in sync with the new `--color-surface`
+— the two were literally the same hex in the original palette, by
+design (a "related" cell reads as a neutral-surface-toned highlight),
+not a coincidence worth breaking.
+
+**One real, if narrow, accessibility fix along the way:**
+`--color-success` (light) measured 4.48:1 against the new
+`--color-surface` — a hair under WCAG AA's 4.5:1 minimum for normal
+text. Darkened from `#1f7a3d` to `#1a7039`, which clears it with real
+margin (5.1-5.9:1 against all three surfaces) instead of skating the
+line.
+
+**Shadows:** `--shadow-color` warmed slightly in light mode (a cool
+navy `rgba(15,23,42,0.14)` didn't sit as naturally against the new warm
+surfaces as a warm dark brown at slightly lower opacity,
+`rgba(40,32,20,0.12)`) and softened a touch in dark mode (`0.55` →
+`0.5` opacity — a graphite background already reads as "dark," so
+shadows don't need to work as hard to show elevation).
+
+**Verification:**
+- Full WCAG contrast audit (script-based, not eyeballed) for text,
+  text-secondary, success/warning/error, accent, and border against
+  every background they actually appear on (bg/panel/surface) — every
+  text-role pairing clears 4.5:1+, borders improved over the previous
+  (already-accepted, already-documented-as-intentionally-subtle)
+  1.3-1.65:1 range to roughly 1.6-2.3:1.
+- Confirmed Cyber/Woodgrain/Paper and System mode are unaffected:
+  checked each theme pack's computed `--color-bg` after the edit
+  (unchanged) and that System mode still resolves to the new Light-pack
+  values correctly.
+- Visual verification via Playwright screenshots: main menu, game
+  board, and the Settings dialog (which best shows the panel/surface
+  distinction via its option tiles), in both light and dark mode, on
+  both a desktop and a mobile viewport — board digits, grid lines, and
+  button hierarchy all read cleanly in every shot.
+- Full regression: `npm test` 181/181; the complete Phase 14 playtest
+  suite; the grid-gap/digit-centering audit; the menu-background
+  restriction, animation, and reduced-motion tests; the audio
+  crossfade/recovery tests — all unchanged, all passing.
+- `sw.js` `CACHE_NAME` bumped `v8` → `v9`.
+
+---
+
 ## 2026-07-30 — Phase 14g: Design Token Consolidation
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`

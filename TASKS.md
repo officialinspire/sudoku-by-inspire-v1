@@ -772,6 +772,67 @@ not a redesign itself.
       `data-theme`/`data-mode` architecture, same component structure —
       purely additive tokens plus mechanical value-for-token swaps.
 
+## Phase 14h — Light/Dark Palette Polish (Light theme pack) ✅ (2026-07-30)
+
+Refined the base "Light" theme pack's Light and Dark color modes using
+the token system Phase 14g just consolidated — a color-only pass, no
+new tokens, no layout/architecture change. Cyber, Woodgrain, and Paper
+theme packs (each already warm/parchment/dark-technical by design) were
+intentionally not touched.
+
+- [x] Light mode: replaced flat `#ffffff`/`#eef0f2` with a warm-neutral
+      trio — `--color-bg: #f6f4ef` (outer page, most muted), `--color-
+      panel: #fcfaf8` (the #app card/dialogs, brightest/cleanest), and
+      `--color-surface: #edeae6` (buttons/tiles/controls, a step more
+      muted than panel so they read as a distinct recessed layer
+      instead of blending in — previously panel and surface were both
+      literally `#ffffff`, i.e. not actually distinct from each other).
+      Text darkened from flat `#1a1a1a`/`#55595e` to a warm near-black/
+      mid-gray (`#2d261f`/`#685e55`) to match. Border darkened from
+      `#d0d3d6` to `#c2b9ad` for a real (if still deliberately soft)
+      contrast improvement over chrome that was previously only
+      1.3-1.65:1.
+- [x] Dark mode: refined `#121212`/`#f0f0f0` to a deliberate graphite/
+      off-white pairing — `--color-bg: #161618`, `--color-panel:
+      #1f1f23`, `--color-surface: #2a2a2f` (three clearly elevated
+      steps, verified via contrast math not eyeballed), text `#edebe8`
+      (comfortable off-white, not harsh `#f0f0f0`), border lightened to
+      `#51515c` for better legibility against the deeper background.
+- [x] Accent (`#2b6cb0` light / `#5b9bd5` dark) and focus ring colors
+      left completely unchanged — verified first that both already
+      clear 4.5:1+ against every new surface (4.52-6.10:1), so retuning
+      them wasn't needed and the brief specifically asks to keep one
+      consistent accent rather than adjust it alongside the neutrals.
+- [x] `--color-success` (light) nudged from `#1f7a3d` to `#1a7039` —
+      the original measured 4.48:1 against the new `--color-surface`,
+      a hair under WCAG AA's 4.5:1; the new value clears it with real
+      margin (5.1-5.9:1) instead of skating the line.
+- [x] `--shadow-color` warmed and softened slightly in both modes
+      (light: cool navy → warm dark brown, 0.14 → 0.12 opacity; dark:
+      0.55 → 0.5 opacity) to sit better against the new warm/graphite
+      surfaces without changing where shadows are used.
+- [x] Board digit/state tokens (`--color-clue-fixed`, `--color-entry-
+      player`, `--color-notes`, `--color-cell-selected/related/match`)
+      verified against the new `--color-panel` and left unchanged —
+      all still clear 4.5:1+ for text, and the soft state tints still
+      read correctly paired with their existing structural cues.
+      Dark-mode `--color-cell-related` updated from `#232326` to
+      `#2a2a2f` to stay in sync with the new `--color-surface` (the two
+      were already the same literal value by design, not coincidence).
+- [x] Verified every text/UI-role color pairing with a WCAG contrast
+      script (relative luminance formula, same methodology as the
+      Phase 11/14c audits) before touching any CSS — not tuned by eye.
+- [x] Confirmed Cyber/Woodgrain/Paper theme packs and System mode are
+      completely unaffected (checked computed `--color-bg` for all 3
+      other packs × 2 modes, and System mode's resolved value, after
+      the edit).
+- [x] Full regression: `npm test` 181/181, the complete Phase 14
+      playtest suite, grid-gap/centering audit, menu-background
+      restriction/animation tests, and audio crossfade tests all still
+      passing unchanged. Visually verified menu/board/settings dialog
+      in both modes, desktop and mobile. `sw.js` `CACHE_NAME` bumped
+      `v8` → `v9`.
+
 ## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and

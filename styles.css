@@ -69,31 +69,53 @@ button {
    ================================================================ */
 
 :root {
-  /* Layout/surface */
-  --color-bg: #eef0f2;
-  --color-panel: #ffffff;
-  --color-surface: #ffffff;
-  --color-border: #d0d3d6;
+  /* Layout/surface — a soft warm-neutral trio (Phase 14h) rather than
+     flat white-on-white: --color-bg (the outer page) is the most muted
+     of the three, --color-panel (the #app card, dialogs) is the
+     brightest/cleanest since it's the primary content surface, and
+     --color-surface (buttons, tiles, stat cards — controls that sit
+     *inside* the panel) sits a step more muted than panel so it reads
+     as a distinct, gently recessed layer instead of blending into it.
+     All three share the same warm hue family (a soft cream, not
+     yellow-beige) so the app reads as one calm, cohesive surface rather
+     than mismatched grays. */
+  --color-bg: #f6f4ef;
+  --color-panel: #fcfaf8;
+  --color-surface: #edeae6;
+  --color-border: #c2b9ad;
 
-  /* Text */
-  --color-text: #1a1a1a;
-  --color-text-secondary: #55595e;
+  /* Text — a warm near-black rather than flat #1a1a1a, and a warm mid-
+     gray secondary. Both comfortably clear WCAG AA's 4.5:1 against all
+     three surfaces above (13:1+ for primary text, 5.2-6.1:1 for
+     secondary — see the Phase 14h contrast audit). */
+  --color-text: #2d261f;
+  --color-text-secondary: #685e55;
 
-  /* Accent + focus */
+  /* Accent + focus — intentionally UNCHANGED from the previous palette.
+     The brand blue already clears 4.5:1 against every new surface above
+     (4.52-5.42:1 — verified, not assumed) without any adjustment, and
+     the brief specifically asks to keep one consistent accent rather
+     than retune it alongside the neutrals. */
   --color-accent: #2b6cb0;
   --color-accent-contrast: #ffffff;
   --color-focus: #1a56db;
 
   /* Status — never the only cue; always paired with an icon/label
-     (see .status-chip in the Settings dialog for the pattern). */
-  --color-success: #1f7a3d;
+     (see .status-chip in the Settings dialog for the pattern).
+     --color-success darkened slightly from the previous palette
+     (#1f7a3d -> #1a7039): against the new --color-surface specifically
+     it measured 4.48:1, a hair under WCAG AA's 4.5:1 — this clears it
+     with real margin (5.1-5.9:1) instead of skating the line. */
+  --color-success: #1a7039;
   --color-warning: #8a5a00;
   --color-error: #b3261e;
 
   /* Sudoku board tokens (used starting Phase 4). Selection/relation/
      match tints below are deliberately soft — Phase 4 must pair each
      with a structural cue (a ring/border, not color alone) so the
-     board reads correctly for color-blind and low-vision players. */
+     board reads correctly for color-blind and low-vision players.
+     Unchanged in Phase 14h: still clear 4.5:1+ against the new
+     --color-panel (board cell background) with no adjustment needed. */
   --color-cell-selected: #cfe3f7;
   --color-cell-related: #e3e8ec;
   --color-cell-match: #fde68a;
@@ -101,7 +123,12 @@ button {
   --color-entry-player: #1e5a92;
   --color-notes: #6b7280;
 
-  --shadow-color: rgba(15, 23, 42, 0.14);
+  /* Warmed and softened slightly from the previous cool navy-black
+     (rgba(15,23,42,0.14)) to sit better against the warm neutral
+     surfaces above — shadows are still neutral-dark (they represent an
+     absence of light, not a tinted surface) but a touch of warmth and
+     a little less opacity reads calmer than a cool, harder-edged one. */
+  --shadow-color: rgba(40, 32, 20, 0.12);
 
   /* Elevation scale, built from --shadow-color above so every tier still
      recolors correctly per theme/mode. Consolidated from four box-shadow
@@ -191,14 +218,20 @@ button {
 
 /* ---- Light pack, dark mode (also the generic dark-mode fallback) ---- */
 
+/* Light pack, dark mode (Phase 14h): deep graphite rather than
+   near-black-with-no-hue, three clearly elevated layers (bg < panel <
+   surface, each verified distinct via contrast math not just eyeballed),
+   and comfortable off-white text instead of a harsh #f0f0f0. Accent/
+   focus intentionally unchanged, same reasoning as the light palette
+   above — already clears 4.5:1+ against every new surface. */
 [data-mode="dark"] {
-  --color-bg: #121212;
-  --color-panel: #1c1c1e;
-  --color-surface: #232326;
-  --color-border: #3a3a3a;
+  --color-bg: #161618;
+  --color-panel: #1f1f23;
+  --color-surface: #2a2a2f;
+  --color-border: #51515c;
 
-  --color-text: #f0f0f0;
-  --color-text-secondary: #b0b0b0;
+  --color-text: #edebe8;
+  --color-text-secondary: #aeaaa2;
 
   --color-accent: #5b9bd5;
   --color-accent-contrast: #06202f;
@@ -209,13 +242,19 @@ button {
   --color-error: #f28b82;
 
   --color-cell-selected: #26415a;
-  --color-cell-related: #232326;
+  /* Kept in sync with --color-surface above (same value, not a
+     coincidence) — "related" cells read as a neutral surface-toned
+     highlight in both the old and new palette. */
+  --color-cell-related: #2a2a2f;
   --color-cell-match: #4a3b12;
   --color-clue-fixed: #f5f5f5;
   --color-entry-player: #7db4e8;
   --color-notes: #9aa0a6;
 
-  --shadow-color: rgba(0, 0, 0, 0.55);
+  /* Slightly softened from the previous 0.55 opacity — a deep graphite
+     background already reads as "dark," so shadows don't need to work
+     as hard to show elevation, and a touch less opacity feels calmer. */
+  --shadow-color: rgba(0, 0, 0, 0.5);
 }
 
 /* ---- Cyber: dark technical interface, restrained neon accents ---- */
