@@ -5,6 +5,117 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-30 — Phase 14n: Responsive Pass — Menu & Gameplay UI
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+A focused responsive audit across the main menu and gameplay UI at six
+requested widths (320/375/430/768/1024/1440px) plus a short-landscape
+phone viewport, reviewing title scaling, menu width, board sizing,
+number controls, toolbar placement, dialog sizing, safe-area spacing,
+overflow, and desktop maximum widths. Constraint: fix with responsive
+CSS (`clamp()`/`min()`/`max()`/`aspect-ratio`/existing layout tools),
+never device-specific JavaScript, and preserve all functionality.
+
+**Audit first:** wrote a Playwright script that loads the Start
+screen, Menu, Game screen (with the difficulty picker and Settings
+dialog), and separately the Statistics/High Scores screens, at every
+requested width, and checks: `document.documentElement.scrollWidth`
+vs. `clientWidth` (zero horizontal overflow anywhere), sibling
+bounding-box overlap within the header/toolbar/number-pad/menu-nav,
+every button/tile's tap-target size (>=44px, matching the app's
+existing `--touch-target-min` token — board cells are intentionally
+exempt, same as every prior phase, since a 9×9 grid's cell size is
+inherent to the puzzle, not a "button"), board squareness and
+containment, dialog width capped on desktop and clear of the screen
+edges on mobile, and non-zero (safe-area-aware) screen padding on all
+sides. Every check passed at every breakpoint except one real,
+concretely-measured problem.
+
+**The one real bug found and fixed:** the game screen's header
+(`.game-header`) held three competing groups — the Menu button, four
+meta stats (Difficulty/Time/Mistakes/Hints), and the Settings gear —
+in a single `flex-wrap: wrap` row with `justify-content: space-
+between`. Below roughly 440px this doesn't fail cleanly; it cascades
+differently depending on exactly how many pixels are available.
+Measured directly (the header's own rendered height, the clearest
+single signal for "how many rows"): 134px — a genuine 3-row stack —
+at 320px; 96px at 340-430px, but *not* the same 2-row split throughout
+that range — at 375px it happened to land as Menu-alone / stats+gear-
+together, while at 390-430px it flipped to Menu+stats-together /
+gear-alone, orphaned on the far left of its own row instead of staying
+paired top-right with Menu. Only from 440px up did all three
+reliably fit on one line (44px height). None of this tripped the
+overflow or tap-target checks — everything technically still fit and
+was still tappable — but it's exactly the kind of "toolbar placement"
+problem this pass exists to catch, and it wasted real vertical space
+low on the exact narrow phones (390-430px covers a large share of
+real-world devices) where "keep the board usable above the fold"
+matters most.
+
+**Fix:** replaced the flex-wrap header with an explicit CSS Grid
+using `grid-template-areas`, so the arrangement is deliberate at every
+width instead of an accidental cascade:
+```css
+.game-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "back settings" "meta meta";
+  ...
+}
+#btn-game-back { grid-area: back; justify-self: start; }
+#btn-game-settings { grid-area: settings; justify-self: end; }
+.game-meta { grid-area: meta; justify-content: center; }
+
+@media (min-width: 480px) {
+  .game-header {
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas: "back meta settings";
+  }
+}
+```
+Below 480px, Menu and Settings now always share row one (pinned to
+opposite corners) with the four stats centered on their own row below
+— a stable, predictable 2-row layout regardless of exact pixel width
+within that range, instead of the fragile 1-to-3-row cascade. The
+480px threshold was chosen with a small safety margin above the
+measured 440px natural single-row fit point. Re-verified across
+320-470px after the fix: every sampled width now measures a
+consistent 82px (clean 2-row), and 480px+ measures a consistent 44px
+(clean 1-row) — no more inconsistency within either range. Grid-area
+placement reorders visually without touching DOM order, so keyboard
+tab order is completely unaffected — the app's only two focusable
+elements in this header (Menu, Settings) were already in their
+natural left-to-right visual order, so this was never a concern, but
+worth confirming rather than assuming.
+
+**Everything else reviewed was already correct, verified rather than
+assumed:** title scaling (the `clamp()`-based fluid type from Phase
+14i), menu width capping (Phase 14i/j), board sizing and
+`aspect-ratio` (Phase 14k, including that phase's `flex-shrink: 0`
+fix for short viewports), number-pad/toolbar tap targets (Phase
+14j/l), dialog sizing and safe-area-aware padding (Phase 14m), and
+the pre-existing short-landscape-phone and `>=1024px` wide-desktop
+side-panel layouts. All were re-swept fresh under this pass's 6-
+breakpoint-plus-landscape audit rather than taken on faith from prior
+phases' own (narrower-scoped) testing. Also swept the Statistics and
+High Scores screens' difficulty-filter tabs and stat cards at
+320/768px — clean, no changes needed.
+
+**Verification:** `npm test` 181/181. The full 6-breakpoint +
+landscape audit script re-run clean after the fix. Re-ran the entire
+existing regression surface built up across every prior Phase 14
+sub-phase — `final-playtest.mjs`, `grid-gap-audit2.mjs`,
+`sbg-verify.mjs`, the board cell-state suite, the board-scaling
+checks, the number-entry feedback suite, and the dialog suite — all
+still passing with zero regressions from the header change. `sw.js`
+`CACHE_NAME` bumped `v14` → `v15`.
+
+**Files changed:** `styles.css`, `sw.js`, `TASKS.md`,
+`DEVELOPMENT_LOG.md`.
+
+---
+
 ## 2026-07-30 — Phase 14m: Dialog, Overlay & Pause Screen Polish
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`

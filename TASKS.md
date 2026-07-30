@@ -1108,6 +1108,60 @@ intentionally not touched.
       existing regression suite (`final-playtest.mjs`) still passing
       unchanged. `sw.js` `CACHE_NAME` bumped `v13` → `v14`.
 
+## Phase 14n — Responsive Pass: Menu & Gameplay UI ✅ (2026-07-30)
+
+- [x] Built a Playwright audit script covering 320/375/430/768/1024/
+      1440px plus a short-landscape phone viewport, across the Start
+      screen, Menu, Game screen, difficulty picker, and Settings
+      dialog: horizontal overflow, sibling overlap, tap-target size
+      (>=44px), board squareness/containment, desktop dialog width cap,
+      and safe-area-aware padding presence. Every check passed at every
+      breakpoint except one.
+- [x] Found and fixed a real bug: the game screen's header (Menu
+      button, 4 meta stats, Settings gear) relied on plain flex-wrap
+      to fit 3 competing groups on one line. Below ~440px this
+      cascaded unpredictably — a genuine 3-row stack at 320px, and at
+      390-430px the Settings gear wrapped alone onto its own row,
+      left-aligned instead of staying paired top-right with Menu.
+      Confirmed via direct measurement (`.game-header`'s own rendered
+      height: 134px/3-row at 320px, 96px/inconsistent-2-row at
+      340-430px, clean 44px/1-row only from 440px up).
+- [x] Replaced the flex-wrap header with an explicit CSS Grid
+      (`grid-template-areas`) so the layout is deliberate at every
+      width instead of an accidental cascade: below 480px, Menu and
+      Settings share one row (opposite corners) with the four stats
+      centered on their own row below; at >=480px (confirmed with a
+      safety margin above the measured 440px natural-fit point) it
+      becomes a single row, Menu/stats/Settings left-to-right. DOM
+      order (and therefore keyboard tab order) is unchanged — grid-area
+      placement reorders visually without touching focus order, and
+      the two focusable elements (Menu, Settings) were already in
+      their natural visual order.
+- [x] Verified every other requested review area was already correct
+      and needed no change: title scaling (existing `clamp()` fluid
+      type from Phase 14i), menu width capping (Phase 14i/j), board
+      sizing/`aspect-ratio` (Phase 14k, including the `flex-shrink: 0`
+      fix), number-pad/toolbar tap targets and placement (Phase 14j/l),
+      dialog sizing and safe-area padding (Phase 14m), and the existing
+      short-landscape-phone and >=1024px wide-desktop side-panel
+      layouts — all re-confirmed under this pass's fresh 6-breakpoint
+      + landscape sweep rather than assumed still-correct.
+- [x] Also swept the Statistics and High Scores screens (difficulty
+      filter tabs, stat cards) at 320/768px — no issues found.
+- [x] No device-specific JavaScript anywhere — the one fix is pure CSS
+      (`display: grid` + `grid-template-areas` + one `min-width: 480px`
+      media query, matching this file's existing mobile-first
+      convention), reusing already-established tokens
+      (`--space-2`, `--touch-target-min`) rather than new ones.
+- [x] Verified: `npm test` 181/181. The 6-breakpoint + landscape audit
+      script re-run clean after the fix (header height: 82px/clean-
+      2-row below 480px, 44px/clean-1-row at and above it, at every
+      sampled width). Full existing regression suite — the Phase 14
+      playtest, grid-gap/centering audit, menu-background suite,
+      board-state suite, board-scaling checks, number-entry feedback
+      suite, and dialog suite — all still passing with zero
+      regressions. `sw.js` `CACHE_NAME` bumped `v14` → `v15`.
+
 ## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and

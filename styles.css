@@ -893,14 +893,36 @@ button {
   gap: var(--space-3);
 }
 
+/* Explicit grid instead of a wrapping flex row: with the Menu button,
+   four meta stats, and the Settings gear all fighting for one line,
+   flex-wrap's natural cascade produces a different — and at a few
+   widths (~390-430px) visually broken, with Settings orphaned alone at
+   the left of its own row instead of staying paired top-right —
+   arrangement depending on exactly how many pixels are available.
+   Below 480px this pins down one predictable 2-row layout (Menu +
+   Settings sharing row one, stats centered on row two); the
+   min-width:480px override further down restores the single-row
+   look once there's reliably enough room for it. */
 .game-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "back settings"
+    "meta meta";
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
   gap: var(--space-2);
   width: min(100%, 32rem);
   margin: 0 auto;
+}
+
+#btn-game-back {
+  grid-area: back;
+  justify-self: start;
+}
+
+#btn-game-settings {
+  grid-area: settings;
+  justify-self: end;
 }
 
 .game-back-btn {
@@ -909,8 +931,20 @@ button {
 }
 
 .game-meta {
+  grid-area: meta;
   display: flex;
+  justify-content: center;
   gap: var(--space-3);
+}
+
+@media (min-width: 480px) {
+  /* Confirmed via measurement that Menu + all four stats + Settings
+     naturally fit on one line from ~440px up — 480px keeps a small
+     safety margin above that. */
+  .game-header {
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas: "back meta settings";
+  }
 }
 
 .game-meta-item {
