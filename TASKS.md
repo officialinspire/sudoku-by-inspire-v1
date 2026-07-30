@@ -709,6 +709,69 @@ specifically on an Android phone.
 - [x] `npm test`: 181/181. Full regression playtest suite: unchanged,
       all passing. `sw.js` `CACHE_NAME` bumped `v6` → `v7`.
 
+## Phase 14g — Design Token Consolidation (no visual/functional change) ✅ (2026-07-30)
+
+An explicit "polish the plumbing, not the paint" pass: audit `styles.css`
+for duplicated hardcoded values and consolidate them into reusable
+design tokens, with a hard constraint that nothing renders differently
+afterward — this is groundwork for a future intentional redesign pass,
+not a redesign itself.
+
+- [x] Audited the entire (single) stylesheet via targeted greps for
+      every `box-shadow`, `font-size`, `font-weight`, `letter-spacing`,
+      `border`/`border-radius`, `transition`, and `animation` duration/
+      easing declaration. Colors, spacing, and non-pill radii were
+      already fully tokenized from earlier phases; everything else
+      wasn't.
+- [x] Added to the global `:root` token block: a 4-tier shadow scale
+      (`--shadow-sm/md/lg/panel`, built from the existing
+      `--shadow-color` so per-theme recoloring still works), a 14-step
+      numbered type scale (`--font-size-1` through `-14`, matching the
+      project's own `--space-N` numbering convention) covering every
+      distinct font-size already in use, 3 font-weight tokens, 3
+      letter-spacing tokens, `--border-width-thin` (the pervasive 1px
+      chrome border), `--focus-ring-width`, `--radius-pill`, 4 motion
+      durations (`--duration-fast/moderate/slow/ambient`), and 4 easing
+      tokens (`--ease-standard/out/in-out/linear`).
+- [x] Board-specific `--board-gap-width` (2px) and `--board-line-width`
+      (3px) were deliberately scoped locally on `.board` rather than
+      folded into the global border-width tokens — they exist for a
+      specific, already-documented DPI-legibility reason (Phase 14c),
+      and coincidentally sharing a number with an unrelated global token
+      would risk a future edit to one silently resizing the other.
+- [x] Replaced every matching hardcoded value across the whole file with
+      its token — 28 font-size, 20 font-weight, 6 letter-spacing, 14
+      border-width, 5 box-shadow, and 22 transition/animation duration+
+      easing declarations. Left three categories of value deliberately
+      un-tokenized, each already documented in-code as intentional: the
+      two responsive `clamp()` font-sizes on board digits (single-use,
+      structurally different from a flat scale value), the non-themed
+      overlay colors on `.skip-btn`/`.pause-overlay`/dialog backdrops
+      (need guaranteed contrast against arbitrary video frames/content,
+      not the current theme), and the single-use conflict-ring inset
+      shadow width (a functional state indicator, not decorative
+      elevation).
+- [x] Verified zero visual regression rigorously, not just by eye:
+      snapshotted `getComputedStyle()` for ~20 representative selectors
+      across all 8 theme/mode combinations *before* editing (via a
+      temporary `git stash` to get the pre-edit file back), then diffed
+      against the same snapshot taken after. The only differences found
+      (cell-value font-weight/color, and gradient-background
+      `backgroundColor` sampling on `.option-tile`) were proven to be
+      pre-existing test nondeterminism — reproduced identically by
+      diffing the *post-edit* code against itself twice (random puzzle
+      content changes which cell is "first" and fixed-vs-not; browser
+      gradient sampling for `getComputedStyle` isn't pixel-stable) —
+      not caused by the token changes.
+- [x] Full regression: `npm test` 181/181, all JS syntax-clean, the
+      complete Phase 14 playtest suite, the grid-gap/centering audit,
+      the audio crossfade/recovery tests, and the menu-background
+      restriction tests all still passing unchanged. `sw.js`
+      `CACHE_NAME` bumped `v7` → `v8`.
+- [x] No new styling library added; single stylesheet, same
+      `data-theme`/`data-mode` architecture, same component structure —
+      purely additive tokens plus mechanical value-for-token swaps.
+
 ## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and

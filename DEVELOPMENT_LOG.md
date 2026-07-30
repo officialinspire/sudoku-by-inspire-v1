@@ -5,6 +5,121 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-30 — Phase 14g: Design Token Consolidation
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+An explicitly scoped request: review the codebase, find duplicated
+styling values, and consolidate them into reusable design tokens —
+"do not redesign yet beyond consolidating safe design variables." Read
+as a strict constraint: every value substitution had to render pixel-
+identically to what it replaced.
+
+**Audit.** `styles.css` is the only stylesheet in the project (1,600+
+lines). Colors, spacing (`--space-1..5`), and the three non-pill radii
+were already fully tokenized from earlier phases — this pass's actual
+job was everything the earlier token block's own header comment didn't
+cover: shadows, typography, motion. Grepped every `box-shadow`,
+`font-size`, `font-weight`, `letter-spacing`, `border`/`border-radius`,
+`transition`, and `animation` line to build an exact inventory before
+touching anything:
+
+- 4 distinct `box-shadow` patterns, reused 2-3x each across buttons,
+  chips, the update banner, the settings dialog, and the desktop `#app`
+  card.
+- 14 distinct `font-size` values (excluding two `clamp()` expressions on
+  the board's digits), several duplicated 2-5x (`0.85rem` alone: 5
+  places).
+- Exactly 3 `font-weight` values (600/700/800) used 20 times combined.
+- 3 `letter-spacing` values, one (`0.05em`) reused 4x.
+- `1px solid <color>` borders at 14 separate call sites.
+- `0.2s ease` on 7 different `transition` declarations; `0.8s ease`,
+  `0.5s ease-out`, and `26s ease-in-out` each used for a specific
+  one-shot or ambient animation.
+
+**Tokens added**, all theme-independent (in `:root`, alongside the
+existing `--space-*`/`--radius-*` tokens): a 4-tier shadow scale built
+on top of the existing `--shadow-color` so it still recolors correctly
+per theme (`--shadow-sm/md/lg/panel`); a 14-step numbered type scale
+(`--font-size-1` through `-14`) — numbered rather than t-shirt-sized
+because there are more distinct steps here than `sm/md/lg` comfortably
+covers, following the same numbering convention `--space-N` already
+established; 3 font-weight tokens; 3 letter-spacing tokens;
+`--border-width-thin` (1px, the pervasive chrome border) and
+`--focus-ring-width` (3px); `--radius-pill` (999px); 4 motion durations
+and 4 easings. Two more tokens — `--board-gap-width` (2px) and
+`--board-line-width` (3px) — were deliberately kept *local* to `.board`
+instead of joining the global scale: they exist for the specific,
+already-documented DPI-legibility reason from Phase 14c, and just
+happen to share a number with unrelated global concepts (the focus ring
+is also 3px) — folding them together would create a false coupling
+where changing one could someday silently resize the other.
+
+**What was deliberately left alone**, each already documented in-code:
+the two `clamp()` font-sizes on board digits (responsive, single-use,
+structurally different from a flat token); the non-themed overlay
+colors on `.skip-btn`, `.pause-overlay`, and dialog `::backdrop`s (their
+whole point is guaranteed contrast against arbitrary video frames or a
+dimmed background, independent of the active theme); the single-use
+inset shadow on `.cell.is-conflict` (a functional state ring, not a
+decorative elevation shadow).
+
+**Mechanical replacement**, done with small Python regex passes per
+category (not hand-editing 90+ call sites individually) to keep the
+substitutions exact and verifiable: 28 font-size, 20 font-weight, 6
+letter-spacing, 14 border-width, 5 box-shadow, and 22 transition/
+animation duration+easing declarations swapped for their token, each
+pass grepped immediately afterward to confirm the count matched and no
+stray literals remained.
+
+**Verification — this was the part actually worth being careful about.**
+"Preserve current architecture and functionality" for a token-only pass
+means the computed output has to be provably unchanged, not just
+visually similar on a glance. Snapshotted `getComputedStyle()` (font
+metrics, shadows, borders, radii, transition/animation timing) for ~20
+representative selectors across all 8 theme/mode combinations *before*
+making any edit — using `git stash` to briefly get the pre-edit file
+back onto disk for that one snapshot, then restoring the edit. Diffed
+that baseline against the same snapshot taken after. Ten properties
+differed at first glance; every one traced to test methodology, not the
+edit itself:
+
+- `.cell-value`'s font-weight/color flipped between runs because the
+  snapshot script queried the *first* `.cell-value` in DOM order, and
+  each run generates a fresh random puzzle — sometimes that cell is a
+  fixed clue (bold, `--color-clue-fixed`), sometimes a blank entry
+  (regular weight, `--color-entry-player`). Confirmed by diffing the
+  *post-edit* code against itself twice: the identical kind of "diff"
+  reappeared with zero code changed in between.
+- `.option-tile`'s `backgroundColor` (Woodgrain/Paper themes, whose
+  `--color-panel`/`--color-surface` are CSS gradients) shifted by small
+  amounts between runs. `getComputedStyle().backgroundColor` isn't
+  guaranteed pixel-stable for a gradient-only background — same proof
+  as above, running the *same* already-edited code twice reproduced
+  equivalent noise.
+
+With both explained and reproduced as pre-existing nondeterminism, the
+real result stands: every shadow, font-size, font-weight, letter-
+spacing, border-width, and transition/animation timing value matched
+exactly, before and after, everywhere.
+
+**Checks run:** `npm test` 181/181; `node --check` on every `.js` file;
+the full Phase 14 regression playtest suite (all themes/modes, all
+difficulties, full input surface, completion, reload/Continue); the
+9-viewport grid-gap/digit-centering audit; the audio crossfade/recovery
+regression tests; the menu-background restriction/animation/reduced-
+motion tests — all unchanged, all passing. `sw.js` `CACHE_NAME` bumped
+`v7` → `v8` (CSS changed).
+
+**Explicitly not done, per the request's own scope:** no visual
+redesign, no merging of the near-duplicate font-sizes that sit oddly
+close together (`0.8rem`/`0.85rem`, `0.9rem`/`0.95rem`, `1.05rem`
+sitting almost alone between `1rem` and `1.15rem`) — flagged as
+"visual inconsistencies found" for a future intentional type-scale
+pass instead of silently resolved now, exactly as asked.
+
+---
+
 ## 2026-07-30 — Phase 14f: Fix Root Cause of Android Audio Cut-Outs
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`
