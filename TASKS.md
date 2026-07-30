@@ -1248,6 +1248,107 @@ intentionally not touched.
       not just numerically compliant, with no loss of the theme's warm
       character. `sw.js` `CACHE_NAME` bumped `v15` → `v16`.
 
+## Phase 14p — Final Polish & Performance Audit ✅ (2026-07-30)
+
+A closing audit pass, not a redesign: review the whole design system for
+inconsistency (fonts, spacing, radii, colors, shadows, button states,
+animation, unused styles) and performance (expensive animated properties,
+unnecessary rerenders, menu-background leakage), fixing only what the
+audit itself finds broken.
+
+- [x] Confirmed the actual available tooling before claiming results:
+      this repo has no lint/type-check/build config (no `eslint`/
+      `prettier`/`tsconfig`/`stylelint`, per `package.json`'s single
+      `"test": "node --test"` script and `CLAUDE.md`'s no-build-step
+      constraint) — `node --check` across every `.js` file is used as the
+      closest available substitute for "type-check"/"build".
+- [x] Font-size, spacing, radius, shadow, and color audit of the entire
+      `styles.css`: zero hardcoded `border-radius` anywhere; zero
+      hardcoded spacing except one justified sub-scale value
+      (`.cell-notes { padding: 2px }`, the 3×3 in-cell notes mini-grid);
+      zero hardcoded `box-shadow` outside the token scale and the
+      already-documented functional conflict/selection rings; only 3
+      hardcoded hex colors, all pre-existing and already documented as
+      deliberately theme-independent (`.skip-btn`'s guaranteed-contrast
+      video overlay text, the SVG mask's alpha-only `#000`, and the
+      intro-to-menu black fade) — no real duplicated-color issue found.
+      One pre-existing, self-documented near-duplicate in the type scale
+      (`--font-size-6: 0.95rem` / `--font-size-8: 1.05rem`) was
+      re-confirmed and left alone — reconciling it would ripple into
+      `.game-meta-item`/`.start-prompt`/`.menu-nav button` for a 1.6px
+      difference, out of scope for a minimal polish pass per this
+      phase's own "no major redesign" constraint.
+- [x] Button/interactive-state audit: all 7 `cursor: pointer` selectors
+      in the stylesheet are covered by the shared interactive-states
+      block (hover/press/disabled/focus-visible); `.cell`'s documented
+      exception (no scale/transform, brightness-only, edge-to-edge grid)
+      re-confirmed as the one deliberate, justified deviation.
+- [x] Unused-CSS-class audit: cross-checked every class in `styles.css`
+      against `index.html` and `js/**` usage. Two apparent misses
+      (`.is-shake`, `.is-value-enter`) were false positives from a naive
+      literal-string grep — both are genuinely applied via
+      `board-view.js`'s `retriggerAnimation()` helper (remove class →
+      force reflow → re-add), not a literal `classList.add('...')` call.
+      No actual unused classes found.
+- [x] Expensive-animated-property audit: every `transition`/
+      `transition-property` declaration (14 found) and `@keyframes` block
+      (5 found) animates only `transform`, `opacity`, `background-color`,
+      `color`, `border-color`, `box-shadow`, or the discrete `display`/
+      `overlay` pair — none animate `width`/`height`/`top`/`left`. One
+      real exception found: `cyber-drift` (the Cyber-theme ambient body
+      background) animates `background-position`, a paint-triggering
+      property, not `transform`. Verified with Playwright's
+      `getAnimations()` that it (a) is confirmed running during gameplay
+      and (b) causes no measurable input lag — 10 rapid-fire keyboard
+      digit entries with the animation active all registered correctly
+      in 162ms. Given it's slow (26s), very low-opacity (0.07-0.09),
+      already gated behind `prefers-reduced-motion`, pre-dates this
+      phase's polish work, and a `transform`-based rewrite would require
+      introducing a new `body::before` pseudo-element with its own
+      z-index/stacking-context risk for a change with no measured
+      benefit — left as-is and documented rather than restructured, per
+      this phase's "fix issues caused by the polish work, don't refactor
+      unrelated code" constraint.
+- [x] Menu-background-leakage audit: confirmed via `getAnimations()`,
+      not assumption, that `.menu-sudoku-bg__pattern` has a running
+      animation on the menu screen and exactly zero animations the
+      instant the game screen is active — `#screen-menu` is genuinely
+      `display: none` (not just visually covered), which is what
+      actually stops the animation from consuming compositor resources
+      off-menu, re-confirming the Phase 14e/14g mechanism still holds.
+      The separate Cyber-theme ambient body drift is an unrelated,
+      intentional per-theme atmospheric effect that runs on every screen
+      by design (not the menu-specific digit pattern this checklist item
+      is about) — confirmed not to be an accidental leak.
+- [x] Reduced-motion re-confirmation: under `prefers-reduced-motion:
+      reduce`, both `.menu-sudoku-bg__pattern` and the Cyber ambient body
+      drift report zero running animations.
+- [x] Rerender audit: `board-view.js`'s `render()` walks all 81 cells and
+      unconditionally sets `textContent`/toggles classes every state
+      change — reviewed and confirmed trivially cheap at this scale
+      (roughly 500 idempotent DOM writes per keystroke, well under a
+      frame budget), not a real performance problem; left unchanged
+      rather than adding diffing complexity with no measurable benefit.
+- [x] Abrupt-state-change, mobile-overflow, desktop-overexpansion, and
+      theme-consistency checklist items re-verified via the existing
+      regression suite rather than re-audited from scratch, since prior
+      phases (14m dialogs/overlays, 14n responsive pass, 14h/14k
+      palette/board work) already covered this ground directly — all
+      still pass with zero regressions.
+- [x] No source files required changes — the audit found the codebase
+      already compliant with every checklist item except the one
+      documented, deliberately-left `cyber-drift` finding above; `sw.js`
+      `CACHE_NAME` was not bumped since no cached file changed.
+- [x] Verified: `npm test` 181/181, `node --check` clean on every JS
+      file, and the full existing Playwright regression suite
+      (`final-playtest.mjs`, `grid-gap-audit2.mjs`, `sbg-verify.mjs`,
+      `board-verify.mjs`, `board-scaling.mjs`, `number-feedback-
+      verify.mjs`, `dialog-verify.mjs`, `responsive-audit.mjs`,
+      `a11y-contrast2.mjs`, `a11y-verify.mjs`) plus a new
+      `final-perf-audit.mjs` covering the menu-background/ambient-drift/
+      responsiveness/reduced-motion checks above — all passing, zero
+      regressions.
+
 ## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and

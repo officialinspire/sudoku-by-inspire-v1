@@ -5,6 +5,130 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-30 — Phase 14p: Final Polish & Performance Audit
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+A closing audit, explicitly scoped as "no new features, no major
+redesign": review the whole design system for inconsistency and the app
+for performance problems, and fix only what the audit itself turns up.
+
+**Tooling check first:** confirmed via `package.json` and a repo-wide
+search that this project has no lint/type-check/build configuration at
+all (no `eslint`, `prettier`, `tsconfig.json`, or `stylelint` config
+anywhere) — consistent with `CLAUDE.md`'s vanilla-JS/no-build-step
+constraint. The only real script is `"test": "node --test"`. Used
+`node --check` across every JS file as the closest available stand-in
+for "type-check"/"build" rather than silently skip those checklist items
+or fabricate results for tools that don't exist in this project.
+
+**Design-system consistency audit:** read the entire `:root` token block
+and grepped every `font-size`, spacing, `border-radius`, `box-shadow`,
+and hex-color declaration in `styles.css` against the token system built
+up over Phases 14g/14h/14k. Found the codebase already highly consistent:
+zero hardcoded border-radii anywhere, zero hardcoded spacing except one
+justified sub-token value for the in-cell notes mini-grid, zero
+hardcoded shadows outside the token scale, and only 3 hardcoded hex
+colors — all pre-existing, all already documented in-code as
+deliberately theme-independent (the intro Skip button's guaranteed-
+contrast text over arbitrary video frames, the alpha-only SVG mask
+color, and the intro-to-menu black fade). No real "duplicated colors"
+issue found. The type scale's own pre-existing comment already flags
+`--font-size-6`/`--font-size-8` as suspiciously close (0.95rem vs.
+1.05rem) — re-confirmed this is real but reconciling it would ripple
+into three other selectors for a 1.6px difference, out of scope for a
+minimal pass; left as a documented, deliberately-deferred finding rather
+than silently fixed.
+
+**Button-state and unused-CSS audit:** every `cursor: pointer` selector
+in the stylesheet (7 total) is covered by the shared interactive-states
+block from Phase 14j; `.cell`'s documented brightness-only exception
+re-confirmed as the sole deliberate deviation. Cross-checked every CSS
+class against actual HTML/JS usage — two apparent "unused" classes
+(`.is-shake`, `.is-value-enter`) turned out to be a false-positive from
+grepping for literal `classList.add('...')` strings; both are genuinely
+applied via `board-view.js`'s `retriggerAnimation()` helper (remove
+class → force reflow → re-add), which a naive string search can't see.
+No actual unused classes found.
+
+**Performance audit — the substantive part of this phase.** Audited
+every `transition`/`transition-property` declaration (14) and
+`@keyframes` block (5) in `styles.css` for the requested "prefer
+transform/opacity, avoid width/height/top/left" rule. All 14
+transitions and 4 of 5 keyframe blocks are fully compliant
+(`transform`/`opacity`/color-only). One real exception: `cyber-drift`
+(the Cyber theme pack's ambient body-level background glow, added in
+Phase 11) animates `background-position`, a paint-triggering property,
+applied directly to `body` rather than scoped to any one screen — so
+unlike the menu's own Sudoku-digit background, it runs on every screen
+whenever Cyber theme is active, gated only by
+`prefers-reduced-motion: no-preference`.
+
+Rather than assume this either is or isn't a real problem, wrote a new
+Playwright script (`final-perf-audit.mjs`) to check empirically:
+
+1. **Menu-background leakage**, checked via `element.getAnimations()`
+   (the Web Animations API), not just `getComputedStyle`: confirmed
+   `.menu-sudoku-bg__pattern` has a genuinely running animation while on
+   the menu, and exactly zero animations the instant the game screen
+   becomes active — because `#screen-menu` is truly `display: none` at
+   that point (verified both the computed style and the `.hidden`
+   property), which is the actual mechanism that stops it from consuming
+   compositor resources off-menu, not just visual overlap. This
+   reconfirms the Phase 14e/14g design still holds exactly as intended.
+2. **Gameplay responsiveness under load**: set Cyber/dark theme,
+   confirmed via `getAnimations()` that the ambient `background-position`
+   drift is actually running during gameplay (the worst-case scenario),
+   then fired 10 rapid keyboard digit entries into 10 different cells.
+   All 10 registered correctly in 162ms — no dropped input, no
+   measurable lag from the concurrent paint-triggering animation.
+3. **Reduced motion**: confirmed under `reducedMotion: 'reduce'` that
+   both the menu pattern and the Cyber ambient drift report zero running
+   animations.
+
+All three passed. Given the empirical result (no measurable performance
+impact), that this animation predates this phase's polish work (not
+something introduced by it), and that the "correct" fix (extracting it
+onto a new `body::before` pseudo-element to use `transform` instead of
+`background-position`) would introduce a new z-index/stacking-context
+surface with real regression risk for zero measured benefit — decided
+*not* to restructure it, consistent with this phase's explicit "fix
+issues caused by the polish work, don't refactor unrelated code"
+instruction. Documented as a known, low-priority finding instead.
+
+**Rerenders:** reviewed `board-view.js`'s `render()` — it unconditionally
+walks all 81 cells and writes `textContent`/toggles classes on every
+state change, with no diffing against previous state before writing.
+At this scale (roughly 500 idempotent DOM operations per keystroke) this
+is trivially inside a frame budget; confirmed empirically by the same
+162ms/10-keystroke measurement above. Not a real problem — left
+unchanged rather than adding diff/memoization complexity that would only
+protect against a cost that doesn't exist here.
+
+**Remaining checklist items** (abrupt state changes, mobile overflow,
+desktop overexpansion, theme inconsistencies) were re-verified via the
+existing regression suite rather than re-audited from scratch, since
+Phases 14m (dialogs/overlays), 14n (6-breakpoint responsive pass), and
+14h/14k (palette/board work) already covered this ground directly and
+recently — all still pass with zero regressions.
+
+**Net result: no source files needed changes.** Every checklist item
+either was already compliant or, in the one exception found
+(`cyber-drift`), was deliberately left as a documented finding rather
+than fixed, per the explicit "no major redesign, don't refactor
+unrelated code" scope for this phase. `sw.js`'s `CACHE_NAME` was **not**
+bumped, since no cached file actually changed this phase.
+
+**Verification:** `npm test` 181/181; `node --check` clean across every
+JS file; the full existing Playwright regression suite — `final-
+playtest.mjs`, `grid-gap-audit2.mjs`, `sbg-verify.mjs`, `board-
+verify.mjs`, `board-scaling.mjs`, `number-feedback-verify.mjs`,
+`dialog-verify.mjs`, `responsive-audit.mjs`, `a11y-contrast2.mjs`,
+`a11y-verify.mjs` — plus the new `final-perf-audit.mjs`, all passing
+with zero regressions. Updated `TASKS.md` with a new Phase 14p entry.
+
+---
+
 ## 2026-07-30 — Phase 14o: Accessibility Audit
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`
