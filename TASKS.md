@@ -914,6 +914,65 @@ intentionally not touched.
       Visually spot-checked in Light/Cyber-dark themes and the Settings
       dialog/game screen. `sw.js` `CACHE_NAME` bumped `v10` → `v11`.
 
+## Phase 14k — Sudoku Board Cell-State Visual Hierarchy ✅ (2026-07-30)
+
+- [x] Audited the board against every requested state (default,
+      selected, related row/col/box, matching-number, fixed, entered,
+      notes, conflict) with real gameplay screenshots in light and dark
+      mode before changing anything — found the "match" tint
+      (`#fde68a`) was the single most saturated color anywhere on the
+      board (louder than selection itself), and the selected cell's
+      soft blue fill read as barely distinct from the related row/
+      column's tint at a glance.
+- [x] Added an accent-colored inset ring (`box-shadow`, a structural
+      cue separate from the fill color) to the selected cell only —
+      related and matching cells stay flat tints with no ring, so
+      selection unambiguously outranks them without needing a louder
+      background color.
+- [x] Softened `:root`'s (Light pack) `--color-cell-match` from
+      `#fde68a` to a muted warm cream `#f3e8c9`, bringing it in line
+      with how subdued the same token already was in every other theme
+      pack (Cyber/Woodgrain/Paper). No other theme's tokens changed.
+- [x] Fixed vs. player-entered digits now differ on three channels, not
+      just color: entered digits are italic at semibold weight, fixed
+      clues are upright at extrabold weight (widened from bold) —
+      readable as "printed clue" vs. "handwritten-in" even in
+      grayscale or for a color-vision-deficient player.
+- [x] Added a `--duration-board: 0.15s` token (120-180ms range as
+      requested) and applied it as a `background-color`/`box-shadow`
+      transition on `.cell` and a `color` transition on `.cell-value` —
+      previously cell state changes snapped instantly.
+- [x] Tokenized the selection/conflict ring width as `--cell-ring-width`
+      alongside the board's existing line-width tokens, rather than a
+      magic number.
+- [x] 3×3 box boundaries, the per-cell "no heavy border" default, and
+      notes rendering left untouched — already correct.
+- [x] Found and fixed a real (pre-existing, unrelated to the above)
+      board-scaling bug while verifying "scales cleanly on narrow
+      screens": `.board` has `overflow: hidden` (needed to clip to its
+      rounded corners), which per spec floors a flex item's automatic
+      minimum size at 0 instead of its aspect-ratio-derived size — on
+      a short viewport (e.g. 320×568) this let the flex column silently
+      squash the board into a short rectangle instead of staying
+      square and letting `.screen`'s own `overflow-y: auto` scroll the
+      rest into view. Fixed with `flex-shrink: 0` on `.board`.
+      Confirmed present identically on the pre-this-phase commit (via
+      `git stash`) before fixing it, so it's a genuine bug catch, not
+      something introduced by the state-hierarchy work.
+- [x] No changes to puzzle generation, validation, difficulty, or game
+      rules — every edit is in `styles.css`; `board-view.js` and
+      `game-state.js` were read for reference only, never modified.
+- [x] Verified: `npm test` 181/181; a new Playwright script confirming
+      transition duration (150ms), zero cell layout shift across state
+      changes, the selection ring vs. ring-free related/match cells,
+      the fixed/entered non-color distinction, and intact 3×3
+      boundaries; a scaling script confirming the board stays exactly
+      square with no horizontal page overflow at 320/390/768/1280/
+      1920px and in short-landscape phone view; screenshots across all
+      4 theme packs × both modes; the full Phase 14 regression suite
+      (playtest, grid-gap/centering audit, menu-background suite) still
+      passing unchanged. `sw.js` `CACHE_NAME` bumped `v11` → `v12`.
+
 ## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and

@@ -5,6 +5,115 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-30 — Phase 14k: Sudoku Board Cell-State Visual Hierarchy
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+A visual-only refinement of the Sudoku board's cell states — default,
+selected, related row/column/box, matching-number, fixed clue, player
+entry, notes, and conflict — with an explicit constraint: no changes to
+puzzle generation, validation, difficulty, or game rules. Everything in
+this phase lives in `styles.css`; `js/ui/board-view.js` and
+`js/game-state.js` were read to understand exactly which classes get
+toggled and why, but neither was edited.
+
+**Audit first:** wrote a Playwright scenario script that starts a real
+game and, via `game-state.js`'s own exported functions (`selectCell`,
+`applyNumberInput`, `toggleNote`, `getPeerIndices` — not by poking the
+DOM or forging state), assembles every state at once on one board: a
+selected cell with its row/column/box highlighted, a genuine structural
+conflict (a duplicate value placed against a real peer), a cell with
+notes, and matching-number cells sharing the selected clue's digit.
+Screenshotted this in both color modes before touching any CSS.
+
+Two real issues fell out of that screenshot, not assumption: the
+"matching number" tint (`--color-cell-match: #fde68a`) was the single
+most saturated color anywhere on the board — louder than the selected
+cell itself, the opposite of "keep matching-number highlights subtle."
+And the selected cell's soft blue fill read as barely distinguishable
+from the related row/column's tint at a glance — both were flat
+background-only tints competing on saturation with nothing to make
+selection unambiguously outrank them.
+
+**Cell-state hierarchy changes:**
+- Selected cells gained an accent-colored inset ring
+  (`box-shadow: inset 0 0 0 var(--cell-ring-width) var(--color-accent)`)
+  layered on top of the existing soft blue fill — a second, structural
+  channel (not just a stronger color) that makes selection unmistakably
+  the top of the hierarchy. Related and matching cells deliberately stay
+  ring-free flat tints, so they read as subordinate/subtle by
+  construction, not just by convention.
+- `:root`'s (Light theme pack) `--color-cell-match` softened from
+  `#fde68a` to a muted warm cream `#f3e8c9` — brings it in line with how
+  subdued the same token already was in Cyber (`#f3e3ee`), Woodgrain
+  (`#e0b975`), and Paper (`#e8d9b0`); none of those or any dark-mode
+  variant needed changing, they were already appropriately quiet.
+- Conflict cells keep their existing red inset ring (now sharing the
+  same `--cell-ring-width` token as selection, tokenized instead of a
+  hardcoded `2px`) — declared after `.is-selected` in source order, so
+  a cell that's both selected and in conflict shows the more urgent
+  error-colored ring while the selected background tint still shows
+  through underneath.
+- Fixed clues vs. player entries now differ on three channels instead
+  of two: entered digits are italic at semibold weight (reads as
+  "handwritten in"), fixed clues are upright at extrabold weight
+  (widened from bold) and their own color — distinguishable even in
+  grayscale or for a color-vision-deficient player, not dependent on
+  the blue/near-black color pairing alone.
+- Added a `--duration-board: 0.15s` token (the requested 120-180ms
+  range) and applied it as a `background-color`/`box-shadow` transition
+  on `.cell` and a `color` transition on `.cell-value` — previously
+  every cell-state change (selecting a cell, a conflict appearing)
+  snapped instantly with zero transition. Purely visual properties
+  (background-color, box-shadow, color never affect box size), so
+  rapid arrow-key navigation across many cells never causes a layout
+  shift, just a quick, calm color/ring settle.
+- Tokenized the selection/conflict ring width as `--cell-ring-width`
+  alongside the board's existing `--board-gap-width`/`--board-line-
+  width` tokens rather than a repeated magic number.
+- 3×3 box boundaries, the "no border on every ordinary cell" default,
+  and notes rendering were already correct and needed no change —
+  notes got one small legibility bump (`font-weight: semibold` on the
+  tiny digits) since they're otherwise unrelated to this pass.
+
+**A real bug found while verifying "scales cleanly on narrow mobile
+screens":** at a short viewport (320×568 tested, but any height-
+constrained case), the board was silently squashed into a non-square
+rectangle (measured 288×119px, a 2.4:1 ratio) instead of staying
+square. Root cause: `.board` has `overflow: hidden` (needed to clip the
+grid to its rounded corners) — per the flexbox spec, a flex item with
+non-visible overflow gets its automatic flex-shrink minimum floored at
+`0` instead of at its `aspect-ratio`-derived size, so on a height-
+starved flex column the browser was free to compress it far below
+square instead of letting `.screen`'s own `overflow-y: auto` scroll the
+remaining content into view the way it does for everything else on that
+screen. Confirmed via `git stash` that this reproduces identically on
+the prior commit with zero other changes — a genuine pre-existing bug,
+not something the state-hierarchy work introduced — and fixed with a
+single `flex-shrink: 0` on `.board`.
+
+**Verification:** `npm test` 181/181 (puzzle logic untouched). A new
+Playwright script confirmed: `.cell`'s transition-duration measures
+150ms; ten cells' bounding rects are pixel-identical before and after a
+selection change (zero layout shift); the selected cell has a non-none
+box-shadow while a related cell has none; selected and related
+backgrounds are genuinely different colors; a fixed clue is upright/
+extrabold while an entered digit is italic/semibold in a different
+color; the 3×3 `grid-line-left` border is still present. A second script
+confirmed the board is exactly square (aspect ratio 1.000) with zero
+horizontal page overflow at 320/390/768/1280/1920px and in a short-
+landscape-phone viewport, both before and after the `flex-shrink: 0`
+fix (broken before, fixed after — confirmed the difference directly).
+Screenshotted the full multi-state scenario across all 4 theme packs ×
+both color modes. Re-ran the full existing regression suite
+(`final-playtest.mjs`, `grid-gap-audit2.mjs`, `sbg-verify.mjs`) with
+zero regressions. `sw.js` `CACHE_NAME` bumped `v11` → `v12`.
+
+**Files changed:** `styles.css`, `sw.js`, `TASKS.md`,
+`DEVELOPMENT_LOG.md`.
+
+---
+
 ## 2026-07-30 — Phase 14j: Consolidated Control Interaction States
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`

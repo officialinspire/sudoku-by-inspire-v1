@@ -123,7 +123,14 @@ button {
      --color-panel (board cell background) with no adjustment needed. */
   --color-cell-selected: #cfe3f7;
   --color-cell-related: #e3e8ec;
-  --color-cell-match: #fde68a;
+  /* Phase 14k: softened from a fairly saturated #fde68a (it read as the
+     loudest color on the whole board — louder than selection itself,
+     the opposite of the intended hierarchy) to a muted warm cream more
+     in proportion with this pack's other very-light neutral surfaces.
+     Every other theme pack's own --color-cell-match was already this
+     soft (compare Cyber/Woodgrain/Paper below) — this brings the Light
+     pack in line rather than introducing a new design language. */
+  --color-cell-match: #f3e8c9;
   --color-clue-fixed: #111827;
   --color-entry-player: #1e5a92;
   --color-notes: #6b7280;
@@ -215,6 +222,7 @@ button {
 
   /* Motion: durations */
   --duration-fast: 0.2s; /* button/control hover, color, and layout transitions */
+  --duration-board: 0.15s; /* board cell state changes (selection/relation/match/conflict) — quicker than --duration-fast so rapid arrow-key or tap navigation across many cells never feels sluggish */
   --duration-moderate: 0.5s; /* one-shot cues, e.g. the completion celebration */
   --duration-slow: 0.8s; /* the intro-to-menu fade */
   --duration-ambient: 26s; /* slow background drift (Cyber theme) */
@@ -936,12 +944,30 @@ button {
      (custom properties inherit), so both stay in sync from one place. */
   --board-gap-width: 2px;
   --board-line-width: 3px;
+  /* State-ring width (selection/conflict) — a separate token from the
+     two above even though it happens to share their 2px value, since
+     it means something different (an inset box-shadow ring, not a grid
+     line) and a future change to one must never accidentally resize
+     the other. */
+  --cell-ring-width: 2px;
 
   display: grid;
   grid-template-columns: repeat(9, 1fr);
   grid-template-rows: repeat(9, 1fr);
   width: min(100%, 32rem);
   aspect-ratio: 1 / 1;
+  /* Without this, a flex item with non-visible overflow (this one has
+     `overflow: hidden` below, needed to clip the grid to its rounded
+     corners) gets its automatic flex-shrink minimum floored at 0
+     instead of its aspect-ratio-derived size — so on a short viewport
+     where .screen-game's flex column doesn't have enough height, the
+     board would silently get squashed into a short rectangle instead
+     of staying square and letting .screen's own overflow-y: auto
+     scroll the rest into view (confirmed: reproduces identically with
+     no other change, i.e. pre-existing, not introduced by this pass —
+     fixed here since "scales cleanly on narrow screens" is explicitly
+     in scope). */
+  flex-shrink: 0;
   margin: 0 auto;
   /* 2px, not 1px: a 1px CSS gap only ever renders as a true single
      device pixel on a >=2x-DPI screen. On an ordinary 1x desktop
@@ -988,6 +1014,13 @@ button {
   background: var(--color-panel);
   cursor: pointer;
   touch-action: manipulation;
+  /* Covers every cell-state change below (selection/relation/match/
+     conflict) with one calm, quick transition — background-color and
+     box-shadow are separate properties so a selection ring (box-shadow)
+     and a tint change (background-color) never have to fight over one
+     shared value. Purely visual: neither property affects layout, so
+     rapid selection changes across the grid never shift anything. */
+  transition: background-color var(--duration-board) var(--ease-standard), box-shadow var(--duration-board) var(--ease-standard);
 }
 
 .cell:disabled {
@@ -1014,7 +1047,14 @@ button {
 .cell-value {
   font-size: clamp(0.9rem, 4vw, 1.4rem);
   font-weight: var(--font-weight-semibold);
+  /* Player entries read as "handwritten in" (italic) vs. the upright
+     printed clues below — a second, non-color channel for telling
+     fixed and entered digits apart, on top of the weight/color
+     difference, so the distinction survives grayscale or a color-
+     vision deficiency. */
+  font-style: italic;
   color: var(--color-entry-player);
+  transition: color var(--duration-board) var(--ease-standard);
 }
 
 .cell-value.is-error {
@@ -1029,7 +1069,12 @@ button {
 
 .cell.is-fixed .cell-value {
   color: var(--color-clue-fixed);
-  font-weight: var(--font-weight-bold);
+  /* Bumped from --font-weight-bold to --font-weight-extrabold and back
+     to upright (overriding the italic above) — widens the weight gap
+     against player entries and keeps clues reading as "printed," so
+     fixed vs. entered is never dependent on the color pairing alone. */
+  font-weight: var(--font-weight-extrabold);
+  font-style: normal;
 }
 
 .cell-notes {
@@ -1061,14 +1106,23 @@ button {
   align-items: center;
   justify-content: center;
   font-size: clamp(0.5rem, 1.6vw, 0.65rem);
+  font-weight: var(--font-weight-semibold);
   color: var(--color-notes);
   line-height: 1;
 }
 
 /* Priority when more than one applies: related < match < selected —
    declared in that order so later rules win on the shared `background`
-   property. Conflicts use box-shadow (a different property) so that
-   signal never has to compete for the cascade. */
+   property. Selected additionally gets an accent ring (a second,
+   structural channel — not just a stronger tint) so it unmistakably
+   outranks the flat related/match tints instead of competing with them
+   on saturation alone; related and match stay ring-free so they read
+   as subordinate/subtle exactly as requested. Conflicts use box-shadow
+   (a different property from background) so that signal never has to
+   compete with the fill colors for the cascade, and — being declared
+   last — its error-colored ring wins over the selection ring on a cell
+   that happens to be both selected and conflicting, while the selected
+   tint underneath still shows through. */
 .cell.is-related {
   background: var(--color-cell-related);
 }
@@ -1079,10 +1133,11 @@ button {
 
 .cell.is-selected {
   background: var(--color-cell-selected);
+  box-shadow: inset 0 0 0 var(--cell-ring-width) var(--color-accent);
 }
 
 .cell.is-conflict {
-  box-shadow: inset 0 0 0 2px var(--color-error);
+  box-shadow: inset 0 0 0 var(--cell-ring-width) var(--color-error);
 }
 
 /* ---------- Board toolbar & number pad ---------- */
