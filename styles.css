@@ -37,6 +37,11 @@ button {
      share textarea) which stays normally selectable. */
   user-select: none;
   -webkit-user-select: none;
+  /* Removes the ~300ms tap-delay/double-tap-to-zoom some touch browsers
+     apply while they wait to see if a second tap is coming — every
+     button here is a single-purpose control, never part of a
+     pinch-zoomable content area, so that wait is pure latency. */
+  touch-action: manipulation;
 }
 
 /* ================================================================
@@ -199,6 +204,14 @@ button {
   --focus-ring-width: 3px;
 
   --touch-target-min: 44px;
+
+  /* Shared "pressed" affordance for every clickable control app-wide —
+     a small, calm scale-down plus a 1px downward nudge, reused by every
+     button/tile/tab (see "Shared interactive control states" below)
+     instead of each one hand-rolling its own numbers. Deliberately
+     restrained: no bounce, no overshoot. */
+  --press-scale: 0.98;
+  --press-translate-y: 1px;
 
   /* Motion: durations */
   --duration-fast: 0.2s; /* button/control hover, color, and layout transitions */
@@ -481,42 +494,86 @@ button {
   outline-offset: 2px;
 }
 
-/* ---------- Hover & active states ----------
-   Hover is gated behind (hover: hover) and (pointer: fine) — without
+/* ---------- Shared interactive control states ----------
+   One consistent state system reused by every clickable control in the
+   app — menu buttons, dialog buttons, the number pad, toolbar buttons,
+   difficulty tabs, option tiles, and the skip button — so a press
+   anywhere feels like the same calm, tactile material responding,
+   rather than several unrelated button systems that happen to sit near
+   each other. Board cells (.cell) are handled separately below: they
+   sit edge-to-edge in a seamless grid, so they only ever get the
+   brightness half of this treatment, never the scale/translate — that
+   would open a visible gap against their neighbors instead of reading
+   as "pressed."
+
+   Timing/scale come from the shared --duration-fast (200ms, inside the
+   requested 120-220ms range) and --press-scale/--press-translate-y
+   tokens declared with the rest of the design tokens above —
+   deliberately restrained: no bounce, no ripple, no glow, just a
+   small, quick, physical-feeling response. Declared once here instead
+   of each component repeating its own transition list. */
+.menu-nav button,
+.btn-primary,
+.btn-secondary,
+.number-btn,
+.difficulty-filter-btn,
+.option-tile,
+.skip-btn {
+  transition-property: background-color, color, border-color, box-shadow, transform;
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
+}
+
+/* Hover is gated behind (hover: hover) and (pointer: fine) — without
    that, touch browsers apply :hover on tap and it can stay "stuck"
    until the next unrelated tap, which reads as a visual glitch rather
-   than a hover cue that was never really possible on a touchscreen.
-   :active isn't gated the same way: a brief press-down cue is useful
-   feedback on both a mouse click and a touch tap. Board cells only get
-   the brightness half of the active treatment, never the scale — they
-   sit edge-to-edge in a seamless grid, and scaling one down would open
-   a visible gap against its neighbors instead of reading as "pressed." */
+   than a hover cue that was never really possible on a touchscreen. */
 @media (hover: hover) and (pointer: fine) {
   .menu-nav button:not(:disabled):hover,
-  .number-btn:hover,
-  .cell:not(:disabled):hover,
   .btn-primary:not(:disabled):hover,
   .btn-secondary:not(:disabled):hover,
-  .difficulty-filter-btn:hover,
+  .number-btn:not(:disabled):hover,
+  .difficulty-filter-btn:not(:disabled):hover,
   .option-tile:hover,
-  .skip-btn:hover {
+  .skip-btn:hover,
+  .cell:not(:disabled):hover {
     filter: brightness(0.96);
   }
+}
+
+/* :active isn't gated the same way as hover: a brief press-down cue is
+   useful feedback on both a mouse click and a touch tap, and never gets
+   "stuck" the way :hover can. box-shadow: none reads as the control
+   settling flush against its surface while held (the requested "subtle
+   shadow reduction while pressed") and is a harmless no-op on controls
+   that had no shadow to begin with. */
+.menu-nav button:not(:disabled):active,
+.btn-primary:not(:disabled):active,
+.btn-secondary:not(:disabled):active,
+.number-btn:not(:disabled):active,
+.difficulty-filter-btn:not(:disabled):active,
+.option-tile:active,
+.skip-btn:active {
+  transform: translateY(var(--press-translate-y)) scale(var(--press-scale));
+  filter: brightness(0.94);
+  box-shadow: none;
 }
 
 .cell:not(:disabled):active {
   filter: brightness(0.92);
 }
 
-.menu-nav button:not(:disabled):active,
-.number-btn:not(:disabled):active,
-.btn-primary:not(:disabled):active,
-.btn-secondary:not(:disabled):active,
-.difficulty-filter-btn:active,
-.option-tile:active,
-.skip-btn:active {
-  filter: brightness(0.9);
-  transform: scale(0.97);
+/* Disabled: identical treatment across every button type — previously
+   duplicated between .menu-nav button and .btn-primary/.btn-secondary
+   with the same values, now declared once. */
+.menu-nav button:disabled,
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  background: var(--color-border);
+  color: var(--color-text-secondary);
+  border-color: var(--color-border);
+  box-shadow: none;
+  cursor: not-allowed;
 }
 
 /* ---------- App frame ---------- */
@@ -679,7 +736,6 @@ button {
   letter-spacing: var(--letter-spacing-snug);
   cursor: pointer;
   box-shadow: var(--shadow-sm);
-  transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard);
 }
 
 /* Decorative only (each button already has a real text label the
@@ -701,13 +757,6 @@ button {
   color: var(--color-text);
   border: var(--border-width-thin) solid var(--color-border);
   box-shadow: none;
-}
-
-.menu-nav button:disabled {
-  background: var(--color-border);
-  color: var(--color-text-secondary);
-  box-shadow: none;
-  cursor: not-allowed;
 }
 
 .menu-footer {
@@ -1050,7 +1099,12 @@ button {
   flex: 1;
 }
 
-#btn-notes-toggle[aria-pressed="true"] {
+/* Shared "selected" look for the two attribute-driven toggle/tab
+   controls in the app (the Notes toggle button and the difficulty
+   filter tabs) — same accent-fill treatment either way, so a selected
+   state reads consistently regardless of which control it's on. */
+#btn-notes-toggle[aria-pressed="true"],
+.difficulty-filter-btn[aria-selected="true"] {
   background: var(--color-accent);
   color: var(--color-accent-contrast);
   border-color: var(--color-accent);
@@ -1074,7 +1128,6 @@ button {
   font-size: var(--font-size-9);
   font-weight: var(--font-weight-semibold);
   cursor: pointer;
-  touch-action: manipulation;
 }
 
 /* ---------- Pause overlay ---------- */
@@ -1113,21 +1166,17 @@ button {
   border-radius: var(--radius-md);
   cursor: pointer;
   font-weight: var(--font-weight-semibold);
-  transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
-}
-
-.btn-primary:disabled,
-.btn-secondary:disabled {
-  background: var(--color-border);
-  color: var(--color-text-secondary);
-  border-color: var(--color-border);
-  cursor: not-allowed;
 }
 
 .btn-primary {
   background: var(--color-accent);
   color: var(--color-accent-contrast);
   border: var(--border-width-thin) solid var(--color-accent);
+  /* The one consistently elevated, filled button style in the app —
+     matches the menu's "New Game" button (also .btn-primary's visual
+     sibling) so every primary call-to-action reads the same, and gives
+     the shared :active rule's shadow reduction something to reduce. */
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-secondary {
@@ -1242,6 +1291,18 @@ button {
   border-color: var(--color-accent);
   background: var(--color-surface);
   font-weight: var(--font-weight-semibold);
+}
+
+/* The actually-focusable element here is the small 1.1rem radio/
+   checkbox, not the tile — the global :focus-visible rule already
+   rings that input on its own, but this makes the keyboard focus cue
+   land on the whole tile (same visual language as every other
+   control's focus ring), which is easier to spot while tabbing through
+   a list of tiles. Progressive enhancement again: without :has()
+   support the input's own ring still shows. */
+.option-tile:has(input:focus-visible) {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: 2px;
 }
 
 /* ---------- Appearance preview ---------- */
@@ -1413,13 +1474,6 @@ button {
   border-radius: var(--radius-md);
   cursor: pointer;
   font-weight: var(--font-weight-semibold);
-  transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
-}
-
-.difficulty-filter-btn[aria-selected="true"] {
-  background: var(--color-accent);
-  color: var(--color-accent-contrast);
-  border-color: var(--color-accent);
 }
 
 .stats-grid {

@@ -867,6 +867,53 @@ intentionally not touched.
       background restriction/animation tests all still passing
       unchanged. `sw.js` `CACHE_NAME` bumped `v9` → `v10`.
 
+## Phase 14j — Consolidated Control Interaction States ✅ (2026-07-30)
+
+- [x] Added shared `--press-scale: 0.98` / `--press-translate-y: 1px`
+      tokens (within the requested 0.97-0.99 scale range), reusing the
+      existing `--duration-fast` (200ms, inside 120-220ms) for timing.
+- [x] Replaced the old brightness+scale-only `:active` treatment with
+      `transform: translateY(1px) scale(0.98)` plus `box-shadow: none`
+      (subtle shadow reduction while pressed) across every button-like
+      control: menu buttons, `.btn-primary`/`.btn-secondary`, the
+      number pad, difficulty tabs, option tiles, and the skip button.
+      No bounce, no ripple, no glow.
+- [x] Added `box-shadow: var(--shadow-sm)` to `.btn-primary` as a
+      baseline (previously only the menu's "New Game" button had
+      elevation) so every primary action in the app is visually
+      related and the press-state shadow reduction has something real
+      to reduce everywhere it appears (dialogs, pause overlay, update
+      banner, completion dialog).
+- [x] Consolidated duplicated CSS: one shared transition declaration
+      for every interactive control (previously repeated per-component,
+      and entirely missing on `.number-btn`/`.skip-btn`); one shared
+      `:disabled` rule (previously identical code in two places); one
+      shared "selected" rule for `#btn-notes-toggle[aria-pressed]` and
+      `.difficulty-filter-btn[aria-selected]` (previously duplicated).
+- [x] Added `touch-action: manipulation` to the global `button` reset
+      so no control anywhere in the app has a tap-delay/double-tap-zoom
+      window (previously only board cells and the number pad had it).
+- [x] Added a `.option-tile:has(input:focus-visible)` rule so keyboard
+      focus on a theme/mode/gameplay radio or checkbox rings the whole
+      tile, not just the small 1.1rem input — progressive enhancement,
+      same pattern already used for the `:has(input:checked)` state.
+- [x] Hover remains gated behind `@media (hover: hover) and
+      (pointer: fine)` (unchanged, already correct) so touch devices
+      never get a "stuck" hover state.
+- [x] No HTML changes — no new controls, no navigation changes. Every
+      existing button, label, and `aria-*` attribute preserved exactly.
+- [x] Verified with Playwright across mouse, keyboard, and touch-
+      emulated input: transition duration measured at 200ms, pressed
+      transform measured as `scale(0.98) translateY(1px)` with
+      box-shadow reduced to `none`, keyboard `:focus-visible` rings
+      confirmed on menu buttons and option tiles, touch tap produces no
+      stuck hover filter, disabled/selected states confirmed, and every
+      checked touch target measured >=44x44px. Full regression:
+      `npm test` 181/181, the Phase 14 playtest suite, grid-gap/
+      centering audit, and the menu-background suite all still passing.
+      Visually spot-checked in Light/Cyber-dark themes and the Settings
+      dialog/game screen. `sw.js` `CACHE_NAME` bumped `v10` → `v11`.
+
 ## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and

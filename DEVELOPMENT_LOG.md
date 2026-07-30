@@ -5,6 +5,111 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-30 — Phase 14j: Consolidated Control Interaction States
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+A pass over every clickable control in the app — menu buttons, dialog
+buttons, the number pad, board toolbar, difficulty tabs, option tiles,
+the skip button, and board cells — to make default/hover/pressed/
+keyboard-focus/disabled/selected states consistent, calm, and reused
+from one shared system instead of each component quietly diverging.
+Explicit constraints from the request: no new controls, no navigation
+changes, every existing button/label/`aria-*` preserved exactly.
+
+**Audit first:** read the whole stylesheet plus every JS file that
+toggles `disabled`, `aria-selected`, or `aria-pressed`
+(`board-view.js`, `menu.js`, `difficulty-filter.js`) to build a
+complete inventory of clickable controls and where their states were
+already handled vs. missing. Found: `.number-btn` and `.skip-btn` had
+no `transition` at all (their hover/press changes snapped instantly);
+`.menu-nav button:disabled` and `.btn-primary/.btn-secondary:disabled`
+were two copies of the same values; `#btn-notes-toggle[aria-pressed]`
+and `.difficulty-filter-btn[aria-selected]` were two copies of the
+same "selected" look; keyboard focus on a Settings dialog radio/
+checkbox only ever ringed the tiny 1.1rem input, not the tile around
+it; only the menu's "New Game" button had any elevation (`box-shadow`)
+for a primary action, so "primary" didn't read consistently app-wide.
+
+**Interaction system (`styles.css`):**
+- New tokens: `--press-scale: 0.98` and `--press-translate-y: 1px`
+  (within the requested 0.97-0.99 scale range), reusing the existing
+  `--duration-fast` (200ms — inside the requested 120-220ms window)
+  for every transition instead of inventing a separate timing token.
+- One shared transition declaration
+  (`background-color, color, border-color, box-shadow, transform` at
+  200ms `ease`) now covers `.menu-nav button`, `.btn-primary`,
+  `.btn-secondary`, `.number-btn`, `.difficulty-filter-btn`,
+  `.option-tile`, and `.skip-btn` — replacing five near-identical
+  per-component transition lists (and adding one to the two controls
+  that had none).
+- Pressed/`:active` state redesigned to match the requested direction:
+  `transform: translateY(1px) scale(0.98)` plus `box-shadow: none`
+  (the "subtle shadow reduction while pressed" cue — reads as the
+  control settling flush against its surface) and a light
+  `filter: brightness(0.94)` for color feedback. No bounce, no ripple,
+  no glow. Board cells keep their own brightness-only press treatment
+  (documented reason unchanged: they sit edge-to-edge in a grid, so
+  scaling one down would open a visible gap against its neighbors).
+- `.btn-primary` gained `box-shadow: var(--shadow-sm)` as a baseline,
+  so every primary action in the app (dialog confirm buttons, pause
+  overlay's Resume, the update banner's Refresh, the completion
+  dialog's New Game) reads as the same elevated "primary" style the
+  menu's New Game button already had, and the press-state shadow
+  reduction has something real to reduce everywhere it appears.
+- Disabled state consolidated into one rule covering
+  `.menu-nav button`, `.btn-primary`, and `.btn-secondary` (previously
+  two copies of identical values).
+- "Selected" state consolidated into one rule covering
+  `#btn-notes-toggle[aria-pressed="true"]` and
+  `.difficulty-filter-btn[aria-selected="true"]` (previously two
+  copies of identical values) — both read as the same accent-filled
+  "on" look.
+- Added `touch-action: manipulation` to the global `button` reset (not
+  just `.cell`/`.number-btn` individually) so no control in the app has
+  a tap-delay/double-tap-zoom window on touch.
+- Added `.option-tile:has(input:focus-visible) { outline: ... }` so
+  tabbing to a theme/mode/gameplay radio or checkbox rings the whole
+  tile, matching every other control's focus ring — progressive
+  enhancement, same pattern as the existing `:has(input:checked)`
+  selected-state rule; browsers without `:has()` still show the
+  input's own native focus ring.
+- Hover stayed exactly as it already was: gated behind
+  `@media (hover: hover) and (pointer: fine)`, which is what prevents
+  a tap on a touch device from leaving a "stuck" hover state — this
+  was already correct, just re-verified and re-documented while
+  reorganizing the section.
+- No HTML changes anywhere — no new controls, no navigation changes,
+  every button's accessible label and every `aria-*` attribute is
+  untouched.
+
+**Verification:** wrote a new Playwright script exercising mouse,
+keyboard, and touch-emulated input against the menu, Settings dialog,
+Statistics screen, and game screen: measured the New Game button's
+`transition-duration` at 200ms; measured its pressed `transform` as
+`matrix(0.98, 0, 0, 0.98, 0, 1)` (i.e. exactly `scale(0.98)
+translateY(1px)`) with `box-shadow` reduced to `none`; confirmed a real
+keyboard Tab shows a solid `:focus-visible` outline on both the New
+Game button and a Settings option-tile; confirmed a touch tap leaves no
+stuck hover filter; confirmed Continue Game's disabled state
+(`cursor: not-allowed`); confirmed the Notes toggle's `aria-pressed`
+selected style and the difficulty tabs' selected/unselected contrast;
+confirmed board cells never receive a scale/translate transform;
+confirmed every checked touch target (New Game, Settings, number pad,
+difficulty tabs, option tiles) measures at least 44×44px; confirmed
+all 5 menu buttons keep their readable text labels. All checks passed.
+Also re-ran the full existing regression suite (`npm test` 181/181,
+the Phase 14 playtest suite, the grid-gap/centering audit, and the
+menu-background suite) with zero regressions, and visually spot-checked
+the menu in Light and Cyber-dark, the Settings dialog's keyboard-focus
+ring, and the game screen's toolbar/number-pad states. `sw.js`
+`CACHE_NAME` bumped `v10` → `v11`.
+
+**Files changed:** `styles.css`, `sw.js`, `TASKS.md`,
+`DEVELOPMENT_LOG.md`.
+
+---
+
 ## 2026-07-30 — Phase 14i: Main Menu Typography & Hierarchy Refinement
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`
