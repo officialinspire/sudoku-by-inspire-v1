@@ -973,6 +973,64 @@ intentionally not touched.
       (playtest, grid-gap/centering audit, menu-background suite) still
       passing unchanged. `sw.js` `CACHE_NAME` bumped `v11` → `v12`.
 
+## Phase 14l — Number-Entry Controls & Gameplay Feedback Polish ✅ (2026-07-30)
+
+- [x] Audited existing coverage first: confirmed the number pad already
+      has the full Phase 14j tactile press system (200ms, scale 0.98 +
+      1px translate, brightness on press) — nothing to add there, just
+      verified it's still intact. Confirmed "unavailable/completed
+      number" states do **not** exist anywhere in the codebase, so per
+      the request's own "if they already exist" scope, nothing was
+      added there — no new gameplay feature invented.
+- [x] Number pad now highlights the button matching the selected
+      cell's current value (an accent ring, mirroring the board's own
+      matching-number cells) — `js/ui/board-view.js` reuses the
+      `selectedValue` it already computes; `styles.css` adds
+      `.number-btn.is-current-value`.
+- [x] Notes mode now visibly changes the number pad itself (dashed
+      accent border + accent digit color on all 9 buttons), not just
+      the toggle button's own label — `.number-pad.is-notes-mode
+      .number-btn`, toggled from `state.notesMode` in the same render
+      pass.
+- [x] Added a brief, one-shot "settle in" pulse (scale 0.8→1, opacity
+      0.4→1, `--duration-board` 150ms) on a cell's digit the moment a
+      value actually appears or changes — diffed against the
+      previously-rendered text so it never replays on unrelated
+      re-renders (selecting a different cell, toggling notes mode) and
+      never fires on the render that first paints a (re)started or
+      restored game.
+- [x] Added a brief, one-shot shake (translateX, max 3px, decaying,
+      new `--duration-shake` 300ms token) the moment a cell's entry
+      first becomes wrong (immediate error checking on) — diffed
+      against the cell's previous `is-error` state so it fires exactly
+      once per mistake, never repeatedly while the cell simply stays
+      wrong.
+- [x] Both new animations are pure `transform`/`opacity`/color changes
+      (never affect layout) and are automatically neutralized by the
+      existing sitewide `prefers-reduced-motion: reduce` override —
+      no separate gating needed.
+- [x] No JS-side delay anywhere: animations are fire-and-forget CSS
+      (`classList` toggle + a forced reflow to allow re-triggering),
+      never a `setTimeout` gating the next input; `applyNumberInput`/
+      `eraseSelectedCell`/`selectCell` themselves are untouched.
+- [x] No changes to validation rules or number logic — every edit to
+      `js/ui/board-view.js` only reads existing state to drive
+      class toggles; `js/game-state.js` was not modified.
+- [x] Verified: `npm test` 181/181; a new Playwright script covering
+      the number-pad highlight tracking selection, notes-mode styling
+      toggling on/off, the entry pulse firing exactly once per real
+      change (checked via `getAnimations()`, not just class presence),
+      the shake firing once on becoming wrong and not again on a later
+      re-render while still wrong, `prefers-reduced-motion` forcing
+      near-zero animation durations, the existing number-button press
+      effect still present, and 6 rapid-fire keyboard digit entries all
+      registering with no drops in under 2 seconds. Full existing
+      regression suite (`final-playtest.mjs`, `grid-gap-audit2.mjs`,
+      `sbg-verify.mjs`, board-scaling checks) still passing unchanged.
+      Screenshotted mouse-click and touch-tap entry paths mid-animation
+      to visually confirm both the shake and the pulse. `sw.js`
+      `CACHE_NAME` bumped `v12` → `v13`.
+
 ## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and

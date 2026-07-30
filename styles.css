@@ -223,6 +223,7 @@ button {
   /* Motion: durations */
   --duration-fast: 0.2s; /* button/control hover, color, and layout transitions */
   --duration-board: 0.15s; /* board cell state changes (selection/relation/match/conflict) — quicker than --duration-fast so rapid arrow-key or tap navigation across many cells never feels sluggish */
+  --duration-shake: 0.3s; /* one-shot invalid-entry shake — a couple of quick, decaying oscillations, brief enough to never block the next keypress */
   --duration-moderate: 0.5s; /* one-shot cues, e.g. the completion celebration */
   --duration-slow: 0.8s; /* the intro-to-menu fade */
   --duration-ambient: 26s; /* slow background drift (Cyber theme) */
@@ -1067,6 +1068,30 @@ button {
   text-decoration-color: currentColor;
 }
 
+/* One-shot "settle in" feedback the moment a digit actually appears or
+   changes in a cell (js/ui/board-view.js retriggers this class only on
+   a real value change, never on an unrelated re-render). Grows up to
+   full size rather than overshooting past it — a clean settle, not a
+   bounce — and only ever animates opacity/transform, neither of which
+   affects layout, so it can never introduce a layout shift or steal a
+   frame from the next keypress. Neutralized automatically by the
+   prefers-reduced-motion override far above (all animation-durations
+   forced to ~0). */
+.cell-value.is-value-enter {
+  animation: cell-value-enter var(--duration-board) var(--ease-out);
+}
+
+@keyframes cell-value-enter {
+  from {
+    transform: scale(0.8);
+    opacity: 0.4;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 .cell.is-fixed .cell-value {
   color: var(--color-clue-fixed);
   /* Bumped from --font-weight-bold to --font-weight-extrabold and back
@@ -1140,6 +1165,36 @@ button {
   box-shadow: inset 0 0 0 var(--cell-ring-width) var(--color-error);
 }
 
+/* One-shot shake the moment a cell first becomes wrong (immediate error
+   checking on) — js/ui/board-view.js only retriggers this on the
+   false→true transition, never on renders where the cell simply *stays*
+   wrong, so it can't turn into repeated flashing while the player
+   works out the fix. Small, quickly-decaying amplitude (max 3px) and
+   translateX only, never affecting layout — deliberately restrained,
+   not a big shove. */
+.cell.is-shake {
+  animation: cell-shake var(--duration-shake) var(--ease-standard);
+}
+
+@keyframes cell-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-3px);
+  }
+  40% {
+    transform: translateX(3px);
+  }
+  60% {
+    transform: translateX(-2px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+
 /* ---------- Board toolbar & number pad ---------- */
 
 .board-toolbar {
@@ -1183,6 +1238,30 @@ button {
   font-size: var(--font-size-9);
   font-weight: var(--font-weight-semibold);
   cursor: pointer;
+}
+
+/* Highlights the number-pad button matching the selected cell's
+   current value — the same "which digit am I looking at" signal the
+   board's own matching-number cells already give, now also visible on
+   the pad itself. A ring (like the board's own selected-cell ring),
+   not a fill, so it reads as "this is informational" rather than "this
+   button is pressed/active." Already covered by .number-btn's shared
+   box-shadow transition above, so this fades in/out at the same 200ms
+   as every other button-state change instead of snapping. */
+.number-btn.is-current-value {
+  border-color: var(--color-accent);
+  box-shadow: inset 0 0 0 var(--cell-ring-width) var(--color-accent);
+}
+
+/* Notes mode: every number button gets a dashed, accent-tinted border
+   instead of its normal solid one — "pencil marks," not "ink" — so a
+   press's *consequence* (candidate note vs. final answer) is clear
+   before the player taps, not just after. Also already covered by the
+   shared border-color/color transition on .number-btn. */
+.number-pad.is-notes-mode .number-btn {
+  border-style: dashed;
+  border-color: var(--color-accent);
+  color: var(--color-accent);
 }
 
 /* ---------- Pause overlay ---------- */

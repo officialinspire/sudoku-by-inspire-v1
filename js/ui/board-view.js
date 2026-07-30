@@ -10,8 +10,29 @@ const difficultyEl = document.getElementById('game-difficulty-label');
 const notesToggleBtn = document.getElementById('btn-notes-toggle');
 const hintBtn = document.getElementById('btn-hint');
 const pauseOverlay = document.getElementById('pause-overlay');
+const numberPadEl = document.getElementById('number-pad');
+const numberButtons = numberPadEl ? Array.from(numberPadEl.querySelectorAll('.number-btn')) : [];
 
 const cells = [];
+
+// Tracks which puzzle the board is currently showing (by array
+// identity) so the one-shot feedback animations below know when a
+// render is the *first* paint of a (re)started or restored game —
+// every cell's value technically "changes" from whatever the DOM
+// happened to hold before, and animating all 81 of them at once would
+// read as a broken flash rather than the intended one-cell feedback.
+let lastPuzzleRef = null;
+let suppressEntryFeedback = true;
+
+// Restarts a CSS animation from its beginning even if the element
+// already has the class (and therefore may already be mid-animation) —
+// removing the class, forcing a reflow, then re-adding it is the
+// standard way to do this without any JS-side timing/delay.
+function retriggerAnimation(el, className) {
+  el.classList.remove(className);
+  void el.offsetWidth;
+  el.classList.add(className);
+}
 
 function buildBoard() {
   for (let index = 0; index < 81; index++) {
@@ -66,12 +87,27 @@ function render(state) {
   const { immediateErrorChecking } = getGameSettings();
   boardEl.classList.toggle('is-empty', !hasGame);
 
+  if (state.puzzle !== lastPuzzleRef) {
+    lastPuzzleRef = state.puzzle;
+    suppressEntryFeedback = true;
+  }
+
   const related = hasGame && state.selectedIndex !== null ? new Set(getPeerIndices(state.selectedIndex)) : null;
   const selectedValue =
     hasGame && state.selectedIndex !== null
       ? state.puzzle[state.selectedIndex] || state.entries[state.selectedIndex]
       : 0;
   const ariaState = { ...state, immediateErrorChecking };
+
+  // Number pad: highlight the button matching the selected cell's
+  // current value (mirrors the board's own "matching number" cells, so
+  // the same digit is easy to spot both on the board and on the pad),
+  // and mark the whole pad while notes mode is active so its buttons
+  // read as "adding a pencil mark" rather than "entering the answer."
+  for (const btn of numberButtons) {
+    btn.classList.toggle('is-current-value', selectedValue !== 0 && Number(btn.dataset.digit) === selectedValue);
+  }
+  numberPadEl?.classList.toggle('is-notes-mode', state.notesMode);
 
   for (let index = 0; index < 81; index++) {
     const { el, valueEl, notesEl, noteDigits } = cells[index];
@@ -93,6 +129,15 @@ function render(state) {
     el.disabled = !hasGame;
     el.setAttribute('aria-selected', String(isSelected));
 
+    // Captured before this render overwrites them below, so the two
+    // one-shot feedback effects further down can tell "just changed"
+    // from "already was this way" — a brief settle-in pulse the moment
+    // a value actually appears/changes in a cell, and a brief shake the
+    // moment a cell first becomes wrong (not on every render while it
+    // simply *stays* wrong, which would be repeated flashing).
+    const previousText = valueEl.textContent;
+    const wasError = valueEl.classList.contains('is-error');
+
     // Note-digit text is always derived from state.notes[index], even
     // while the cell is showing a real value and the notes container is
     // hidden — otherwise a cell that had notes, then got a value
@@ -109,14 +154,24 @@ function render(state) {
       valueEl.classList.toggle('is-error', isError);
       valueEl.hidden = false;
       notesEl.hidden = true;
+
+      if (!suppressEntryFeedback && previousText !== String(value)) {
+        retriggerAnimation(valueEl, 'is-value-enter');
+      }
     } else {
       valueEl.textContent = '';
       valueEl.hidden = true;
       notesEl.hidden = notesBitmask === 0;
     }
 
+    if (!suppressEntryFeedback && isError && !wasError) {
+      retriggerAnimation(el, 'is-shake');
+    }
+
     el.setAttribute('aria-label', getCellAriaLabel(index, ariaState));
   }
+
+  suppressEntryFeedback = false;
 
   // Keep DOM focus following the selected cell (arrow-key navigation
   // moves selection; this is what makes the browser's focus ring move

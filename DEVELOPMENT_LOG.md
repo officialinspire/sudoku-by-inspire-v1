@@ -5,6 +5,102 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-30 — Phase 14l: Number-Entry Controls & Gameplay Feedback Polish
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+Polished the number pad and its gameplay feedback — no new gameplay
+features, no changes to validation rules or number logic. Everything
+here is either a `styles.css` addition or a `js/ui/board-view.js`
+change that only reads existing state to drive class toggles;
+`js/game-state.js` (the actual rules/validation module) was not
+touched.
+
+**Audit first:** before writing anything, checked which of the
+requested items already existed. The number pad already had the full
+Phase 14j tactile-press system (200ms transition, `scale(0.98)` + 1px
+downward translate, brightness dip on press) — genuinely nothing to add
+there, just re-verified it in this session's tests. "Unavailable or
+completed number" states (e.g. graying out a digit once all 9 are
+placed) do not exist anywhere in the codebase — per the request's own
+"if they already exist" scope for that specific item, nothing was
+added; inventing it now would have been a new feature, which was
+explicitly out of scope.
+
+**What was added:**
+- **Selected-number identification:** the number pad now highlights
+  the button matching the selected cell's current value with an accent
+  ring (`.number-btn.is-current-value`) — the same visual language as
+  the board's own accent-ringed selected cell and its soft
+  matching-number tint (Phase 14k), just extended to the pad itself.
+  `board-view.js` already computed `selectedValue` for the board's own
+  match-highlighting; this reuses that same value rather than
+  recomputing it.
+- **Note-mode pad clarity:** switching Notes mode on now visibly
+  changes all 9 number buttons (dashed accent border + accent digit
+  color, `.number-pad.is-notes-mode .number-btn`), not just the
+  toggle button's own label — so what a tap on the pad is about to *do*
+  is clear before the tap, not just after.
+- **Entry feedback:** a brief one-shot "settle in" pulse (scale
+  0.8→1, opacity 0.4→1, 150ms) plays on a cell's digit the instant a
+  value actually appears or changes there — covers both a fresh entry
+  and directly overwriting an existing entry with a different digit
+  (both real, already-supported flows). Implemented by capturing each
+  cell's previously-rendered text before overwriting it each render and
+  comparing; the animation only (re)plays when that text actually
+  changed, using a remove-class → force-reflow → re-add-class sequence
+  so it restarts cleanly even on rapid consecutive entries into the
+  same cell. A module-level flag suppresses it for the very first
+  render of a (re)started or restored game, so loading a save doesn't
+  cascade a pulse across every already-filled cell.
+- **Invalid-entry feedback:** a brief one-shot shake (`translateX`,
+  max 3px amplitude, decaying over 2-3 oscillations, 300ms — a new
+  `--duration-shake` token) plays the instant a cell's entry first
+  becomes wrong (immediate error checking on), using the same
+  before/after diffing technique against each cell's previous
+  `is-error` state — so it fires exactly once per mistake and never
+  repeats while the player works out the fix, which would read as
+  nagging/flashing.
+
+**Motion discipline:** both new animations only ever touch
+`transform`/`opacity`/color — never a layout-affecting property, so
+neither can introduce a layout shift or contend with anything else on
+the page. Both are automatically neutralized by the existing sitewide
+`@media (prefers-reduced-motion: reduce)` override (forces
+`animation-duration` to ~0 and `animation-iteration-count` to 1) —
+no new gating logic needed, same infrastructure the completion
+celebration and menu background already rely on. Neither animation is
+implemented with any `setTimeout`/blocking JS — they're fire-and-forget
+CSS keyframes triggered by a synchronous `classList` toggle, so no
+input is ever delayed waiting on one to finish, and rapid consecutive
+keypresses (tested: 6 digits typed back-to-back with zero pause) all
+register immediately with zero drops.
+
+**Verification:** `npm test` 181/181. A new Playwright script
+confirmed: selecting a clue highlights exactly its digit on the pad and
+clears when an empty cell is selected; notes mode toggles the pad's
+border style on and reverts it off; the entry pulse fires on a genuine
+value change and does *not* start a new running animation
+(`getAnimations()`, not just class presence — the class is deliberately
+left attached after an animation finishes since that's visually
+harmless) on an unrelated re-render; the shake fires once on becoming
+wrong and does not fire again on a later re-render while the cell is
+still (not newly) wrong; `prefers-reduced-motion` forces both new
+animations' durations near zero; the existing number-button press
+transform is still present; and 6 rapid-fire keyboard digit entries
+into 6 different cells all land correctly with no drops in ~100ms
+total. Screenshotted both a mouse click (number pad) and a touch tap
+mid-animation to visually confirm the shake and pulse render correctly
+via both input paths. Re-ran the full existing regression suite
+(`final-playtest.mjs`, `grid-gap-audit2.mjs`, `sbg-verify.mjs`, the
+Phase 14k board-scaling checks) — zero regressions. `sw.js`
+`CACHE_NAME` bumped `v12` → `v13`.
+
+**Files changed:** `styles.css`, `js/ui/board-view.js`, `sw.js`,
+`TASKS.md`, `DEVELOPMENT_LOG.md`.
+
+---
+
 ## 2026-07-30 — Phase 14k: Sudoku Board Cell-State Visual Hierarchy
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`
