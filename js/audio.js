@@ -211,9 +211,7 @@ function createMusicTrack(name, src) {
   // notice and resume rather than leave it silently stopped until some
   // unrelated screen/settings change happens to re-sync playback.
   track.element.addEventListener('pause', () => {
-    if (activeTrackName === name && canPlayMusicNow()) {
-      track.element.play().catch(() => {});
-    }
+    if (activeTrackName === name) recoverMusicPlayback();
   });
 
   const source = audioContext.createMediaElementSource(track.element);
@@ -302,6 +300,32 @@ function loadMusicTracks() {
     menu: createMusicTrack('menu', MUSIC_TRACK_SOURCES.menu),
     gameplay: createMusicTrack('gameplay', MUSIC_TRACK_SOURCES.gameplay),
   };
+}
+
+/**
+ * The single shared recovery path for "music should be audible right
+ * now but might not actually be" — used by the per-track 'pause'
+ * listener, the AudioContext 'statechange' listener, and the
+ * low-frequency safety-net poll below, so all three agree on exactly
+ * what "recovered" means instead of three slightly different checks.
+ *
+ * Critically, this resumes the *AudioContext* every time, not just the
+ * <audio> element: a mobile browser reclaiming audio focus (locking the
+ * screen, a phone call, another app grabbing the audio session — all
+ * common on Android) can suspend the shared AudioContext independently
+ * of the <audio> element's own play/pause state. When that happens,
+ * `track.element.paused` still reads `false` — the element itself never
+ * stopped "playing" — but nothing is actually reaching the speakers,
+ * because the graph it's routed through is suspended. Checking only
+ * `.paused` (the earlier version of this fix) misses that case
+ * entirely: it looks fully recovered while staying completely silent.
+ */
+function recoverMusicPlayback() {
+  if (!musicTracks || !activeTrackName || !canPlayMusicNow()) return;
+  const track = musicTracks[activeTrackName];
+  if (!track.available) return;
+  ensureContextRunning();
+  if (track.element.paused) track.element.play().catch(() => {});
 }
 
 /**
@@ -437,6 +461,14 @@ export function initAudioEngine() {
 
   document.addEventListener('visibilitychange', handleVisibilityChange);
 
+  // Fires whenever the context itself transitions state — including a
+  // browser suspending it out from under the app (Android in particular
+  // does this readily: locking the screen, a phone call, another app
+  // taking the audio focus). This is the fast path for exactly that:
+  // recovers as soon as the browser reports the transition instead of
+  // waiting on the safety-net poll below.
+  audioContext.addEventListener('statechange', recoverMusicPlayback);
+
   // Picks the right music track for whatever screen is showing right
   // when the engine finishes initializing (e.g. the menu, if it's
   // already visible by the time the Start-screen gesture unlocks
@@ -448,19 +480,11 @@ export function initAudioEngine() {
 
   initAudioReactions();
 
-  // Backstop for the one case the per-track 'pause' listener can't see:
-  // a .play() call that never actually started playback at all (its
-  // promise silently rejected — every call site above deliberately
-  // swallows that rejection rather than surfacing an error) has nothing
-  // to transition *away* from, so no 'pause' event ever fires for it.
-  // A low-frequency poll is a cheap, simple way to catch that case too
-  // without trying to enumerate every possible mobile-browser reason a
-  // play() attempt can silently fail.
-  setInterval(() => {
-    if (!musicTracks || !activeTrackName || !canPlayMusicNow()) return;
-    const track = musicTracks[activeTrackName];
-    if (track.available && track.element.paused) {
-      track.element.play().catch(() => {});
-    }
-  }, 2000);
+  // Final backstop, on a low-frequency timer, for whatever's left: a
+  // .play() call whose promise silently rejected without ever
+  // transitioning the element out of paused (no 'pause' event fires for
+  // that, since it never started), or a suspend that happens not to fire
+  // a 'statechange' event in some browser. Cheap insurance against
+  // needing to enumerate every possible mobile-browser failure mode.
+  setInterval(recoverMusicPlayback, 2000);
 }

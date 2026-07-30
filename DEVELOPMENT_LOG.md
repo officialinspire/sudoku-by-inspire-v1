@@ -5,6 +5,74 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-30 — Phase 14f: Fix Root Cause of Android Audio Cut-Outs
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+Direct follow-up: the user was still hearing background music cut off,
+now specifically tested on a real Android phone rather than desktop —
+meaning Phase 14d's fix (a per-track `pause` event listener plus a 2s
+safety-net poll) wasn't actually catching the failure mode Android hits.
+
+**Diagnosis.** Re-read Phase 14d's recovery logic with fresh eyes: both
+the `pause` listener and the poll checked `track.element.paused` and
+called `track.element.play()` if it was `true` — but neither ever
+touched the shared `AudioContext`'s own state. Android is known to
+suspend a page's AudioContext readily whenever it reclaims audio focus
+— locking the screen, an incoming call, another app grabbing the
+session — and critically, when *only* the context suspends (not the
+element itself), the `<audio>` element keeps reporting `paused: false`
+throughout, because from the element's own perspective it never
+stopped. That means Phase 14d's checks would see "looks fine" and do
+nothing, while the AudioContext being suspended means literally nothing
+reaches the speakers — total silence despite every one of the app's own
+signals saying playback is fine. That mismatch — "the element thinks
+it's playing, the destination is deaf" — is exactly what "gets cut off"
+would sound like from the outside, and desktop testing never surfaces
+it because desktop browsers are far less aggressive about suspending
+contexts than Android is.
+
+Verified this diagnosis concretely rather than assuming it: wrapped the
+`AudioContext` constructor in a Playwright `addInitScript` spy to get a
+real handle on the exact instance the app creates, called `.suspend()`
+on it directly (not `.pause()` on the element — deliberately replicating
+only the context-level interruption), and confirmed `element.paused`
+stayed `false` the entire time. That's precisely the blind spot Phase
+14d's checks had.
+
+**Fix (`js/audio.js`):** consolidated the pause listener, the safety-net
+poll, and a new `AudioContext.addEventListener('statechange', ...)`
+handler into one shared `recoverMusicPlayback()` function that always
+calls `ensureContextRunning()` (which resumes the context if
+suspended) *before* checking whether the element itself also needs a
+fresh `.play()`. The `statechange` listener is the fast path — it fires
+the moment the browser reports the context transitioning, rather than
+waiting up to 2 seconds for the poll to notice.
+
+**Verification:**
+
+- Re-ran the exact `.suspend()` simulation and confirmed the context
+  recovers to `state: 'running'` automatically — timed it at ~50ms,
+  confirming the `statechange` listener (not the slower poll) is doing
+  the work.
+- Re-ran every audio regression test from Phase 14b/14d unchanged: the
+  external-`.pause()` simulation, the pause-overlay music crossfade, the
+  "settings mid-game" and "rapid digit entry" reproductions, and the
+  tab-hidden-stays-silent/resumes-on-visible test — all still pass, so
+  this fix is additive and doesn't disturb any of the previously-fixed
+  paths.
+- `npm test`: 181/181. `node --check` on every JS file: clean. Full
+  Phase 14 regression playtest suite: unchanged, all passing.
+- `sw.js` `CACHE_NAME` bumped `v6` → `v7`.
+
+**Scope decision:** considered adding the same recovery pattern to the
+intro video, but didn't — it's a one-shot playback at app start (an
+interruption there just means a frozen frame once, not a repeatedly-
+breaking background loop), and it already has complete error/rejection
+→ fallback-to-menu handling from Phase 1.
+
+---
+
 ## 2026-07-30 — Phase 14e: Animated Sudoku-Digit Menu Background
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`

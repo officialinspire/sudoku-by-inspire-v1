@@ -229,17 +229,20 @@ least once:
     crossfade smoothly (an exponential ease, not a linear ramp, over
     ~1.8s — see Phase 14c, 2026-07-30), not cut instantly or sound
     abrupt near the end of the fade.
-- [ ] **Mobile-specific: music survives interruptions** (Phase 14d,
+- [ ] **Mobile-specific: music survives interruptions** (Phase 14d/14f,
       2026-07-30 — this is the one class of bug that only ever showed up
-      on a real mobile device, not desktop testing). On an actual phone,
+      on a real mobile device, not desktop testing; Android in
+      particular readily suspends the page's AudioContext on focus loss,
+      which Phase 14f specifically targeted). On an actual phone,
       confirm background music does *not* silently stop after: opening
       Settings (from the menu or in-game) and closing it again; entering
       several digits in a row during gameplay; opening/closing the
       pause overlay repeatedly; backgrounding the browser app briefly
-      and returning to it. If it ever does go silent and stay silent,
-      that's a real regression worth reporting — the app should notice
-      any externally-caused pause and resume automatically within about
-      2 seconds at the very most.
+      and returning to it; locking the screen briefly and unlocking;
+      receiving a phone call or notification sound during play. If it
+      ever does go silent and stay silent, that's a real regression
+      worth reporting — the app should notice and recover automatically
+      within about a second or two at the very most.
 - [ ] **Missing music (regression check only)**: temporarily rename or
       remove either MP3 and confirm the app still never shows an error,
       never breaks SFX, and the Music toggle simply has nothing audible

@@ -667,6 +667,48 @@ behind the main menu only.
       from prior phases unaffected. `sw.js` `CACHE_NAME` bumped
       `v5` → `v6`.
 
+## Phase 14f — Fix Root Cause of Android Audio Cut-Outs ✅ (2026-07-30)
+
+The user was still hearing music cut off after Phase 14d's fix, tested
+specifically on an Android phone.
+
+- [x] **Real bug found: Phase 14d's recovery only checked the `<audio>`
+      element's own `.paused` state, never the shared `AudioContext`'s
+      state.** Android readily suspends the AudioContext when it
+      reclaims audio focus (locking the screen, a phone call, another
+      app grabbing the session) — and when that happens, the `<audio>`
+      element itself keeps reporting `paused: false` the whole time (it
+      never actually stopped "playing" from its own point of view), so
+      the pause-event listener and safety-net poll both saw "looks
+      fine" while the app was completely silent. Verified this exact
+      scenario by directly suspending the app's real `AudioContext` in
+      Playwright (via a wrapped-constructor spy, not just calling
+      `.pause()` on the element) and confirming `element.paused` stays
+      `false` throughout the suspension — precisely reproducing what
+      the old fix couldn't detect.
+- [x] Fix, `js/audio.js`: consolidated the three separate recovery call
+      sites (pause listener, safety-net poll, and a new
+      `AudioContext.addEventListener('statechange', ...)` handler) into
+      one shared `recoverMusicPlayback()` that *always* calls
+      `ensureContextRunning()` first, regardless of the element's own
+      paused state, then retries `.play()` only if actually needed.
+      The new `statechange` listener is the fast path — recovers within
+      milliseconds of the browser reporting the transition — with the
+      pause listener and 2s poll as backstops for whatever it might
+      miss.
+- [x] Verified: simulated suspension recovers to `state: 'running'`
+      within ~50ms (via the `statechange` listener, not the slower
+      poll); re-ran every Phase 14b/14d audio regression test
+      (crossfade, pause-overlay, settings-mid-game, rapid digit entry,
+      tab-hidden silence) — all still passing unchanged.
+- [x] Considered extending the same recovery pattern to the intro
+      video — decided against it: it's a one-shot playback triggered
+      once at app start (not a continuous/looping background element an
+      interruption would repeatedly break), and it already has its own
+      complete error/rejection → fallback-to-menu handling from Phase 1.
+- [x] `npm test`: 181/181. Full regression playtest suite: unchanged,
+      all passing. `sw.js` `CACHE_NAME` bumped `v6` → `v7`.
+
 ## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and
