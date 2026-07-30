@@ -10,6 +10,7 @@ const difficultyEl = document.getElementById('game-difficulty-label');
 const notesToggleBtn = document.getElementById('btn-notes-toggle');
 const hintBtn = document.getElementById('btn-hint');
 const pauseOverlay = document.getElementById('pause-overlay');
+const resumeBtn = document.getElementById('btn-resume');
 const numberPadEl = document.getElementById('number-pad');
 const numberButtons = numberPadEl ? Array.from(numberPadEl.querySelectorAll('.number-btn')) : [];
 
@@ -211,7 +212,18 @@ function render(state) {
     hintBtn.disabled = !canHint;
   }
 
-  if (pauseOverlay) pauseOverlay.hidden = state.status !== 'paused';
+  if (pauseOverlay) {
+    const shouldShow = state.status === 'paused';
+    const wasHidden = pauseOverlay.hidden;
+    pauseOverlay.hidden = !shouldShow;
+    // Move focus onto the overlay's own Resume button the moment it
+    // actually appears (not the pause-overlay itself, which isn't
+    // focusable) — otherwise keyboard focus stays on the now-hidden
+    // board cell behind it, same gap a native <dialog> avoids
+    // automatically via showModal(). Runs after the "follow the
+    // selected cell" focus call above, so it correctly wins.
+    if (shouldShow && wasHidden && resumeBtn) resumeBtn.focus();
+  }
 }
 
 export function initBoardView() {

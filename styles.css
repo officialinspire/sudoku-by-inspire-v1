@@ -224,6 +224,7 @@ button {
   --duration-fast: 0.2s; /* button/control hover, color, and layout transitions */
   --duration-board: 0.15s; /* board cell state changes (selection/relation/match/conflict) — quicker than --duration-fast so rapid arrow-key or tap navigation across many cells never feels sluggish */
   --duration-shake: 0.3s; /* one-shot invalid-entry shake — a couple of quick, decaying oscillations, brief enough to never block the next keypress */
+  --duration-dialog: 0.2s; /* dialog/overlay entrance-exit fade + scale (150-220ms requested range) */
   --duration-moderate: 0.5s; /* one-shot cues, e.g. the completion celebration */
   --duration-slow: 0.8s; /* the intro-to-menu fade */
   --duration-ambient: 26s; /* slow background drift (Cyber theme) */
@@ -1264,8 +1265,13 @@ button {
   color: var(--color-accent);
 }
 
-/* ---------- Pause overlay ---------- */
-
+/* ---------- Pause overlay ----------
+   Not a native <dialog> (pausing has to work the instant the game
+   detects "hidden" or Escape, without waiting on the modal machinery),
+   but standardized to look and move like one: same panel/radius/
+   shadow surface as .settings-dialog, same fade+scale entrance/exit,
+   same backdrop opacity — "polish every dialog/overlay/pause screen
+   the same way" applies here too, not just to the <dialog> elements. */
 .pause-overlay {
   position: fixed;
   inset: 0;
@@ -1274,18 +1280,52 @@ button {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-3);
   padding: max(var(--space-3), env(safe-area-inset-top)) max(var(--space-3), env(safe-area-inset-right))
     max(var(--space-3), env(safe-area-inset-bottom)) max(var(--space-3), env(safe-area-inset-left));
-  background: rgba(0, 0, 0, 0.65);
-  color: #ffffff;
+  /* Same opacity as .settings-dialog::backdrop — one "soften the
+     interface behind a modal surface" treatment everywhere. */
+  background: rgba(0, 0, 0, 0.5);
+  opacity: 1;
+  transition: opacity var(--duration-dialog) var(--ease-standard), overlay var(--duration-dialog) allow-discrete, display var(--duration-dialog) allow-discrete;
 }
 
 .pause-overlay[hidden] {
   display: none;
+  opacity: 0;
 }
 
-.pause-overlay p {
+@starting-style {
+  .pause-overlay:not([hidden]) {
+    opacity: 0;
+  }
+}
+
+.pause-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  width: min(20rem, 92vw);
+  padding: var(--space-4);
+  background: var(--color-panel);
+  color: var(--color-text);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  transform: scale(0.96);
+  transition: transform var(--duration-dialog) var(--ease-standard);
+}
+
+.pause-overlay:not([hidden]) .pause-card {
+  transform: scale(1);
+}
+
+@starting-style {
+  .pause-overlay:not([hidden]) .pause-card {
+    transform: scale(0.96);
+  }
+}
+
+.pause-card p {
   font-size: var(--font-size-12);
   font-weight: var(--font-weight-bold);
   margin: 0;
@@ -1319,7 +1359,12 @@ button {
   border: var(--border-width-thin) solid var(--color-border);
 }
 
-/* ---------- Settings dialog ---------- */
+/* ---------- Settings dialog ----------
+   Shared by all six <dialog> elements in the app (Settings, New Game's
+   difficulty picker, the Hint confirm, Puzzle Solved, Replace
+   Unfinished Game?, and Clear Data?) — one surface/border/radius/
+   shadow/spacing system and one entrance/exit transition covers every
+   one of them from this single rule. */
 
 .settings-dialog {
   width: min(30rem, 92vw);
@@ -1332,10 +1377,57 @@ button {
   background: var(--color-panel);
   color: var(--color-text);
   box-shadow: var(--shadow-lg);
+  /* Closed/exiting state: faded and very slightly shrunk — a small
+     transform, not a dramatic pop, and never a bounce (a plain ease,
+     no overshoot in the timing function or the keyframe values). The
+     `overlay`/`display` transitions (only meaningful with
+     `allow-discrete`) are what let a native <dialog> animate on both
+     open *and* close at all — without them the browser would just
+     snap `display: none` on at the instant `close()` is called,
+     skipping the opacity/transform transition entirely. No JS timing
+     code needed anywhere for this: it's the browser's own close()
+     that gets held open for one transition's length before the dialog
+     actually leaves the top layer. */
+  opacity: 0;
+  transform: scale(0.96);
+  transition: opacity var(--duration-dialog) var(--ease-standard), transform var(--duration-dialog) var(--ease-standard), overlay var(--duration-dialog) allow-discrete, display var(--duration-dialog) allow-discrete;
+}
+
+.settings-dialog[open] {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* The one-time "first frame" a dialog is shown from — without this, a
+   newly-opened <dialog> has no previous rendered frame to transition
+   *from* (it was `display: none` a moment ago), so the browser would
+   just jump straight to the [open] state instead of easing into it. */
+@starting-style {
+  .settings-dialog[open] {
+    opacity: 0;
+    transform: scale(0.96);
+  }
 }
 
 .settings-dialog::backdrop {
   background: rgba(0, 0, 0, 0.5);
+  /* Backdrop only fades (no transform — scaling a full-viewport box
+     would visibly reveal the page at its shrunken edges, not read as
+     "subtle"); kept as its own transition rather than piggybacking on
+     the dialog's, since ::backdrop is a separate box the browser
+     manages independently. */
+  opacity: 0;
+  transition: opacity var(--duration-dialog) var(--ease-standard), overlay var(--duration-dialog) allow-discrete, display var(--duration-dialog) allow-discrete;
+}
+
+.settings-dialog[open]::backdrop {
+  opacity: 1;
+}
+
+@starting-style {
+  .settings-dialog[open]::backdrop {
+    opacity: 0;
+  }
 }
 
 .settings-form h2 {
@@ -1369,9 +1461,16 @@ button {
   margin: 0 0 var(--space-2);
 }
 
+/* Stacked, full-width buttons on mobile (readable at any label length —
+   "Reset Appearance"/"Clear Data"/"Close" were previously squeezed into
+   one row, wrapping unevenly on narrow screens) and a right-aligned row
+   again once there's room, at the same >=768px breakpoint the rest of
+   the app's desktop layout switches on (see the media query below).
+   Column order matches DOM order (never reversed) so visual order,
+   reading order, and keyboard tab order all agree. */
 .settings-actions {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
   gap: var(--space-2);
   margin-top: var(--space-4);
 }
@@ -1567,6 +1666,24 @@ button {
   margin: 0;
   font-size: var(--font-size-10);
   font-weight: var(--font-weight-bold);
+}
+
+/* Score is always the last stat in the DOM (see index.html) — spanning
+   it across both columns and setting it off with a divider reads as
+   "the total," separate from the difficulty/time/mistakes/hints
+   breakdown above it. Calm, not confetti: one accent-colored, slightly
+   larger number (the same "this is a score" treatment High Scores'
+   own list already uses), no extra motion beyond the existing
+   title-celebration animation just above. */
+.completion-stat:last-child {
+  grid-column: 1 / -1;
+  padding-top: var(--space-2);
+  border-top: var(--border-width-thin) solid var(--color-border);
+}
+
+.completion-stat:last-child dd {
+  font-size: var(--font-size-12);
+  color: var(--color-accent);
 }
 
 .share-label {
@@ -1771,6 +1888,11 @@ button {
 @media (min-width: 768px) {
   .difficulty-filter {
     grid-template-columns: repeat(4, 1fr);
+  }
+
+  .settings-actions {
+    flex-direction: row;
+    justify-content: flex-end;
   }
 
   /* Centers #app as a "floating card" via flexbox rather than the more

@@ -1031,6 +1031,83 @@ intentionally not touched.
       to visually confirm both the shake and the pulse. `sw.js`
       `CACHE_NAME` bumped `v12` → `v13`.
 
+## Phase 14m — Dialog, Overlay & Pause Screen Polish ✅ (2026-07-30)
+
+- [x] Audited first: confirmed all six `<dialog>` elements (Settings,
+      New Game's difficulty picker, Hint confirm, Puzzle Solved,
+      Replace Unfinished Game?, Clear Data?) already share one
+      `.settings-dialog` class — strong existing foundation, so a
+      single shared CSS change reaches every one of them. Confirmed
+      the pause overlay does **not** share that system (plain scrim +
+      unstyled text) and found two real, screenshot-confirmed issues:
+      Settings' 3-button action row overflowed/wrapped ugly on a
+      360px-wide screen, and no dialog/overlay had any entrance or
+      exit motion at all (native `<dialog>` show/hide is instant).
+- [x] Added a shared entrance/exit transition to `.settings-dialog`
+      (fade + a small `scale(0.96→1)`, 200ms — inside the requested
+      150-250ms range, no bounce) using `@starting-style` +
+      `transition-behavior: allow-discrete`, the standard modern CSS
+      technique for animating native `<dialog>` open *and* close with
+      zero JS — `showModal()`/`close()` calls in all six dialog
+      controller files are completely untouched. `::backdrop` gets its
+      own opacity-only fade (no transform — scaling a full-viewport box
+      would reveal its edges, not read as subtle).
+- [x] Fixed the mobile button-row overflow: `.settings-actions` now
+      stacks full-width buttons on narrow screens and becomes a
+      right-aligned row again at the existing >=768px desktop
+      breakpoint — column order matches DOM order (never reversed), so
+      visual/reading/tab order stay in agreement.
+- [x] Pause overlay restyled to match the dialog surface system: its
+      "Paused" message and Resume button now sit in a `.pause-card`
+      (panel background, `--radius-lg`, `--shadow-lg` — same tokens
+      `.settings-dialog` uses) instead of floating directly on the
+      scrim; the scrim's own opacity aligned to `0.5` to match
+      `::backdrop`; and it gets the same fade (+ card scale) transition
+      as the real dialogs, via the same `@starting-style`/
+      `allow-discrete` technique applied to a plain toggled element
+      instead of a native `<dialog>`.
+      Real accessibility gap found and fixed along the way: the pause
+      overlay never moved keyboard focus onto itself, so a keyboard
+      user's focus stayed on the now-hidden board cell behind it.
+      `js/ui/board-view.js` now focuses the Resume button the moment
+      the overlay actually becomes visible (and the existing "follow
+      the selected cell" logic already correctly restores focus to the
+      board on resume — verified, not changed).
+- [x] Completion dialog hierarchy clarified: Score (always the last
+      stat in the DOM) now spans both grid columns with a divider
+      above it and is set in a larger, accent-colored value — reusing
+      the exact same "this is a score" treatment High Scores' own list
+      already uses — so it reads as the payoff "total," calm rather
+      than flashy, with zero new statistics, confetti, or sound. The
+      existing title-celebration animation (scale+fade-in, gated to
+      `prefers-reduced-motion: no-preference`) was left exactly as-is.
+- [x] Desktop dialog width was already capped (`min(30rem, 92vw)`,
+      confirmed 480px on a 1920px-wide viewport) and mobile content was
+      already inset from screen edges (92vw + internal padding,
+      confirmed no overflow at 320px) — no changes needed there, just
+      verified.
+- [x] Reduced motion: no new gating logic anywhere — the existing
+      sitewide `@media (prefers-reduced-motion: reduce)` override
+      (forces every `transition-duration`/`animation-duration` near
+      zero) already covers the new dialog/backdrop/pause-card
+      transitions, confirmed directly rather than assumed.
+- [x] Verified: `npm test` 181/181. A new Playwright script confirmed
+      the dialog transition duration (200ms), a genuinely mid-flight
+      opacity+transform sample during open, the dialog staying rendered
+      briefly after `close()` before being removed, reduced motion
+      forcing near-zero duration, native focus-trap and ESC-close/
+      focus-return behavior intact (with a documented, `git stash`-
+      confirmed-pre-existing Chromium quirk where Tab transiently
+      touches `<body>`/the dialog element itself while wrapping —
+      never a real actionable element outside the dialog), the mobile
+      action-button stack vs. desktop row, dialog width capped on
+      desktop and inset from edges on mobile, and the pause overlay's
+      card styling + focus handoff to Resume and back to the board.
+      Screenshotted every dialog type plus the pause overlay across
+      Light/Cyber-dark/Woodgrain-dark, mobile and desktop. Full
+      existing regression suite (`final-playtest.mjs`) still passing
+      unchanged. `sw.js` `CACHE_NAME` bumped `v13` → `v14`.
+
 ## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and
