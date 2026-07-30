@@ -22,7 +22,7 @@
  * devtools -> Application -> Service Workers -> Unregister, and/or
  * Application -> Storage -> "Clear site data."
  */
-const CACHE_NAME = 'inspire-sudoku-shell-v15';
+const CACHE_NAME = 'inspire-sudoku-shell-v16';
 
 // The minimum set of files the app cannot boot without. Listed
 // explicitly and installed with cache.addAll(), which is all-or-nothing:

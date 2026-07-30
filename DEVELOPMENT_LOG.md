@@ -5,6 +5,124 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-30 — Phase 14o: Accessibility Audit
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+A full accessibility pass against a checklist covering semantic
+controls, icon-only accessible names, keyboard navigation, focus
+order, `:focus-visible` indicators, contrast, touch-target sizing,
+selected/disabled states, dialogs/overlays, decorative-content
+handling, and reduced-motion behavior — with explicit constraints: no
+product-scope changes, no color-alone communication where practical,
+never remove a focus outline without replacing it, and minimal
+targeted fixes over broad rewrites.
+
+**Audit first, before touching anything:** read every HTML/CSS/JS file
+against the checklist rather than assuming prior phases' work was
+complete. Most of it held up well — native `<dialog>` elements
+already had correct focus-trapping and `aria-labelledby`; the
+difficulty filter (`js/ui/difficulty-filter.js`) already implements
+the full WAI-ARIA tabs pattern with roving `tabindex` and arrow-key
+navigation; `getCellAriaLabel` already announces row/column/value/
+selected/conflict state on every board cell; `screens.js` already
+moves focus to each new screen's root on navigation; `.menu-sudoku-bg`
+was already `aria-hidden="true"`; there is no `outline: none` anywhere
+in `styles.css`; and the sitewide `prefers-reduced-motion: reduce`
+override already catches every animation/transition added across
+every prior phase, verified directly rather than assumed. No
+semantic-button, keyboard-navigation, focus-order, or reduced-motion
+gaps were found — the two real issues were both narrower and more
+specific than that.
+
+**Issue 1 — contrast:** wrote a live Playwright contrast script using
+the WCAG relative-luminance formula, checking every place
+`--color-accent` is used as literal text color (as opposed to a fill
+or a border/ring, both of which have different, already-audited
+requirements) against all 8 theme/mode combinations. Woodgrain and
+Paper's `--color-surface`/`--color-panel` are CSS gradients, and a
+naive `getComputedStyle().backgroundColor` read returns `transparent`
+for those (the color lives in `background-image`, a different
+sub-property) — silently producing meaningless comparisons against
+implicit black. Fixed by resolving each custom property's actual
+string value and testing every gradient stop, taking the worst case.
+That surfaced four real WCAG AA failures, all specific to Paper's dark
+mode: `.brand span` ("by Inspire") at 4.23:1 against the desktop
+`--color-panel` card (below the 4.5:1 minimum for normal text), the
+pre-existing `.highscore-score` at 3.88:1 against `--color-surface`,
+and two introduced by this project's own recent work without ever
+being checked against this exact pairing — the notes-mode number-pad
+digit text and the completion dialog's score (Phases 14l and 14m).
+
+Fixed all four by switching from `--color-accent` to
+`--color-entry-player` — a token in the same accent hue family per
+theme (literally identical to `--color-accent` in Woodgrain/light,
+closely related everywhere else) but one that was already
+purpose-built and audited specifically for colored text sitting on
+panel/surface backgrounds (it's what a player's own entered digits use
+on the board). Re-verified: every one of the 8 theme/mode
+combinations now clears 4.5:1 with a comfortable margin (Paper/dark's
+worst case moved from 3.88:1 to 5.88:1). Screenshotted the result in
+Paper/dark specifically — the corrected color reads as more legible,
+not just numerically compliant, with no loss of the theme's warm
+character.
+
+**Issue 2 — the pause overlay lacked dialog semantics and a real focus
+trap.** `#pause-overlay` is deliberately not a native `<dialog>` (it
+has to appear instantly on a backgrounded tab or an Escape press,
+without `showModal()`'s machinery), which meant it never got any of
+`role="dialog"`, `aria-modal="true"`, or an accessible name — and,
+more concretely, nothing stopped a keyboard user from tabbing straight
+through the Resume button into the board underneath, which is
+supposed to read (and now formally claims, via `aria-modal`) as inert
+while paused. Fixed with two minimal, targeted changes:
+- `index.html`: added `role="dialog" aria-modal="true" aria-label="Game paused"` to `#pause-overlay`.
+- `js/ui/controls.js`: since Resume is the overlay's only focusable
+  element and already receives focus the instant it opens (a Phase
+  14m fix), a single `keydown` listener that calls
+  `event.preventDefault()` on `Tab` is a complete, fully-correct trap
+  for this specific single-control case — no generic multi-element
+  trap machinery needed.
+
+Confirmed every existing interaction still works exactly as before:
+clicking Resume, clicking the backdrop, Escape to toggle pause,
+pressing Enter on the already-focused Resume button, and — importantly
+— that the new Tab-blocking listener is scoped tightly enough that
+Settings-dialog keyboard navigation (a completely separate, unrelated
+native `<dialog>`) is unaffected.
+
+**Deliberately left unchanged, and why:** the board's "related" and
+"matching-number" cell highlights (Phase 14k) still rely on hue/
+luminance alone with no structural cue, unlike the selected cell
+(accent ring) and conflicts (error-colored ring). Not fixed here —
+the information they convey (row/column/box membership, which cells
+share a digit) is independently available through non-color means
+already on screen (grid position, the literal digit text itself), and
+Phase 14k's explicit brief was to keep exactly these two states
+visually subordinate/subtle relative to the selected cell's ring.
+Adding rings to them now would reverse that considered, previously-
+requested design decision and add exactly the kind of visual weight
+this task's own "preserve existing visual identity" and "minimal
+targeted changes" constraints argue against. Recorded here as a
+deliberate, reasoned exception rather than a silently-skipped gap.
+
+**Verification:** `npm test` 181/181. The corrected 8-combination
+contrast script passes clean. A new Playwright script confirmed the
+pause overlay's ARIA attributes, that focus starts on and stays
+trapped on the Resume button through repeated Tab and Shift+Tab, and
+that every existing way to resume the game still works with focus
+correctly landing back on the selected board cell afterward. Re-ran
+the full existing regression suite built up across every prior Phase
+14 sub-phase — the playtest, grid-gap/centering audit, menu-background
+suite, board-state suite, number-entry feedback suite, and dialog
+suite — all still passing with zero regressions. `sw.js` `CACHE_NAME`
+bumped `v15` → `v16`.
+
+**Files changed:** `index.html`, `styles.css`, `js/ui/controls.js`,
+`sw.js`, `TASKS.md`, `DEVELOPMENT_LOG.md`.
+
+---
+
 ## 2026-07-30 — Phase 14n: Responsive Pass — Menu & Gameplay UI
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`

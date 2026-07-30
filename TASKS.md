@@ -1162,6 +1162,92 @@ intentionally not touched.
       suite, and dialog suite — all still passing with zero
       regressions. `sw.js` `CACHE_NAME` bumped `v14` → `v15`.
 
+## Phase 14o — Accessibility Audit ✅ (2026-07-30)
+
+- [x] Full checklist audit (semantic controls, icon-only accessible
+      names, keyboard nav, focus order, `:focus-visible`, contrast,
+      touch targets, selected/disabled states, dialogs/overlays,
+      decorative-content handling, reduced motion) against every
+      HTML/CSS/JS file — found the app already solid on most fronts
+      from prior phases (native `<dialog>` focus trap + `aria-
+      labelledby` on all six dialogs; the difficulty filter's full
+      WAI-ARIA tabs pattern with roving tabindex; `getCellAriaLabel`
+      announcing row/column/value/selected/conflict state on every
+      board cell; `screens.js` moving focus to each new screen's root
+      on navigation; a comprehensive `getCellAriaLabel`/`aria-live`
+      story on every dynamic status region; `.menu-sudoku-bg` already
+      `aria-hidden="true"`; zero `outline: none` anywhere in
+      `styles.css`; the sitewide `prefers-reduced-motion: reduce`
+      override already catching every transition/animation added
+      across every prior phase). No semantic-button, keyboard, focus-
+      order, or reduced-motion gaps found.
+- [x] Wrote a live-contrast Playwright script (WCAG relative-luminance
+      formula, worst-case gradient-stop testing for Woodgrain/Paper's
+      gradient surfaces — a plain `getComputedStyle().backgroundColor`
+      read returns transparent for those and silently produces bogus
+      readings) covering every `--color-accent`-as-text usage in the
+      app across all 8 theme/mode combinations. Found 4 real WCAG AA
+      failures, all in Paper/dark specifically: `.brand span` ("by
+      Inspire") at 4.23:1 against the desktop `--color-panel` card,
+      the pre-existing `.highscore-score` at 3.88:1 against
+      `--color-surface`, and two from this project's own recent work —
+      the notes-mode number-pad digit text and the completion dialog's
+      score — both introduced in Phases 14l/14m without ever being
+      checked against this exact pairing.
+- [x] Fixed by switching all four from `--color-accent` (calibrated
+      for fills/borders/focus rings) to `--color-entry-player` — a
+      token in the same accent hue family per theme (literally
+      identical in Woodgrain/light) but already purpose-built and
+      audited for colored text on panel/surface backgrounds. Re-
+      verified: comfortable 4.5:1+ margin in all 8 combinations,
+      visual identity preserved (same brand hue, just the
+      already-established "safe for text" shade of it).
+- [x] Found and fixed a real dialogs/overlays gap: `#pause-overlay`
+      isn't a native `<dialog>` (it needs to appear instantly on a
+      backgrounded tab or Escape press, without the modal `showModal()`
+      machinery), so it never had any of `role="dialog"`,
+      `aria-modal="true"`, or an accessible name — nor any real
+      keyboard focus trap, despite visually blocking the board. Added
+      `role="dialog" aria-modal="true" aria-label="Game paused"` to the
+      element, plus a minimal, fully-correct trap: since Resume is the
+      overlay's only focusable element and already receives focus the
+      instant it opens (a Phase 14m fix), blocking `Tab`/`Shift+Tab`
+      from moving focus at all is a complete trap for this
+      single-control case.
+- [x] No changes to product scope, functionality, or visual identity —
+      confirmed every existing interaction (click Resume, click the
+      backdrop, Escape to toggle pause, Enter on the focused Resume
+      button, Settings-dialog Tab navigation unaffected by the new
+      trap) still works exactly as before.
+- [x] Considered and deliberately left unchanged: the board's
+      "related"/"matching-number" cell tints (Phase 14k) rely on hue/
+      luminance alone with no structural cue, unlike the selected cell
+      (which has an accent ring) and conflicts (an error-colored ring).
+      Not fixed here — the information they convey (row/column/box
+      membership, matching digits) is independently available through
+      non-color means already on screen (grid position, the literal
+      digit text), and Phase 14k's explicit brief was to keep these
+      two states deliberately subordinate/subtle to the selected
+      cell's ring; adding rings to them now would reverse that
+      considered design decision and add visual weight this task's
+      "preserve existing visual identity" and "minimal targeted
+      changes" constraints argue against. Documented as a reasoned
+      exception, not an oversight.
+- [x] Verified: `npm test` 181/181. The corrected 8-combination
+      contrast script passes clean. A new Playwright script confirmed
+      the pause-overlay's ARIA attributes, that focus starts on and
+      stays trapped on Resume through repeated Tab/Shift+Tab, and that
+      every existing way to resume (click button, click backdrop,
+      Escape, Enter-on-focused-button) still works, with focus
+      correctly returning to the board afterward. Full existing
+      regression suite — the Phase 14 playtest, grid-gap/centering
+      audit, menu-background suite, board-state suite, number-entry
+      feedback suite, and dialog suite — all still passing with zero
+      regressions. Screenshotted the corrected colors in Paper/dark
+      (where the failures were) to confirm they read as more legible,
+      not just numerically compliant, with no loss of the theme's warm
+      character. `sw.js` `CACHE_NAME` bumped `v15` → `v16`.
+
 ## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and
