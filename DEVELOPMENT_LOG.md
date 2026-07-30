@@ -5,6 +5,102 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-30 — Phase 14e: Animated Sudoku-Digit Menu Background
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+A fifth direct feature request: a subtle, animated Sudoku-digit texture
+drifting behind the main menu, and only the main menu, with a fairly
+detailed spec (opacity range, speed range, seamless looping, edge fade,
+reduced-motion handling, mobile performance, no leaking into gameplay).
+
+**Design decisions and why:**
+
+- **CSS `mask-image` on one element, not a DOM grid of digits.** The
+  spec asks for both "cover the screen with a drifting pattern" and
+  "limit the number of rendered elements for mobile performance" —
+  those pull in opposite directions if you build it as individual digit
+  elements (covering a diagonally-scrolling viewport with headroom for
+  the drift needs dozens to hundreds of them). A single element with a
+  `mask-image` sidesteps the conflict entirely: `mask-repeat: repeat`
+  tiles a small SVG pattern natively and pixel-perfectly, so the DOM
+  cost is fixed at 2 elements regardless of how much area it covers.
+- **The mask only carries shape, not color.** The referenced SVG draws
+  the digits in plain black, but what actually reaches the screen is
+  `background-color: var(--color-text-secondary)` clipped through that
+  shape — so the pattern automatically follows whichever theme is
+  active (it's the same "ink" token already used for the real board's
+  grid lines) without needing a colored variant per theme.
+- **Seamless loop by construction.** The animation translates the
+  pattern by *exactly* one tile period (`--sbg-tile`, 420px) diagonally
+  down-left. Since the mask repeats infinitely across the (deliberately
+  oversized-by-one-tile) element, the frame at "moved by one full tile"
+  is pixel-identical to the frame at "moved by zero" — the loop doesn't
+  need any crossfade or special-casing, the two endpoints just happen
+  to render the same.
+- **Lives inside `#screen-menu`'s own DOM subtree**, as the first two
+  children, rather than as a separate globally-mounted element toggled
+  by JS. This app already has a single, well-tested mechanism for
+  "only show this on one screen" — `.screen[hidden] { display: none }`
+  — and putting the background inside that screen's own subtree gets
+  the exact same guarantee for free: it structurally cannot render
+  while any other screen (including the game screen) is active, with
+  zero new JS logic to get wrong.
+
+**Real bug found and fixed during implementation.** The pattern was
+completely invisible on first build — not just "hard to see because
+it's subtle," confirmed by temporarily boosting `--sbg-opacity` to 0.6
+for debugging and still seeing nothing. Root cause: `.menu-sudoku-bg`
+had `z-index: -1` (needed to paint it behind `#screen-menu`'s normal-
+flow children — position:absolute elements otherwise paint *above*
+static content by default, regardless of DOM order), but `#screen-menu`
+only had `position: relative` set, not an explicit `z-index`. Per the
+CSS stacking-context rules, `position: relative` alone does *not*
+establish a new stacking context — only `position` combined with a
+non-`auto` `z-index` does. Without that, the `-1` had no local
+"stacking floor" to stop at, so it escaped upward past every ancestor
+(`#app`, `body`, ...) looking for the nearest one that *did* establish a
+stacking context, and ended up painting behind the very first opaque
+background it found — invisible. Reproduced this in isolation (a
+minimal standalone HTML page replicating just the stacking structure)
+before touching the real CSS, confirmed the exact same failure, then
+confirmed the fix (`#screen-menu { position: relative; z-index: 0; }`)
+resolved it in that isolated case before applying it to the app.
+
+**Checks run:**
+
+- Isolated visual verification of the SVG tile pattern (rendered
+  standalone, 2x2 tiling) before wiring it into the app, to confirm the
+  loose-Sudoku-with-blanks look and seamless tiling independent of any
+  app-integration bugs.
+- Full restriction test: confirmed via `getBoundingClientRect()` (not
+  `getComputedStyle().display`, which reports an element's own resolved
+  display regardless of an ancestor's `display: none` and would have
+  given a false pass here) that the background renders zero-size on the
+  Start screen, has no presence inside Statistics/High Scores/Game
+  screens' subtrees, and that `#screen-menu` itself is `display: none`
+  (unmounted from rendering) the instant gameplay begins.
+- Confirmed the New Game button is still the actual hit-test target at
+  its own coordinates — the background never intercepts clicks.
+- Confirmed the animation is genuinely running (sampled the computed
+  `transform` matrix twice, 2 seconds apart, and it changed) and moving
+  in the correct down-left direction (translateX growing more negative,
+  translateY growing more positive).
+- Confirmed `prefers-reduced-motion: reduce` sets `animationName: none`
+  and the computed transform stops changing, while opacity stays > 0
+  (a static pattern, not a removed one, per the request's own two
+  allowed options).
+- Confirmed exactly 2 elements are added to the DOM regardless of
+  viewport size, and no page overflow is introduced (desktop and
+  320px).
+- Re-ran the full regression playtest suite, the real-audio crossfade/
+  recovery checks, and the grid-gap/centering audit from prior phases:
+  all still passing, unaffected by this round's changes.
+- `npm test`: 181/181. `node --check` on every JS file: clean.
+- `sw.js` `CACHE_NAME` bumped `v5` → `v6`.
+
+---
+
 ## 2026-07-30 — Phase 14d: Mobile Music-Stops-Unexpectedly Fix
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`

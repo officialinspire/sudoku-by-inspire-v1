@@ -604,6 +604,69 @@ diagnosed and fixed from first principles instead).
       Phase 14 playtest suite passing, zero console/page errors.
       `sw.js` `CACHE_NAME` bumped `v4` → `v5`.
 
+## Phase 14e — Animated Sudoku-Digit Menu Background ✅ (2026-07-30)
+
+A fifth direct feature request: a subtle animated Sudoku-digit texture
+behind the main menu only.
+
+- [x] Added `.menu-sudoku-bg` (edge-fade wrapper) and
+      `.menu-sudoku-bg__pattern` (the actual drifting tile) as the first
+      children of `#screen-menu` in `index.html` — living inside the
+      menu screen's own subtree, not a globally-mounted element, so it's
+      shown/hidden by the exact same `.screen[hidden] { display: none }`
+      rule that already governs every screen transition. No JS
+      mount/unmount logic needed or added; verified via
+      `getBoundingClientRect()` (not `getComputedStyle`, which doesn't
+      reflect an ancestor's `display: none`) that it renders zero-size
+      on every other screen and during gameplay.
+- [x] Single-element CSS `mask-image` pattern (a hand-built, seamlessly-
+      tileable inline SVG data URI of loose Sudoku digits with ~45%
+      blank cells) rather than a DOM grid of individual digits — stays
+      at exactly 2 elements total regardless of viewport size, since
+      `mask-repeat` tiles natively. The mask only defines shape; actual
+      color comes from `background-color: var(--color-text-secondary)`
+      (the same "ink" token the real board's grid lines use), so it
+      auto-matches every theme with one image, no per-theme variants.
+- [x] Diagonal down-left drift via `transform: translate()`, animated by
+      *exactly* one tile period (`--sbg-tile`) so the loop is seamless
+      by construction — verified the CSS `transform` matrix genuinely
+      changes over a real 2s window (animation is live, not stalled).
+- [x] Soft edge fade via a second, independent `mask-image` (radial
+      gradient) on the outer wrapper.
+- [x] `@media (prefers-reduced-motion: reduce)` disables the animation
+      entirely, leaving a static faint pattern rather than removing it
+      or leaving it moving — verified both that `animationName` becomes
+      `none` and that the computed `transform` genuinely stops changing
+      under that media query.
+- [x] Tunable via 3 CSS custom properties scoped to `.menu-sudoku-bg`:
+      `--sbg-tile` (420px, spacing), `--sbg-opacity` (0.06, the 4-8%
+      requested range), `--sbg-duration` (32s, the 25-40s requested
+      range).
+- [x] **Real bug found and fixed during implementation:** the pattern
+      was completely invisible at first (confirmed empirically, not
+      just by not-noticing-it — boosted opacity to 60% for debugging
+      and it still showed nothing). Root cause: `z-index: -1` was set
+      on `.menu-sudoku-bg` to paint it behind `#screen-menu`'s normal-
+      flow children, but `#screen-menu` only had `position: relative`
+      — without an explicit `z-index` too, an element doesn't establish
+      its own stacking context, so the `-1` had no local floor to stop
+      at and escaped upward past every ancestor looking for one,
+      landing behind the very first opaque background it found and
+      disappearing entirely. Reproduced in isolation before fixing;
+      fixed by adding `z-index: 0` to `#screen-menu` alongside its
+      `position: relative`, which correctly scopes the child's `-1`
+      to just below `#screen-menu`'s own (transparent) box.
+- [x] `pointer-events: none`, `user-select: none`, `aria-hidden="true"`
+      on the outer wrapper (covers the whole subtree for assistive
+      tech); verified the New Game button is still the actual hit-test
+      target at its own coordinates (background never intercepts
+      clicks).
+- [x] Verified: 2 total elements added (mobile-performance requirement),
+      no page overflow introduced (desktop and 320px), full regression
+      playtest suite still passing, real-audio and grid-line checks
+      from prior phases unaffected. `sw.js` `CACHE_NAME` bumped
+      `v5` → `v6`.
+
 ## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and
