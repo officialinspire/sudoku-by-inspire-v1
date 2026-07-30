@@ -5,6 +5,84 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-30 — Phase 14i: Main Menu Typography & Hierarchy Refinement
+
+**Branch:** `claude/sudoku-inspire-setup-2jpef2`
+
+A CSS-only refinement of the title (Start) screen and main menu,
+requested explicitly as typography/layout polish with hard constraints:
+no navigation or feature changes, no new external fonts, every existing
+menu action preserved, and responsive sizing via `clamp()` or
+equivalent across small phones through desktop.
+
+**Audit first:** screenshotted the Start and Menu screens at five
+viewport sizes (320×568, 390×844, 768×1024, 1280×800, 1920×1080) before
+touching any CSS. Found two real issues: (1) the Inspire logo on the
+Start screen (`width: min(70%, 16rem)`, up to 256px) visually
+outweighed the "Sudoku by Inspire" title beneath it, inverting the
+hierarchy the request asked for (app title should outrank INSPIRE
+branding); and (2) a grep across the whole stylesheet turned up exactly
+one `line-height` declaration in the entire file (unrelated, on note
+digits) — heading and prompt text had no explicit line-height at all.
+
+**Typography changes (`styles.css`):**
+- `.brand` (title): font-size changed from a fixed `--font-size-13`
+  token (with a desktop-only media-query bump to `--font-size-14`) to a
+  single fluid `clamp(var(--font-size-13), 1.7rem + 1.3vw,
+  var(--font-size-14))` — both ends still anchored to the existing
+  numbered type scale, just interpolated smoothly between a 360px and
+  960px viewport instead of jumping at one breakpoint. Added
+  `line-height: 1.1` (tight/confident, previously unset).
+- `.brand--compact` (the menu screen's smaller title): same treatment,
+  `clamp(var(--font-size-11), 1.2rem + 0.5vw, var(--font-size-12))`.
+- `.start-prompt`: font-size changed to `clamp(var(--font-size-7),
+  0.85rem + 0.4vw, var(--font-size-9))`, plus `line-height: 1.4` for
+  comfortable reading — as a side effect this also let the prompt text
+  fit on one line at 320px width instead of wrapping to two.
+- `.start-logo`: shrunk from `min(70%, 16rem)` to `clamp(6rem, 22vw,
+  9rem)` (max 144px vs. the old 256px) so it reads as a supporting
+  brand mark under the title, not a competing graphic — restores the
+  requested hierarchy order (title > INSPIRE branding > primary action
+  > secondary controls).
+- `.menu-nav` max-width: changed from a fixed 20rem (mobile) / 24rem
+  (desktop, via media query) to `clamp(18rem, 60vw, 22rem)`, keeping
+  the button column fluid while capping it slightly tighter on desktop
+  than before.
+- Removed the now-redundant `.brand { font-size }` and `.menu-nav {
+  max-width }` overrides from inside `@media (min-width: 768px)`, since
+  the new clamp() expressions already cover that range. Left every
+  other rule in that block (`.difficulty-filter`, `body`, `#app`,
+  `.screen`) completely untouched.
+- Deliberately did **not** apply clamp() to `.menu-nav button` font-size
+  (interactive controls read better with fixed, predictable text than
+  fluid display-type scaling) and did **not** touch `.brand::after` (the
+  small fixed accent underline doesn't need to scale with the heading).
+- No HTML changes. No new fonts — everything still uses the existing
+  system font stack and the existing `--font-size-*` token scale.
+
+**Verification:**
+- Re-screenshotted the Start and Menu screens at the same five viewport
+  sizes; visually confirmed the improved hierarchy (logo now reads as
+  a supporting mark, title is the dominant element) and no leftover
+  dead space or overflow.
+- Playwright checks at all five sizes: zero horizontal or vertical page
+  overflow (`document.documentElement.scrollWidth/Height` vs.
+  `clientWidth/Height`), and all five menu buttons (`btn-new-game`,
+  `btn-continue-game`, `btn-statistics`, `btn-highscores`,
+  `btn-settings`) present with correct IDs — confirms zero navigation/
+  feature regression.
+- `npm test`: 181/181 passing.
+- Full Phase 14 regression playtest (`final-playtest.mjs`) and the
+  menu-background restriction/animation suite (`sbg-verify.mjs`): all
+  checks passing, zero console/page errors.
+- `sw.js` `CACHE_NAME` bumped `v9` → `v10` so existing installs pick up
+  the change.
+
+**Files changed:** `styles.css`, `sw.js`, `TASKS.md`,
+`DEVELOPMENT_LOG.md`.
+
+---
+
 ## 2026-07-30 — Phase 14h: Light/Dark Palette Polish
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`

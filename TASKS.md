@@ -833,6 +833,40 @@ intentionally not touched.
       in both modes, desktop and mobile. `sw.js` `CACHE_NAME` bumped
       `v8` → `v9`.
 
+## Phase 14i — Main Menu Typography & Hierarchy Refinement ✅ (2026-07-30)
+
+- [x] `.brand` (title) font-size converted from a fixed token +
+      desktop-only media-query override to a single fluid
+      `clamp(var(--font-size-13), 1.7rem + 1.3vw, var(--font-size-14))`
+      expression, anchored to the existing type-scale tokens at both
+      ends; added explicit `line-height: 1.1` (previously unset).
+- [x] `.brand--compact` (menu-screen title) similarly converted to
+      `clamp(var(--font-size-11), 1.2rem + 0.5vw, var(--font-size-12))`.
+- [x] `.start-logo` shrunk from `min(70%, 16rem)` to
+      `clamp(6rem, 22vw, 9rem)` so it reads as a supporting brand mark
+      under the title rather than competing with it — restores the
+      requested hierarchy order (app title > INSPIRE branding).
+- [x] `.start-prompt` font-size converted to
+      `clamp(var(--font-size-7), 0.85rem + 0.4vw, var(--font-size-9))`
+      with `line-height: 1.4` added for comfortable reading.
+- [x] `.menu-nav` max-width converted from fixed 20rem (mobile) / 24rem
+      (desktop, via media query) to a single fluid
+      `clamp(18rem, 60vw, 22rem)`, keeping buttons from growing
+      button-bar-wide on desktop.
+- [x] Removed the now-redundant `.brand{font-size}` and
+      `.menu-nav{max-width}` overrides from the `@media (min-width:
+      768px)` block; every other rule in that block (`.difficulty-
+      filter`, `body`, `#app`, `.screen`) left untouched.
+- [x] No HTML changes, no navigation/feature changes — every menu
+      action (New Game, Continue Game, Statistics, High Scores,
+      Settings) preserved exactly.
+- [x] Verified across 320×568, 390×844, 768×1024, 1280×800, and
+      1920×1080: zero horizontal/vertical page overflow, all 5 menu
+      buttons present with correct IDs at every size. Full regression:
+      `npm test` 181/181, full Phase 14 playtest suite, and the menu-
+      background restriction/animation tests all still passing
+      unchanged. `sw.js` `CACHE_NAME` bumped `v9` → `v10`.
+
 ## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and

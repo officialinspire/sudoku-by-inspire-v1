@@ -570,8 +570,13 @@ button {
 }
 
 .brand {
-  font-size: var(--font-size-13);
+  /* Fluid title: interpolates from the --font-size-13 token at a 360px
+     viewport up to --font-size-14 at 960px, then clamps flat outside
+     that range — so it stays anchored to the existing type scale
+     instead of introducing an arbitrary one-off size. */
+  font-size: clamp(var(--font-size-13), 1.7rem + 1.3vw, var(--font-size-14));
   font-weight: var(--font-weight-extrabold);
+  line-height: 1.1;
   letter-spacing: var(--letter-spacing-tight);
   margin: 0;
 }
@@ -581,7 +586,7 @@ button {
 }
 
 .brand--compact {
-  font-size: var(--font-size-11);
+  font-size: clamp(var(--font-size-11), 1.2rem + 0.5vw, var(--font-size-12));
 }
 
 /* A small accent-colored rule under every screen's title (Start, Menu,
@@ -599,13 +604,18 @@ button {
 }
 
 .start-logo {
-  width: min(70%, 16rem);
+  /* Sized as a supporting brand mark, not a dominant graphic — the
+     "Sudoku by Inspire" title (.brand) is the primary hierarchy
+     element, so the logo above it stays smaller than the title's own
+     footprint at every viewport width. */
+  width: clamp(6rem, 22vw, 9rem);
   margin: 0 auto var(--space-2);
 }
 
 .start-prompt {
   color: var(--color-text-secondary);
-  font-size: var(--font-size-8);
+  font-size: clamp(var(--font-size-7), 0.85rem + 0.4vw, var(--font-size-9));
+  line-height: 1.4;
   margin: 0;
 }
 
@@ -647,7 +657,10 @@ button {
   flex-direction: column;
   gap: var(--space-3);
   width: 100%;
-  max-width: 20rem;
+  /* Fluid width instead of a hard mobile/desktop breakpoint jump — keeps
+     controls from ever growing button-bar-wide on desktop while still
+     using the available width on narrow phones. */
+  max-width: clamp(18rem, 60vw, 22rem);
 }
 
 .menu-nav button {
@@ -1568,14 +1581,6 @@ button {
 /* ---------- Desktop ---------- */
 
 @media (min-width: 768px) {
-  .brand {
-    font-size: var(--font-size-14);
-  }
-
-  .menu-nav {
-    max-width: 24rem;
-  }
-
   .difficulty-filter {
     grid-template-columns: repeat(4, 1fr);
   }
