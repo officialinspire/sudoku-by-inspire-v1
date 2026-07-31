@@ -5,6 +5,72 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-31 — Number Pad: Completed-Digit De-emphasis
+
+**Branch:** `claude/number-selector-completion-jmqlpr`
+
+A targeted post-v1 enhancement (not one of the numbered `TASKS.md`
+phases, so no phase item was checked off — this session is logged on its
+own): reward a player for finishing all 9 correct instances of a digit
+without shrinking or removing the number pad, which must stay a fixed
+5+4 grid per `CLAUDE.md`.
+
+**Completion detection (`js/game-state.js`):** added `computeCompletedDigits`,
+a pure function alongside the existing `computeConflicts`, both derived
+fresh on every `getState()` call rather than cached — same pattern, so it
+can never go stale after an erase/undo. For each digit 1-9 it counts
+cells where either the puzzle's *given* equals that digit (always
+correct by construction) or a player *entry* equals both the digit and
+`solution[i]` at that cell — a wrong guess that merely looks like the
+digit never counts. A digit is "complete" at exactly 9. Exposed as
+`state.completedDigits` (a `Set`), the same shape as `state.conflicts`.
+
+**UI (`js/ui/board-view.js`):** each render loop over the number pad now
+also reads `state.completedDigits` and, per button, toggles a new
+`.is-complete` class, sets the native `disabled` attribute (so a click
+can't fire and it drops out of tab order — this is what makes it
+actually stop being selectable, not just look different), and swaps in
+an `aria-label` ("`N`, all placed") for screen readers, falling back to
+the plain digit text otherwise.
+
+**Styling (`styles.css`):** `.number-btn.is-complete` dims via `opacity:
+0.5`, switches the digit's own text to the existing muted
+`--color-text-secondary` token (never a brighter color — the goal is
+*less* emphasis), and adds a thin `--color-success`-tinted border as the
+"you got this one" cue (the same token `.status-chip--success` already
+uses elsewhere, kept to a border only, never text, so no new contrast
+audit was needed). Doubled the selector with
+`.number-pad.is-notes-mode .number-btn.is-complete` so the dimmed look
+always wins over the higher-specificity notes-mode border rule. Added
+`opacity` to `.number-btn`'s own transition-property list (on top of the
+shared button transition block) so the dim fades over the existing
+`--duration-fast` token (200ms — inside the requested 150-250ms window,
+already zeroed globally under `prefers-reduced-motion: reduce`). No new
+`@keyframes`, so there's no flashing or bouncing to rule out — it's a
+plain property transition.
+
+**Tests:** added a `completedDigits` suite to `js/game-state.test.js` (6
+cases: exactly-9-correct marks complete, fewer-than-9 doesn't, a wrong
+entry that looks like the digit never counts, erasing a correct instance
+un-completes it, undo un-completes it, and no active game means no digit
+is ever complete). Full suite: 187/187 passing (`npm test`).
+
+**Manual verification:** ran the real app in headless Chromium
+(Playwright) rather than relying on tests alone — started a game, drove
+`game-state.js`'s exported functions directly (same module instance the
+page already loaded) to correctly fill all 9 occurrences of digit 1,
+confirmed the "1" button became `disabled` with class `is-complete` and
+the new `aria-label` while "2" stayed untouched, then erased one correct
+instance and confirmed the button reverted to normal. Screenshotted the
+completed state in the default theme, Dark mode, Woodgrain, and
+Cyber/light — the dimmed "1" button reads clearly and stays legible in
+every combination checked.
+
+**Files changed:** `js/game-state.js`, `js/game-state.test.js`,
+`js/ui/board-view.js`, `styles.css`.
+
+---
+
 ## 2026-07-30 — Phase 14p: Final Polish & Performance Audit
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`

@@ -534,6 +534,13 @@ button {
   transition-timing-function: var(--ease-standard);
 }
 
+/* .number-btn only: adds `opacity` on top of the shared list above, for
+   the completed-digit dim (.is-complete) to fade in/out over the same
+   --duration-fast rather than snapping instantly. */
+.number-btn {
+  transition-property: background-color, color, border-color, box-shadow, transform, opacity;
+}
+
 /* Hover is gated behind (hover: hover) and (pointer: fine) — without
    that, touch browsers apply :hover on tap and it can stay "stuck"
    until the next unrelated tap, which reads as a visual glitch rather
@@ -1314,6 +1321,28 @@ button {
   border-style: dashed;
   border-color: var(--color-accent);
   color: var(--color-entry-player);
+}
+
+/* A digit with all 9 correct instances already placed: dimmed and
+   read-only rather than removed, so the keypad layout never reshuffles
+   mid-game. --color-success ties the cue to "this one's correct" (same
+   token the rest of the UI already uses for correctness, e.g.
+   .status-chip--success) without shouting — here it's only a thin
+   border, never the digit's own text color, which stays on the already
+   muted --color-text-secondary token instead. Opacity does the actual
+   "dim," transitioning over --duration-fast (200ms, inside the
+   requested 150-250ms range) via the opacity addition below; disabled
+   already drops it out of the shared hover/active rules further up, so
+   no separate "don't highlight on hover" override is needed here.
+   Doubled up with the .is-notes-mode combination so this always wins
+   over the dashed notes-mode border regardless of selector order —
+   a completed digit reads the same whether or not notes mode is on. */
+.number-btn.is-complete,
+.number-pad.is-notes-mode .number-btn.is-complete {
+  opacity: 0.5;
+  color: var(--color-text-secondary);
+  border-color: var(--color-success);
+  cursor: not-allowed;
 }
 
 /* ---------- Pause overlay ----------

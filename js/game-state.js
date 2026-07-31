@@ -155,12 +155,18 @@ export function resumeTimer(reason) {
 /**
  * Returns a full, ready-to-render snapshot: the raw state fields plus
  * `conflicts` (a Set of cell indices whose player entry currently
- * clashes with a peer) and the live-computed `elapsedSeconds`, both
- * derived fresh every call rather than cached on `state` — cheap and
- * impossible to let go stale, which a cached copy could.
+ * clashes with a peer), `completedDigits` (a Set of digits 1-9 with all
+ * 9 correct instances placed), and the live-computed `elapsedSeconds` —
+ * all three derived fresh every call rather than cached on `state`,
+ * cheap and impossible to let go stale, which a cached copy could.
  */
 export function getState() {
-  return { ...state, conflicts: computeConflicts(state), elapsedSeconds: currentElapsedSeconds() };
+  return {
+    ...state,
+    conflicts: computeConflicts(state),
+    completedDigits: computeCompletedDigits(state),
+    elapsedSeconds: currentElapsedSeconds(),
+  };
 }
 
 function mergedBoard(s) {
@@ -209,6 +215,34 @@ function computeConflicts(s) {
     }
   }
   return conflicts;
+}
+
+/**
+ * Digits (1-9) that have all 9 correct instances placed on the board —
+ * a given always counts (it's correct by construction), a player entry
+ * only counts if it actually matches the solution at that cell. A wrong
+ * entry that merely *looks* like the digit doesn't count toward it, so
+ * the number pad's "you're done with this digit" cue never lies. Purely
+ * derived from `s`, same pattern as computeConflicts, so it's always
+ * fresh off getState() and never goes stale after an erase/undo.
+ */
+function computeCompletedDigits(s) {
+  const completed = new Set();
+  if (!s.puzzle) return completed;
+  const counts = new Array(10).fill(0);
+  for (let i = 0; i < BOARD_SIZE; i++) {
+    const given = s.puzzle[i];
+    if (given !== 0) {
+      counts[given] += 1;
+      continue;
+    }
+    const entry = s.entries[i];
+    if (entry !== 0 && entry === s.solution[i]) counts[entry] += 1;
+  }
+  for (let digit = 1; digit <= 9; digit++) {
+    if (counts[digit] === 9) completed.add(digit);
+  }
+  return completed;
 }
 
 /**

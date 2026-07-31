@@ -263,6 +263,85 @@ describe('completion', () => {
   });
 });
 
+describe('completedDigits', () => {
+  // All 9 cells (across the whole board, not one row/col/box) whose
+  // solution value is `digit` — the fixture's index 0 given may or may
+  // not be one of them.
+  function cellsForDigit(digit) {
+    const indices = [];
+    for (let i = 0; i < 81; i++) if (solution[i] === digit) indices.push(i);
+    return indices;
+  }
+
+  test('placing all 9 correct instances of a digit marks it complete', () => {
+    const digit = solution[1]; // any digit other than index 0's given works
+    for (const index of cellsForDigit(digit)) {
+      if (index === 0) continue; // already a given
+      selectCell(index);
+      applyNumberInput(solution[index]);
+    }
+    assert.equal(getState().completedDigits.has(digit), true);
+  });
+
+  test('a digit with fewer than 9 correct instances is not complete', () => {
+    const digit = solution[1];
+    const indices = cellsForDigit(digit).filter((i) => i !== 0);
+    for (const index of indices.slice(0, -1)) {
+      selectCell(index);
+      applyNumberInput(solution[index]);
+    }
+    assert.equal(getState().completedDigits.has(digit), false);
+  });
+
+  test('a wrong entry that merely looks like the digit does not count toward it', () => {
+    // Fill every occurrence but one correctly, then put a wrong guess of
+    // that digit in an unrelated empty cell (not the last true instance) —
+    // it should never push the count to 9.
+    const digit = solution[1];
+    const indices = cellsForDigit(digit).filter((i) => i !== 0);
+    for (const index of indices.slice(0, -1)) {
+      selectCell(index);
+      applyNumberInput(solution[index]);
+    }
+    const wrongIndex = solution.findIndex((value, i) => i !== 0 && value !== digit && solution[i] !== digit);
+    selectCell(wrongIndex);
+    applyNumberInput(digit); // guaranteed wrong here since solution[wrongIndex] !== digit
+    assert.equal(getState().completedDigits.has(digit), false);
+  });
+
+  test('erasing a correct instance restores the normal (incomplete) state', () => {
+    const digit = solution[1];
+    for (const index of cellsForDigit(digit)) {
+      if (index === 0) continue;
+      selectCell(index);
+      applyNumberInput(solution[index]);
+    }
+    assert.equal(getState().completedDigits.has(digit), true);
+
+    const lastIndex = cellsForDigit(digit).find((i) => i !== 0);
+    selectCell(lastIndex);
+    eraseSelectedCell();
+    assert.equal(getState().completedDigits.has(digit), false);
+  });
+
+  test('undoing a correct instance restores the normal (incomplete) state', () => {
+    const digit = solution[1];
+    for (const index of cellsForDigit(digit)) {
+      if (index === 0) continue;
+      selectCell(index);
+      applyNumberInput(solution[index]);
+    }
+    assert.equal(getState().completedDigits.has(digit), true);
+    undo();
+    assert.equal(getState().completedDigits.has(digit), false);
+  });
+
+  test('no game in progress means no digit is ever complete', () => {
+    resetToIdle();
+    assert.equal(getState().completedDigits.size, 0);
+  });
+});
+
 describe('eraseSelectedCell', () => {
   test('clears an entry and its notes', () => {
     selectCell(1);

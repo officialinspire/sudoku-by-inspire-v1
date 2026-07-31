@@ -105,8 +105,20 @@ function render(state) {
   // the same digit is easy to spot both on the board and on the pad),
   // and mark the whole pad while notes mode is active so its buttons
   // read as "adding a pencil mark" rather than "entering the answer."
+  // A digit with all 9 correct instances placed (state.completedDigits,
+  // computed fresh off getState() every render) gets dimmed and disabled
+  // instead of removed — the keypad layout stays fixed, but the button
+  // stops reading as something worth pressing. Disabling it natively
+  // (rather than just a CSS look) also means a click can't fire and it
+  // drops out of tab order, matching "no longer appear selectable."
   for (const btn of numberButtons) {
-    btn.classList.toggle('is-current-value', selectedValue !== 0 && Number(btn.dataset.digit) === selectedValue);
+    const digit = Number(btn.dataset.digit);
+    const isComplete = state.completedDigits.has(digit);
+    btn.classList.toggle('is-current-value', selectedValue !== 0 && digit === selectedValue);
+    btn.classList.toggle('is-complete', isComplete);
+    btn.disabled = isComplete;
+    if (isComplete) btn.setAttribute('aria-label', `${digit}, all placed`);
+    else btn.removeAttribute('aria-label');
   }
   numberPadEl?.classList.toggle('is-notes-mode', state.notesMode);
 
