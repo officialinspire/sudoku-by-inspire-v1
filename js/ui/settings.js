@@ -10,6 +10,7 @@ import {
   onAudioSettingsChange,
 } from '../audio-settings.js';
 import { suspendTimer, resumeTimer } from '../game-state.js';
+import { isHapticsSupported } from '../haptics.js';
 
 const dialog = document.getElementById('settings-dialog');
 const themeInputs = dialog.querySelectorAll('input[name="theme"]');
@@ -24,11 +25,13 @@ const sfxVolumeInput = document.getElementById('setting-sfx-volume');
 const vibrationEnabledInput = document.getElementById('setting-vibration-enabled');
 const vibrationSupportHint = document.getElementById('vibration-support-hint');
 
-// Feature-detected once — it can't change over the page's lifetime — and
-// used both to disable the toggle and to explain why in the hint text,
-// rather than letting the player enable a setting that can never do
-// anything on this device/browser.
-const vibrationSupported = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
+// Feature-detected once (via the same check js/haptics.js itself uses
+// before ever calling navigator.vibrate — one definition of "does this
+// device support it," not two) — it can't change over the page's
+// lifetime, and is used both to disable the toggle and to explain why
+// in the hint text, rather than letting the player enable a setting
+// that can never do anything on this device/browser.
+const vibrationSupported = isHapticsSupported();
 
 function syncControls() {
   const { theme, mode, effectiveMode } = getAppearance();

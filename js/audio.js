@@ -8,9 +8,12 @@
  * interaction — see index.js, where it's called synchronously alongside
  * `playIntro()` from the Start screen's advance handler (the same
  * gesture unlocks both). It is never called at module load time, and
- * every exported play/vibrate function silently no-ops if the engine
- * hasn't been initialized yet or the browser doesn't support the
- * feature it needs — see the "feature detection" notes below.
+ * every exported playX() function silently no-ops if the engine hasn't
+ * been initialized yet or the browser doesn't support the feature it
+ * needs — see the "feature detection" notes below. Haptic feedback
+ * (js/haptics.js) is a separate concern with its own independent
+ * feature/settings gating, wired up from the same game-state reactions
+ * as the win/error sounds below but not dependent on Web Audio support.
  *
  * SFX are synthesized here with the Web Audio API (oscillator + gain
  * envelope) rather than shipped as audio files — zero extra binary
@@ -28,6 +31,7 @@
 import { getAudioSettings, onAudioSettingsChange } from './audio-settings.js';
 import { onStateChange, getState } from './game-state.js';
 import { onScreenChange, getCurrentScreen } from './screens.js';
+import { hapticWrongEntry, hapticPuzzleComplete } from './haptics.js';
 
 const MUSIC_FADE_SECONDS = 1.8;
 const MUSIC_TRACK_SOURCES = {
@@ -115,33 +119,23 @@ export function playSelect() {
 
 export function playError() {
   playTone({ frequency: 260, frequencyEnd: 140, duration: 0.18, type: 'square', peakGain: 0.12 });
-  vibrate(40);
+  hapticWrongEntry();
 }
 
 export function playCompletion() {
-  if (!audioContext) return;
-  const base = audioContext.currentTime;
-  // A short ascending major-triad-plus-octave arpeggio (C5, E5, G5, C6) —
-  // a small, deliberately simple "win" cue rather than anything busy.
-  const notes = [523.25, 659.25, 783.99, 1046.5];
-  notes.forEach((frequency, i) => {
-    playTone({ frequency, duration: 0.16, type: 'sine', peakGain: 0.15, startTime: base + i * 0.1 });
-  });
-  vibrate([30, 40, 30]);
-}
-
-/**
- * Vibration is its own independent toggle (distinct from SFX) and its
- * own independent feature check: `navigator.vibrate` simply doesn't
- * exist on many desktop browsers and on iOS Safari, and calling it
- * there would throw in some environments — checking `typeof ... ===
- * 'function'` first makes the unsupported case a silent no-op rather
- * than an error.
- */
-export function vibrate(pattern) {
-  if (!getAudioSettings().vibrationEnabled) return;
-  if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
-  navigator.vibrate(pattern);
+  // The haptic fires unconditionally, below — audio and haptics degrade
+  // independently (see js/haptics.js), so a device with no AudioContext
+  // support still feels the win cue even though it can't hear one.
+  if (audioContext) {
+    const base = audioContext.currentTime;
+    // A short ascending major-triad-plus-octave arpeggio (C5, E5, G5, C6) —
+    // a small, deliberately simple "win" cue rather than anything busy.
+    const notes = [523.25, 659.25, 783.99, 1046.5];
+    notes.forEach((frequency, i) => {
+      playTone({ frequency, duration: 0.16, type: 'sine', peakGain: 0.15, startTime: base + i * 0.1 });
+    });
+  }
+  hapticPuzzleComplete();
 }
 
 function applySfxGain() {
@@ -426,10 +420,19 @@ export function initAudioEngine() {
   if (engineInitialized) return;
   engineInitialized = true;
 
-  // No AudioContext support at all: every playX()/vibrate() call above
-  // already checks for a live `audioContext`/`navigator.vibrate` before
-  // doing anything, so simply never creating one makes the whole engine
-  // a harmless no-op rather than a thrown error.
+  // Wires up the game-state listener that drives both SFX/music *and*
+  // haptics (playError/playCompletion, called from there, each fire
+  // their haptic independently of whether audio itself is available —
+  // see js/haptics.js) — run unconditionally, before the AudioContext
+  // check below, so a device with no Web Audio support at all still
+  // gets haptic feedback rather than losing it as a side effect of
+  // audio being unsupported.
+  initAudioReactions();
+
+  // No AudioContext support at all: every playX() call above already
+  // checks for a live `audioContext` before doing anything, so simply
+  // never creating one makes the rest of the audio engine a harmless
+  // no-op rather than a thrown error.
   if (!AudioContextCtor) return;
 
   audioContext = new AudioContextCtor();
@@ -477,8 +480,6 @@ export function initAudioEngine() {
     syncActiveMusicTrack();
   });
   syncActiveMusicTrack();
-
-  initAudioReactions();
 
   // Final backstop, on a low-frequency timer, for whatever's left: a
   // .play() call whose promise silently rejected without ever

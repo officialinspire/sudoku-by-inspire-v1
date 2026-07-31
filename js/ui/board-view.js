@@ -2,6 +2,7 @@ import { getState, onStateChange, selectCell, getPeerIndices } from '../game-sta
 import { getGameSettings, onGameSettingsChange } from '../game-settings.js';
 import { getCellAriaLabel } from './cell-aria.js';
 import { getRowIndices, getColumnIndices, getBoxIndices } from '../sudoku-engine.js';
+import { hapticCorrectEntry, hapticDigitComplete, hapticUnitComplete, hapticBoxComplete } from '../haptics.js';
 
 const boardEl = document.getElementById('board');
 const timerEl = document.getElementById('game-timer');
@@ -199,6 +200,11 @@ function render(state) {
 
       if (!suppressEntryFeedback && previousText !== String(value)) {
         retriggerAnimation(valueEl, 'is-value-enter');
+        // The lightest haptic tier — a correct digit just landed. Wrong
+        // entries get their own, separate cue (js/audio.js's playError,
+        // reacting to state.mistakes rising) rather than being decided
+        // here, so this only ever fires for the happy path.
+        if (!isFixed && value === state.solution[index]) hapticCorrectEntry();
       }
     } else {
       valueEl.textContent = '';
@@ -213,32 +219,39 @@ function render(state) {
     el.setAttribute('aria-label', getCellAriaLabel(index, ariaState));
   }
 
-  // Progression-reward animations: a calm, one-shot glow the exact
-  // render a digit/row/column/box first becomes complete (see
-  // styles.css's .is-just-completed/.is-unit-complete for the actual
-  // effects). Gated the same way as the per-cell feedback above — never
-  // on the first paint of a (re)started or restored puzzle, whatever it
-  // already contains.
+  // Progression-reward animations + haptics: a calm, one-shot glow (see
+  // styles.css's .is-just-completed/.is-unit-complete) plus a matching
+  // tier of the haptic hierarchy (js/haptics.js) the exact render a
+  // digit/row/column/box first becomes complete. Gated the same way as
+  // the per-cell feedback above — never on the first paint of a
+  // (re)started or restored puzzle, whatever it already contains.
   if (!suppressEntryFeedback) {
     forEachNewlyCompleted(previousCompletedDigits, state.completedDigits, (digit) => {
       const btn = numberButtons.find((b) => Number(b.dataset.digit) === digit);
       if (btn) retriggerAnimation(btn, 'is-just-completed');
+      hapticDigitComplete();
     });
 
     // Rows/columns/boxes all land on the same board-cell effect, and a
     // single cell can belong to more than one newly-completed unit at
     // once (e.g. the cell that finishes both its row and its box) — de-
     // duped into one Set so a cell like that is only retriggered once,
-    // not twice back-to-back in the same render.
+    // not twice back-to-back in the same render. The haptic hierarchy
+    // treats a row and a column as one rung (hapticUnitComplete for
+    // both), so it's called directly inside each diff rather than from
+    // the shared cell Set below.
     const newlyCompletedCells = new Set();
     forEachNewlyCompleted(previousCompletedRows, state.completedRows, (row) => {
       for (const i of getRowIndices(row)) newlyCompletedCells.add(i);
+      hapticUnitComplete();
     });
     forEachNewlyCompleted(previousCompletedCols, state.completedCols, (col) => {
       for (const i of getColumnIndices(col)) newlyCompletedCells.add(i);
+      hapticUnitComplete();
     });
     forEachNewlyCompleted(previousCompletedBoxes, state.completedBoxes, (box) => {
       for (const i of getBoxIndices(Math.floor(box / 3) * 3, (box % 3) * 3)) newlyCompletedCells.add(i);
+      hapticBoxComplete();
     });
     for (const i of newlyCompletedCells) retriggerAnimation(cells[i].el, 'is-unit-complete');
   }

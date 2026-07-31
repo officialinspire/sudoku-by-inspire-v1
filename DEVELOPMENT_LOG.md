@@ -5,6 +5,107 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-31 — Centralized Haptic Feedback Hierarchy
+
+**Branch:** `claude/number-selector-completion-jmqlpr`
+
+Vibration already existed in this app (`js/audio.js`'s `vibrate()`
+helper, called from `playError()`/`playCompletion()`, gated on
+`js/audio-settings.js`'s `vibrationEnabled` toggle) but wasn't
+centralized and covered only two of the six requested moments. Added a
+new dedicated module and wired in the four missing triggers.
+
+**`js/haptics.js` (new):** the one place in the app that ever calls
+`navigator.vibrate()`. Exports one named function per trigger
+(`hapticCorrectEntry`, `hapticWrongEntry`, `hapticDigitComplete`,
+`hapticUnitComplete`, `hapticBoxComplete`, `hapticPuzzleComplete`) so
+call sites ask for *what happened*, never *what pattern to play*.
+Every call is gated, in order, on: `navigator.vibrate` existing,
+`audio-settings.js`'s `vibrationEnabled` toggle, and — new —
+`prefers-reduced-motion: reduce` (vibration is a physical-motion effect,
+so a player who's told their OS they want reduced motion gets that
+honored here too, without a second in-app setting). All silent no-ops,
+never a throw.
+
+**The hierarchy** (`TIERS` in `js/haptics.js`) is entirely duration/
+pattern-shape, not amplitude — the Vibration API has no concept of
+intensity, only on/off millisecond timings, so "progressively stronger"
+is expressed as increasingly long/elaborate patterns:
+```
+correctEntry:   10ms                    (lightest)
+digitComplete:  15ms
+unitComplete:   20ms   (a row or a column — one rung, not two)
+boxComplete:    28ms
+puzzleComplete: [30, 40, 30]ms          (strongest — pre-existing pattern, kept)
+wrongEntry:     40ms   (pre-existing, outside the progression ladder)
+```
+Everything stays well inside "light impact, brief" — the longest single
+pulse is under 30ms, and the longest pattern totals 100ms across three
+short pulses. No continuous vibration, no long patterns.
+
+**Coalescing — the part that made this actually reliable:** a single
+moment (the last cell of a puzzle) can cross several thresholds at once
+— finish its digit, its row, its box, *and* the whole puzzle
+simultaneously. `navigator.vibrate()` doesn't queue; a new call cancels
+whatever's still playing, so firing several tiers back-to-back would
+just mean whichever happened to run *last* wins — an accident of
+subscriber/call order, not a real priority. Every `hapticX()` call now
+queues a request and only the single strongest one requested during the
+current synchronous pass of work actually fires, via a `queueMicrotask`
+flush after that pass finishes. Verified live: filling an entire puzzle
+in one script (81 placements, completing every digit/row/column/box and
+the puzzle itself along the way) produces exactly **one** `vibrate()`
+call — the puzzle-complete pattern — never a shorter one clobbering it
+or firing after it.
+
+**`js/audio.js`:** its own `vibrate()` helper removed; `playError()`/
+`playCompletion()` now call `hapticWrongEntry()`/`hapticPuzzleComplete()`
+from the new module. Also fixed a real independent-degradation gap
+found while wiring this up: `initAudioReactions()` (the game-state
+listener that drives both sound *and* haptics) was only ever called
+after a live `AudioContext` had been created, so a device with no Web
+Audio support at all would silently never get haptics either, even
+though `js/haptics.js` has nothing to do with Web Audio. Moved that call
+above the `AudioContext` feature check, and removed `playCompletion()`'s
+early `if (!audioContext) return` (it now skips just the tones, not the
+haptic after them) — audio and haptics now genuinely degrade
+independently, as required.
+
+**`js/ui/board-view.js`:** the four new triggers hang off logic that
+already existed from the prior progression-animation session — the same
+`completedDigits`/`completedRows`/`completedCols`/`completedBoxes` diff
+against the previous render already used to fire the visual glow now
+also calls the matching `hapticX()` right alongside it. A correct-entry
+haptic was new: added to the per-cell loop's existing "did this cell's
+value just change" check, firing only when the new value matches the
+solution (a wrong entry already has its own separate cue).
+
+**`js/ui/settings.js`:** its own local `navigator.vibrate` feature
+detection replaced with `js/haptics.js`'s `isHapticsSupported()` — one
+definition of "does this device support it," not two.
+
+**Tests:** new `js/haptics.test.js` (16 cases) covering each trigger's
+pattern, the coalescing behavior (weaker requests in the same
+synchronous pass are dropped in favor of the strongest; separate passes
+each fire independently), and all three gates (setting off, unsupported,
+reduced-motion) including that nothing ever throws with `navigator`/
+`window` entirely absent. Full suite: 221/221 (`npm test`).
+
+**Manual verification:** headless Chromium (Playwright), `navigator.
+vibrate` stubbed to log calls — confirmed a correct entry (10), a wrong
+entry (40), completing a digit (15) and a row (20) each log exactly the
+expected single pattern (the coalescing correctly absorbs the many
+individual correct-entry ticks a scripted fill produces into just the
+strongest tier reached); the Settings vibration toggle silences all of
+it when turned off and the OS's reduced-motion preference silences it
+even with the toggle on; filling an entire puzzle produces exactly one
+call, the puzzle-complete pattern.
+
+**Files changed:** `js/haptics.js` (new), `js/haptics.test.js` (new),
+`js/audio.js`, `js/ui/board-view.js`, `js/ui/settings.js`.
+
+---
+
 ## 2026-07-31 — Progression Reward Animations (Digit/Row/Column/Box)
 
 **Branch:** `claude/number-selector-completion-jmqlpr`
