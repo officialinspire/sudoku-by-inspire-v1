@@ -342,6 +342,66 @@ describe('completedDigits', () => {
   });
 });
 
+describe('completedRows / completedCols / completedBoxes', () => {
+  // The fixture's only given is index 0 (row 0, col 0), so row 0,
+  // column 0, and the top-left box all start with exactly one correct
+  // cell already in place.
+  function fillIndices(indices) {
+    for (const index of indices) {
+      if (index === 0) continue; // the fixed given
+      selectCell(index);
+      applyNumberInput(solution[index]);
+    }
+  }
+
+  test('filling every cell of a row marks it complete, and only that row', () => {
+    const rowIndices = Array.from({ length: 9 }, (_, col) => rowColToIndex(0, col));
+    fillIndices(rowIndices);
+    const state = getState();
+    assert.equal(state.completedRows.has(0), true);
+    assert.equal(state.completedRows.has(1), false);
+  });
+
+  test('a partially filled row is not complete', () => {
+    const rowIndices = Array.from({ length: 9 }, (_, col) => rowColToIndex(0, col));
+    fillIndices(rowIndices.slice(0, -1));
+    assert.equal(getState().completedRows.has(0), false);
+  });
+
+  test('filling every cell of a column marks it complete', () => {
+    const colIndices = Array.from({ length: 9 }, (_, row) => rowColToIndex(row, 0));
+    fillIndices(colIndices);
+    assert.equal(getState().completedCols.has(0), true);
+  });
+
+  test('filling every cell of a 3x3 box marks it complete', () => {
+    const boxIndices = [];
+    for (let row = 0; row < 3; row++) {
+      for (let col = 0; col < 3; col++) boxIndices.push(rowColToIndex(row, col));
+    }
+    fillIndices(boxIndices);
+    assert.equal(getState().completedBoxes.has(0), true);
+  });
+
+  test('erasing a cell from a completed row un-completes it', () => {
+    const rowIndices = Array.from({ length: 9 }, (_, col) => rowColToIndex(0, col));
+    fillIndices(rowIndices);
+    assert.equal(getState().completedRows.has(0), true);
+
+    selectCell(rowColToIndex(0, 8));
+    eraseSelectedCell();
+    assert.equal(getState().completedRows.has(0), false);
+  });
+
+  test('no game in progress means no row/column/box is ever complete', () => {
+    resetToIdle();
+    const state = getState();
+    assert.equal(state.completedRows.size, 0);
+    assert.equal(state.completedCols.size, 0);
+    assert.equal(state.completedBoxes.size, 0);
+  });
+});
+
 describe('eraseSelectedCell', () => {
   test('clears an entry and its notes', () => {
     selectCell(1);

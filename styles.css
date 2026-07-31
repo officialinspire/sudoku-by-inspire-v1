@@ -225,6 +225,7 @@ button {
   --duration-board: 0.15s; /* board cell state changes (selection/relation/match/conflict) — quicker than --duration-fast so rapid arrow-key or tap navigation across many cells never feels sluggish */
   --duration-shake: 0.3s; /* one-shot invalid-entry shake — a couple of quick, decaying oscillations, brief enough to never block the next keypress */
   --duration-dialog: 0.2s; /* dialog/overlay entrance-exit fade + scale (150-220ms requested range) */
+  --duration-progress: 0.2s; /* one-shot "you just completed a number/row/column/box" glow (150-250ms requested range) — deliberately its own token rather than reusing --duration-fast/-dialog: same value today, but a distinct semantic purpose (progression reward, not a control transition or a dialog entrance) that may need to move independently later */
   --duration-moderate: 0.5s; /* one-shot cues, e.g. the completion celebration */
   --duration-slow: 0.8s; /* the intro-to-menu fade */
   --duration-ambient: 26s; /* slow background drift (Cyber theme) */
@@ -1259,6 +1260,64 @@ button {
   }
 }
 
+/* One-shot "you just completed a row/column/box" reward
+   (js/ui/board-view.js retriggers this on every cell in the unit, once,
+   the render a unit's count first reaches 9 correct cells — never on a
+   render where it simply *stays* complete). Two independent, purely
+   additive effects, both fading out over --duration-progress and both
+   automatically covered by the sitewide prefers-reduced-motion
+   override further up:
+
+   1. A `::after` overlay, not `.cell`'s own `box-shadow` — the
+      selected/match/conflict rings above are real, persistent state on
+      that property, and a temporary animation is only safe to layer
+      elsewhere entirely rather than risk it winning the cascade for
+      150-250ms and blanking out a ring that's supposed to stay put
+      (e.g. the cell the player is still sitting on when its row
+      completes). The overlay reads as the requested "soft accent glow"
+      (a blurred, low-opacity shadow) plus "slight border color
+      transition" (a thin inset ring, same technique already used for
+      .is-match) plus "subtle elevation" (the outward blur itself,
+      rather than any transform/movement) — three requested effects,
+      one small addition, zero risk to existing rings.
+   2. A brightness/saturate `filter` pulse on the digit text — a
+      "gentle font color refinement" that works identically regardless
+      of the underlying color (fixed clue vs. player entry, any theme):
+      filter multiplies whatever color is already there rather than
+      requiring a hardcoded target color to animate towards. */
+.cell.is-unit-complete::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 var(--border-width-thin) color-mix(in srgb, var(--color-accent) 65%, transparent),
+    0 0 8px 1px color-mix(in srgb, var(--color-accent) 30%, transparent);
+  animation: cell-unit-complete-glow var(--duration-progress) var(--ease-out);
+}
+
+@keyframes cell-unit-complete-glow {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.cell.is-unit-complete .cell-value {
+  animation: cell-value-complete-pulse var(--duration-progress) var(--ease-out);
+}
+
+@keyframes cell-value-complete-pulse {
+  from {
+    filter: brightness(1.3) saturate(1.35);
+  }
+  to {
+    filter: none;
+  }
+}
+
 /* ---------- Board toolbar & number pad ---------- */
 
 .board-toolbar {
@@ -1357,6 +1416,31 @@ button {
   color: var(--color-text-secondary);
   border-color: var(--color-success);
   cursor: not-allowed;
+}
+
+/* One-shot reward the render a digit's 9th correct instance lands
+   (js/ui/board-view.js retriggers this once, on the incomplete→complete
+   transition only) — a brief accent glow + text brightness lift that
+   settles into the button's permanent .is-complete look above, rather
+   than a separate/competing visual language. Safe to animate box-shadow
+   directly here (unlike the board cells' equivalent below): a number
+   button's only other box-shadow user is .is-current-value, and by the
+   time this settles the button is `disabled`, which already drops it
+   out of that state going forward. */
+.number-btn.is-just-completed {
+  animation: number-btn-complete-glow var(--duration-progress) var(--ease-out);
+}
+
+@keyframes number-btn-complete-glow {
+  from {
+    box-shadow: 0 0 0 var(--border-width-thin) color-mix(in srgb, var(--color-accent) 70%, transparent),
+      0 0 10px 2px color-mix(in srgb, var(--color-accent) 35%, transparent);
+    filter: brightness(1.2) saturate(1.3);
+  }
+  to {
+    box-shadow: none;
+    filter: none;
+  }
 }
 
 /* ---------- Pause overlay ----------

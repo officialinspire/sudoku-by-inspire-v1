@@ -81,6 +81,43 @@ export function getBoxValues(board, row, col) {
   return values;
 }
 
+/**
+ * Index-returning counterparts to getRowValues/getColumnValues/
+ * getBoxValues above — same coordinate math, but for callers that need
+ * to know *which cells* make up a unit rather than what's currently in
+ * them (e.g. js/game-state.js checking whether every cell in a unit is
+ * correct, or js/ui/board-view.js finding which cells to animate when a
+ * unit completes). Take no `board` argument since the answer never
+ * depends on board contents.
+ */
+export function getRowIndices(row) {
+  if (!Number.isInteger(row) || row < 0 || row > 8) {
+    throw new RangeError(`row must be an integer 0-8, got ${row}`);
+  }
+  const start = row * GRID_SIZE;
+  return Array.from({ length: GRID_SIZE }, (_, col) => start + col);
+}
+
+export function getColumnIndices(col) {
+  if (!Number.isInteger(col) || col < 0 || col > 8) {
+    throw new RangeError(`col must be an integer 0-8, got ${col}`);
+  }
+  return Array.from({ length: GRID_SIZE }, (_, row) => row * GRID_SIZE + col);
+}
+
+export function getBoxIndices(row, col) {
+  assertValidCoord(row, col);
+  const boxRowStart = Math.floor(row / BOX_SIZE) * BOX_SIZE;
+  const boxColStart = Math.floor(col / BOX_SIZE) * BOX_SIZE;
+  const indices = [];
+  for (let r = boxRowStart; r < boxRowStart + BOX_SIZE; r++) {
+    for (let c = boxColStart; c < boxColStart + BOX_SIZE; c++) {
+      indices.push(r * GRID_SIZE + c);
+    }
+  }
+  return indices;
+}
+
 export function isValidBoardShape(board) {
   if (!Array.isArray(board)) return false;
   if (board.length !== BOARD_SIZE) return false;

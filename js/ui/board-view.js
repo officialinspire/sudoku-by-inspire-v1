@@ -1,6 +1,7 @@
 import { getState, onStateChange, selectCell, getPeerIndices } from '../game-state.js';
 import { getGameSettings, onGameSettingsChange } from '../game-settings.js';
 import { getCellAriaLabel } from './cell-aria.js';
+import { getRowIndices, getColumnIndices, getBoxIndices } from '../sudoku-engine.js';
 
 const boardEl = document.getElementById('board');
 const timerEl = document.getElementById('game-timer');
@@ -25,6 +26,20 @@ const cells = [];
 let lastPuzzleRef = null;
 let suppressEntryFeedback = true;
 
+// Remembers the last render's completed digits/rows/columns/boxes so
+// the progression-reward animations below (a digit/row/column/box's
+// "you just finished this" glow) can fire on exactly the render where a
+// unit's count first reaches 9 — never re-firing on a later render
+// where it simply *stays* complete, and never firing retroactively for
+// units already complete when a saved game is restored (gated behind
+// suppressEntryFeedback below, for the same reason that flag already
+// exists: a restored/started puzzle's first paint is not "just
+// completed," no matter what it already contains).
+let previousCompletedDigits = new Set();
+let previousCompletedRows = new Set();
+let previousCompletedCols = new Set();
+let previousCompletedBoxes = new Set();
+
 // Restarts a CSS animation from its beginning even if the element
 // already has the class (and therefore may already be mid-animation) —
 // removing the class, forcing a reflow, then re-adding it is the
@@ -33,6 +48,16 @@ function retriggerAnimation(el, className) {
   el.classList.remove(className);
   void el.offsetWidth;
   el.classList.add(className);
+}
+
+// Calls `onNew` for every member of `current` that wasn't already in
+// `previous` — the one "what's newly true this render" diff shared by
+// all four progression-reward triggers below (a digit, row, column, or
+// box that just became complete), rather than four near-identical loops.
+function forEachNewlyCompleted(previous, current, onNew) {
+  for (const unit of current) {
+    if (!previous.has(unit)) onNew(unit);
+  }
 }
 
 function buildBoard() {
@@ -187,6 +212,40 @@ function render(state) {
 
     el.setAttribute('aria-label', getCellAriaLabel(index, ariaState));
   }
+
+  // Progression-reward animations: a calm, one-shot glow the exact
+  // render a digit/row/column/box first becomes complete (see
+  // styles.css's .is-just-completed/.is-unit-complete for the actual
+  // effects). Gated the same way as the per-cell feedback above — never
+  // on the first paint of a (re)started or restored puzzle, whatever it
+  // already contains.
+  if (!suppressEntryFeedback) {
+    forEachNewlyCompleted(previousCompletedDigits, state.completedDigits, (digit) => {
+      const btn = numberButtons.find((b) => Number(b.dataset.digit) === digit);
+      if (btn) retriggerAnimation(btn, 'is-just-completed');
+    });
+
+    // Rows/columns/boxes all land on the same board-cell effect, and a
+    // single cell can belong to more than one newly-completed unit at
+    // once (e.g. the cell that finishes both its row and its box) — de-
+    // duped into one Set so a cell like that is only retriggered once,
+    // not twice back-to-back in the same render.
+    const newlyCompletedCells = new Set();
+    forEachNewlyCompleted(previousCompletedRows, state.completedRows, (row) => {
+      for (const i of getRowIndices(row)) newlyCompletedCells.add(i);
+    });
+    forEachNewlyCompleted(previousCompletedCols, state.completedCols, (col) => {
+      for (const i of getColumnIndices(col)) newlyCompletedCells.add(i);
+    });
+    forEachNewlyCompleted(previousCompletedBoxes, state.completedBoxes, (box) => {
+      for (const i of getBoxIndices(Math.floor(box / 3) * 3, (box % 3) * 3)) newlyCompletedCells.add(i);
+    });
+    for (const i of newlyCompletedCells) retriggerAnimation(cells[i].el, 'is-unit-complete');
+  }
+  previousCompletedDigits = state.completedDigits;
+  previousCompletedRows = state.completedRows;
+  previousCompletedCols = state.completedCols;
+  previousCompletedBoxes = state.completedBoxes;
 
   suppressEntryFeedback = false;
 

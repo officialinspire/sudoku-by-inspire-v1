@@ -5,6 +5,94 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-31 — Progression Reward Animations (Digit/Row/Column/Box)
+
+**Branch:** `claude/number-selector-completion-jmqlpr`
+
+Gentle, one-shot "you just finished this" feedback for four progress
+events: a number pad digit, a row, a column, and a 3x3 box each becoming
+fully (correctly) filled. Digit completion already had a *permanent*
+dimmed look (an earlier session); this adds the missing *moment-of-
+completion* reward for all four, on top of whatever permanent styling
+already exists.
+
+**`js/sudoku-engine.js`:** added `getRowIndices`/`getColumnIndices`/
+`getBoxIndices` — index-returning counterparts to the existing
+`getRowValues`/`getColumnValues`/`getBoxValues`, same coordinate math,
+for callers that need to know *which cells* make up a unit rather than
+what's in them. Tested in `sudoku-engine.test.js` against the existing
+value-returning functions (same indices, same values when mapped
+through the board) plus range-checking.
+
+**`js/game-state.js`:** added `completedRows`/`completedCols`/
+`completedBoxes` to `getState()`'s derived fields, alongside the
+existing `completedDigits`/`conflicts` — same "computed fresh every
+call, never cached, never goes stale after an erase/undo" pattern.
+Factored a shared `computeCompletedUnits(s, indicesForUnit)` (a unit
+0-8 is complete when all 9 of its cells are correct) used for all
+three, and an `isCellCorrect` helper pulled out of the per-cell check
+`computeCompletedDigits` already inlined — one definition of "is this
+cell correct," not four copies. Tested in `game-state.test.js`:
+filling/partially-filling/erasing-from a row, column, and box.
+
+**`js/ui/board-view.js`:** the actual "did something *just* become
+complete" detection. Kept four small `previousCompleted*` Sets (digits/
+rows/cols/boxes) from the prior render and diffs them against the
+current ones every render via a shared `forEachNewlyCompleted` helper —
+firing only on the incomplete→complete transition, never again while a
+unit simply *stays* complete (same principle as the existing shake/
+value-enter one-shot feedback), and gated behind the same
+`suppressEntryFeedback` flag so a restored/started game's pre-existing
+progress is never retroactively "celebrated" on first paint. Newly-
+completed row/column/box cells are collected into one deduped Set
+before animating (a cell finishing both its row and its box at once
+gets animated exactly once, not twice back-to-back).
+
+**`styles.css`:** new `--duration-progress: 0.2s` token (its own,
+despite matching `--duration-fast`/`-dialog` today — a distinct semantic
+purpose that may need to move independently later). Two new one-shot
+effects:
+- `.cell.is-unit-complete` — a `::after` overlay (not `.cell`'s own
+  `box-shadow`, which selection/match/conflict rings already own and
+  can't afford to have blanked out for 150-250ms) giving a soft
+  accent-colored glow + thin inset ring, plus a `filter:
+  brightness()/saturate()` pulse on the digit text for a gentle color
+  refinement that needs no hardcoded target color and works identically
+  under any theme/fixed-vs-entry color.
+- `.number-btn.is-just-completed` — a brief accent glow + brightness
+  lift directly on the pad button's own `box-shadow` (safe here, unlike
+  the board cells: the button is `disabled` by the time this settles),
+  fading into the pre-existing `.is-complete` dimmed look rather than
+  competing with it.
+Both fade out over `--duration-progress` (200ms, inside the requested
+150-250ms range) via `var(--ease-out)`, both automatically covered by
+the sitewide `prefers-reduced-motion: reduce` override, and neither
+touches `transform`/position — no movement, no flashing repeats (each
+is a single one-shot keyframe, never `infinite`), no confetti.
+
+**Tests:** `sudoku-engine.test.js` +4, `game-state.test.js` +6. Full
+suite: 205/205 (`npm test`).
+
+**Manual verification:** headless Chromium (Playwright) — filled a full
+row via `game-state.js` directly and confirmed all 9 cells gained
+`is-unit-complete` the instant the row's 9th cell landed;
+`getAnimations()` confirmed both new keyframes actually running at
+200ms; selecting an unrelated cell afterward left the class in place
+with zero animations still running (no re-trigger while merely staying
+complete); filled a digit to completion and confirmed the pad button
+picks up `is-just-completed` + `is-complete` + `disabled` together, then
+settles into the permanent dimmed look ~400ms later; filled a 3x3 box
+under Cyber/dark and screenshotted the glow — reads as a calm, deliberate
+"this box is done" outline, not a flash; confirmed
+`prefers-reduced-motion: reduce` collapses `.cell`'s `animation-duration`
+to ~0.
+
+**Files changed:** `js/sudoku-engine.js`, `js/sudoku-engine.test.js`,
+`js/game-state.js`, `js/game-state.test.js`, `js/ui/board-view.js`,
+`styles.css`.
+
+---
+
 ## 2026-07-31 — Configurable Mistake Detection (Immediate / Classic)
 
 **Branch:** `claude/number-selector-completion-jmqlpr`

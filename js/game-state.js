@@ -18,7 +18,15 @@
  * Node-testable.
  */
 
-import { isValidPlacement, isSolved, indexToRowCol, rowColToIndex } from './sudoku-engine.js';
+import {
+  isValidPlacement,
+  isSolved,
+  indexToRowCol,
+  rowColToIndex,
+  getRowIndices,
+  getColumnIndices,
+  getBoxIndices,
+} from './sudoku-engine.js';
 
 const BOARD_SIZE = 81;
 
@@ -155,16 +163,21 @@ export function resumeTimer(reason) {
 /**
  * Returns a full, ready-to-render snapshot: the raw state fields plus
  * `conflicts` (a Set of cell indices whose player entry currently
- * clashes with a peer), `completedDigits` (a Set of digits 1-9 with all
- * 9 correct instances placed), and the live-computed `elapsedSeconds` —
- * all three derived fresh every call rather than cached on `state`,
- * cheap and impossible to let go stale, which a cached copy could.
+ * clashes with a peer), `completedDigits`/`completedRows`/
+ * `completedCols`/`completedBoxes` (Sets of the 1-9 digits / 0-8 row,
+ * column, box indices with all 9 correct cells placed), and the
+ * live-computed `elapsedSeconds` — all derived fresh every call rather
+ * than cached on `state`, cheap and impossible to let go stale, which a
+ * cached copy could.
  */
 export function getState() {
   return {
     ...state,
     conflicts: computeConflicts(state),
     completedDigits: computeCompletedDigits(state),
+    completedRows: computeCompletedUnits(state, getRowIndices),
+    completedCols: computeCompletedUnits(state, getColumnIndices),
+    completedBoxes: computeCompletedUnits(state, (unit) => getBoxIndices(Math.floor(unit / 3) * 3, (unit % 3) * 3)),
     elapsedSeconds: currentElapsedSeconds(),
   };
 }
@@ -241,6 +254,35 @@ function computeCompletedDigits(s) {
   }
   for (let digit = 1; digit <= 9; digit++) {
     if (counts[digit] === 9) completed.add(digit);
+  }
+  return completed;
+}
+
+// A cell counts as "correct" whether it's a fixed given (correct by
+// construction) or a player entry that matches the solution — the same
+// per-cell notion computeCompletedDigits inlines above, factored out
+// here since row/column/box completion below all need exactly the same
+// check, just applied to a different set of 9 indices each time.
+function isCellCorrect(s, index) {
+  if (s.puzzle[index] !== 0) return true;
+  return s.entries[index] !== 0 && s.entries[index] === s.solution[index];
+}
+
+/**
+ * Units 0-8 (interpreted as row/column/box indices by whichever
+ * `indicesForUnit` is passed) where all 9 cells are correct. Shared by
+ * completedRows/-Cols/-Boxes in getState() above — one "is this whole
+ * unit done" definition, reused three times with a different index
+ * function, rather than three near-identical loops that could drift
+ * apart. Purely derived from `s`, same pattern as computeConflicts/
+ * computeCompletedDigits, so it's always fresh and never goes stale
+ * after an erase/undo.
+ */
+function computeCompletedUnits(s, indicesForUnit) {
+  const completed = new Set();
+  if (!s.puzzle) return completed;
+  for (let unit = 0; unit < 9; unit++) {
+    if (indicesForUnit(unit).every((index) => isCellCorrect(s, index))) completed.add(unit);
   }
   return completed;
 }

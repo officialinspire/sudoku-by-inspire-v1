@@ -7,6 +7,9 @@ import {
   getRowValues,
   getColumnValues,
   getBoxValues,
+  getRowIndices,
+  getColumnIndices,
+  getBoxIndices,
   isValidBoardShape,
   isValidPlacement,
   findEmptyCell,
@@ -117,6 +120,49 @@ describe('row/column/box extraction', () => {
     const row = getRowValues(completeBoard, 0);
     row[0] = 999;
     assert.notEqual(completeBoard[0], 999);
+  });
+});
+
+describe('row/column/box index extraction', () => {
+  test('getRowIndices returns the 9 board indices of that row, matching getRowValues', () => {
+    for (let row = 0; row < 9; row++) {
+      assert.deepEqual(
+        getRowIndices(row).map((i) => completeBoard[i]),
+        getRowValues(completeBoard, row)
+      );
+    }
+    assert.deepEqual(getRowIndices(0), [0, 1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+
+  test('getColumnIndices returns the 9 board indices of that column, matching getColumnValues', () => {
+    for (let col = 0; col < 9; col++) {
+      assert.deepEqual(
+        getColumnIndices(col).map((i) => completeBoard[i]),
+        getColumnValues(completeBoard, col)
+      );
+    }
+    assert.deepEqual(getColumnIndices(0), [0, 9, 18, 27, 36, 45, 54, 63, 72]);
+  });
+
+  test('getBoxIndices returns the 9 board indices of the containing box, matching getBoxValues', () => {
+    assert.deepEqual(getBoxIndices(4, 4), [30, 31, 32, 39, 40, 41, 48, 49, 50]);
+    for (let row = 0; row < 9; row++) {
+      for (let col = 0; col < 9; col++) {
+        assert.deepEqual(
+          getBoxIndices(row, col).map((i) => completeBoard[i]),
+          getBoxValues(completeBoard, row, col)
+        );
+      }
+    }
+  });
+
+  test('rejects out-of-range row/col', () => {
+    assert.throws(() => getRowIndices(-1), RangeError);
+    assert.throws(() => getRowIndices(9), RangeError);
+    assert.throws(() => getColumnIndices(-1), RangeError);
+    assert.throws(() => getColumnIndices(9), RangeError);
+    assert.throws(() => getBoxIndices(-1, 0), RangeError);
+    assert.throws(() => getBoxIndices(0, 9), RangeError);
   });
 });
 
