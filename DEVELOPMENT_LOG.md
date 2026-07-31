@@ -5,6 +5,83 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-31 — Configurable Mistake Detection (Immediate / Classic)
+
+**Branch:** `claude/number-selector-completion-jmqlpr`
+
+Turned the existing boolean "Immediate error checking" gameplay setting
+into a proper, labeled two-option preference — Mistake Detection:
+Immediate / Classic — rather than adding a second, overlapping setting
+next to it.
+
+**`js/game-settings.js`:** replaced the `immediateErrorChecking: boolean`
+field with `mistakeDetection: 'immediate' | 'classic'`
+(`MISTAKE_DETECTION_MODES`, same `.includes()`-validated-enum pattern
+`js/theme.js` already uses for `THEME_PACKS`/`COLOR_MODES`).
+`setImmediateErrorChecking(bool)` → `setMistakeDetection(mode)`, same
+guard-invalid-and-no-op shape as `setTheme`/`setMode`. Bumped
+`SCHEMA_VERSION` 1 → 2 so a previously-stored boolean-shaped value is
+rejected by `isValidSettings` and falls back to the safe default
+(`'immediate'`) rather than being partially trusted — same policy this
+file already documents for corrupt/hand-edited storage, just also
+covering "valid JSON, old shape" now. That default is exactly the app's
+prior only behavior, so an existing player's experience is unchanged
+unless they explicitly pick Classic.
+
+**No change to `js/game-state.js` or the completion/scoring path.**
+Classic mode needed zero new gameplay logic: `finishIfSolved()` already
+calls the engine's real `isSolved()` against the whole board, and since
+every generated puzzle has exactly one solution, a wrong entry anywhere
+always breaks some row/column/box — the puzzle simply can never
+"complete" while a mistake remains, with no separate check required.
+`mistakes`/`hintsUsed` counting (used by scoring, not by any player-
+facing flag) also stays exactly as-is in both modes. This is what
+"validate only through existing completion logic" already meant, in the
+architecture as it stood — Classic didn't need building, only Immediate's
+existing extra visual layer needed to become optional.
+
+**`js/ui/board-view.js`:** one line — `getGameSettings().mistakeDetection
+=== 'immediate'` computed into the same local `immediateErrorChecking`
+boolean the render function already used for the `isError` check and for
+`js/ui/cell-aria.js`'s merged `ariaState`. This is the only seam touched:
+`js/ui/cell-aria.js` and its existing test file needed zero changes,
+since they only ever consumed a boolean and still do.
+
+**`js/ui/settings.js` / `index.html`:** replaced the single "Immediate
+error checking" checkbox with a "Mistake Detection" fieldset of two
+radio options (`Immediate — flag a wrong entry as soon as it's placed` /
+`Classic — no flagging; only find out when the puzzle won't complete`),
+wired exactly like the existing Theme pack/Color mode radio groups
+(`querySelectorAll('input[name=...])`, sync on every settings-change
+event, one `change` listener per input) rather than inventing a new
+control pattern.
+
+**Tests:** added `js/game-settings.test.js` (this module had none
+before) — 8 cases: default is `'immediate'`, switching persists and
+round-trips through a re-`initGameSettings()`, an invalid mode is a
+no-op, subscribers are notified (and not after unsubscribing), a
+pre-existing boolean-shaped (schema v1) stored value falls back to the
+default instead of being misread, and corrupted JSON falls back too.
+`npm test`: 195/195 (187 existing + 8 new).
+
+**Manual verification:** headless Chromium (Playwright) end-to-end —
+opened Settings, confirmed Immediate is checked by default; selected
+Classic, confirmed the new schema (`{"version":2,"mistakeDetection":
+"classic"}`) in `localStorage`, reloaded the page, and confirmed the
+radio state survived; started a game, placed a deliberately wrong entry
+in Classic mode, and confirmed `.is-error` is never applied (mistake
+still counted in the stats bar, exactly as before); switched to
+Immediate from the in-game Settings button with that same wrong entry
+still on the board and confirmed it became flagged (`.is-error`, red
+wavy underline) immediately on the next render, with no new keystroke —
+correct live-reactivity, since `board-view.js` reads the setting fresh
+every render rather than caching it per game.
+
+**Files changed:** `js/game-settings.js`, `js/game-settings.test.js`
+(new), `js/ui/board-view.js`, `js/ui/settings.js`, `index.html`.
+
+---
+
 ## 2026-07-31 — Board: Accent Ring for Matching-Number Highlighting
 
 **Branch:** `claude/number-selector-completion-jmqlpr`

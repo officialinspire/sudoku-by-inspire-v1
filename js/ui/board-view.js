@@ -85,7 +85,11 @@ function formatTime(totalSeconds) {
 
 function render(state) {
   const hasGame = state.puzzle !== null;
-  const { immediateErrorChecking } = getGameSettings();
+  // js/ui/cell-aria.js and the `isError` check below only ever need a
+  // boolean — translating the 'immediate'/'classic' setting into one
+  // here keeps that existing boolean-shaped contract (and its tests)
+  // untouched by the newer enum setting.
+  const immediateErrorChecking = getGameSettings().mistakeDetection === 'immediate';
   boardEl.classList.toggle('is-empty', !hasGame);
 
   if (state.puzzle !== lastPuzzleRef) {

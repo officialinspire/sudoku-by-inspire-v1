@@ -1,5 +1,5 @@
 import { getAppearance, setTheme, setMode, resetAppearance, onAppearanceChange } from '../theme.js';
-import { getGameSettings, setImmediateErrorChecking, onGameSettingsChange } from '../game-settings.js';
+import { getGameSettings, setMistakeDetection, onGameSettingsChange } from '../game-settings.js';
 import {
   getAudioSettings,
   setMusicEnabled,
@@ -16,7 +16,7 @@ const themeInputs = dialog.querySelectorAll('input[name="theme"]');
 const modeInputs = dialog.querySelectorAll('input[name="mode"]');
 const modeHint = document.getElementById('mode-current-hint');
 const resetBtn = document.getElementById('btn-reset-appearance');
-const immediateErrorCheckingInput = document.getElementById('setting-immediate-error-checking');
+const mistakeDetectionInputs = dialog.querySelectorAll('input[name="mistake-detection"]');
 const musicEnabledInput = document.getElementById('setting-music-enabled');
 const musicVolumeInput = document.getElementById('setting-music-volume');
 const sfxEnabledInput = document.getElementById('setting-sfx-enabled');
@@ -41,7 +41,8 @@ function syncControls() {
       ? `System is currently ${effectiveMode === 'dark' ? 'Dark' : 'Light'}.`
       : '';
 
-  immediateErrorCheckingInput.checked = getGameSettings().immediateErrorChecking;
+  const { mistakeDetection } = getGameSettings();
+  for (const input of mistakeDetectionInputs) input.checked = input.value === mistakeDetection;
 
   const audio = getAudioSettings();
   musicEnabledInput.checked = audio.musicEnabled;
@@ -61,9 +62,9 @@ export function initSettingsDialog() {
     input.addEventListener('change', () => setMode(input.value));
   }
 
-  immediateErrorCheckingInput.addEventListener('change', () => {
-    setImmediateErrorChecking(immediateErrorCheckingInput.checked);
-  });
+  for (const input of mistakeDetectionInputs) {
+    input.addEventListener('change', () => setMistakeDetection(input.value));
+  }
 
   musicEnabledInput.addEventListener('change', () => setMusicEnabled(musicEnabledInput.checked));
   musicVolumeInput.addEventListener('input', () => setMusicVolume(Number(musicVolumeInput.value)));

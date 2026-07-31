@@ -244,10 +244,14 @@
       <p id="mode-current-hint" class="settings-hint" aria-live="polite"></p>
 
       <fieldset class="settings-group">
-        <legend>Gameplay</legend>
+        <legend>Mistake Detection</legend>
         <label class="option-tile">
-          <input type="checkbox" id="setting-immediate-error-checking">
-          <span>Immediate error checking</span>
+          <input type="radio" name="mistake-detection" value="immediate">
+          <span>Immediate — flag a wrong entry as soon as it's placed</span>
+        </label>
+        <label class="option-tile">
+          <input type="radio" name="mistake-detection" value="classic">
+          <span>Classic — no flagging; only find out when the puzzle won't complete</span>
         </label>
       </fieldset>
 
