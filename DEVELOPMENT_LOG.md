@@ -5,6 +5,67 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-31 — Board: Accent Ring for Matching-Number Highlighting
+
+**Branch:** `claude/number-selector-completion-jmqlpr`
+
+A request to "improve number highlighting throughout gameplay" turned
+out, on audit, to already be almost entirely built: `js/ui/board-view.js`
+already computes `isSelected`/`isRelated`/`isMatch` per cell every render
+(board-wide value matching, not just row/column peers), and `styles.css`
+already has an explicit, previously-audited hierarchy — related < match
+< selected — with selection additionally carrying its own accent ring so
+it unmistakably outranks the other two (Phase 14k, 2026-07-30). The
+`--duration-board` transition (0.15s) was already comfortably under the
+requested 200ms cap.
+
+**The one real gap, found by re-reading Phase 2's own token comments
+against what Phase 14k actually shipped:** Phase 2 required every board-
+state tint to be "paired with a structural cue (a ring/border, not color
+alone)" for color-blind/low-vision players. Phase 14k gave `.is-selected`
+that ring but deliberately left `.is-related`/`.is-match` as flat,
+ring-free color tints (reasoned, at the time, as necessary to keep them
+reading as visually subordinate to selection) — leaving "matching
+number" as a color-only signal, and not literally tied to "an accent
+color" as this request specifically asks for.
+
+**Fix, scoped to `.cell.is-match` only** (`styles.css`): added
+`box-shadow: inset 0 0 0 var(--border-width-thin) color-mix(in srgb,
+var(--color-accent) 55%, transparent)` — a thin (1px vs. selection's
+2px), half-opacity accent ring layered on top of the existing warm
+background tint (left untouched). This directly satisfies "a subtle
+accent color" without touching any of the 8 hand-tuned theme palettes,
+and gives matching-number cells a genuine non-color-fill channel
+(an edge/shape a fully colorblind player can still perceive) —
+closing the Phase 2 gap for this one state, without touching
+`.is-related` (row/column highlighting, explicitly "preserve" in the
+request) or `.is-selected` (must stay strongest).
+
+**Why not recolor `--color-cell-match` to be accent-derived instead:**
+tried this first as a Node script computing WCAG-luminance-matched
+accent/panel blends for all 8 palettes. Rejected after the numbers
+showed accent-derived tints would land nearly indistinguishable
+(contrast ~1.0–1.1) from the neutral `--color-cell-related` tint in the
+cool-accent themes (Light, Cyber) — worse than the status quo, and a
+wholesale recolor of 8 already-audited palettes for a net perceptual
+wash is a large blast radius for a marginal gain. The ring approach gets
+the literal "accent color" requirement with far less risk.
+
+**Verified:**
+- `npm test`: 187/187, unaffected (CSS-only change).
+- Headless Chromium (Playwright): selected a given clue, confirmed via
+  `getComputedStyle` that `.cell`'s `box-shadow` transition duration is
+  `0.15s` (under the 200ms cap); screenshotted the resulting
+  selected + related + matching-number combination (a clue with 4 other
+  same-digit cells on an Easy board) across Light (both modes), Cyber
+  (both modes), Woodgrain, and Paper — in every combination the accent
+  ring around matching cells reads as clearly subordinate to the
+  selected cell's own ring/fill, and legible without excessive contrast.
+
+**Files changed:** `styles.css`.
+
+---
+
 ## 2026-07-31 — Number Pad: Completed-Digit De-emphasis
 
 **Branch:** `claude/number-selector-completion-jmqlpr`

@@ -1188,22 +1188,36 @@ button {
 
 /* Priority when more than one applies: related < match < selected —
    declared in that order so later rules win on the shared `background`
-   property. Selected additionally gets an accent ring (a second,
-   structural channel — not just a stronger tint) so it unmistakably
-   outranks the flat related/match tints instead of competing with them
-   on saturation alone; related and match stay ring-free so they read
-   as subordinate/subtle exactly as requested. Conflicts use box-shadow
-   (a different property from background) so that signal never has to
-   compete with the fill colors for the cascade, and — being declared
-   last — its error-colored ring wins over the selection ring on a cell
-   that happens to be both selected and conflicting, while the selected
-   tint underneath still shows through. */
+   property. Selected additionally gets a full-strength accent ring (a
+   second, structural channel — not just a stronger tint) so it
+   unmistakably outranks match/related instead of competing with them
+   on saturation alone; related stays a flat, ring-free neutral tint so
+   it reads as the most subordinate/subtle state. Conflicts use
+   box-shadow (a different property from background) so that signal
+   never has to compete with the fill colors for the cascade, and —
+   being declared last — its error-colored ring wins over both the
+   match and selection rings on a cell that happens to be in conflict,
+   while the tint underneath still shows through. */
 .cell.is-related {
   background: var(--color-cell-related);
 }
 
+/* Matching-number cells: the existing warm background tint (unchanged)
+   plus a thin, half-opacity accent-colored ring — literally "a subtle
+   accent color," and a second, non-color-fill channel so this state
+   doesn't rely on hue/saturation alone (the same reasoning already
+   applied to fixed-vs-entered digits and to conflicts elsewhere on this
+   board). Deliberately thinner and lower-opacity than the selected
+   cell's own solid ring below (1px/55% vs 2px/100%) so, even before the
+   selected cell's stronger fill and full ring are considered, this
+   alone can never visually compete with — let alone outrank —
+   selection. `color-mix` with the `transparent` keyword is always safe
+   here regardless of theme: unlike --color-panel/-surface (gradients in
+   Woodgrain/Paper), --color-accent is a plain solid color in every
+   theme. */
 .cell.is-match {
   background: var(--color-cell-match);
+  box-shadow: inset 0 0 0 var(--border-width-thin) color-mix(in srgb, var(--color-accent) 55%, transparent);
 }
 
 .cell.is-selected {
