@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import { initAudioSettings, setVibrationEnabled } from './audio-settings.js';
 import {
   isHapticsSupported,
-  hapticCorrectEntry,
   hapticWrongEntry,
   hapticDigitComplete,
   hapticUnitComplete,
@@ -90,19 +89,13 @@ describe('isHapticsSupported', () => {
 });
 
 describe('individual triggers', () => {
-  test('hapticCorrectEntry fires the lightest pattern', async () => {
-    hapticCorrectEntry();
-    await Promise.resolve();
-    assert.deepEqual(vibrateCalls, [10]);
-  });
-
   test('hapticWrongEntry fires its own pattern', async () => {
     hapticWrongEntry();
     await Promise.resolve();
     assert.deepEqual(vibrateCalls, [40]);
   });
 
-  test('hapticDigitComplete fires a stronger pattern than a correct entry', async () => {
+  test('hapticDigitComplete fires the lightest tier of the progression ladder', async () => {
     hapticDigitComplete();
     await Promise.resolve();
     assert.deepEqual(vibrateCalls, [15]);
@@ -129,8 +122,8 @@ describe('individual triggers', () => {
 
 describe('coalescing within a single synchronous pass', () => {
   test('only the strongest of several same-tick requests actually fires', async () => {
-    hapticCorrectEntry();
     hapticDigitComplete();
+    hapticUnitComplete();
     hapticBoxComplete();
     await Promise.resolve();
     assert.deepEqual(vibrateCalls, [28]);
@@ -138,17 +131,17 @@ describe('coalescing within a single synchronous pass', () => {
 
   test('the strongest still wins even if requested first', async () => {
     hapticPuzzleComplete();
-    hapticCorrectEntry();
+    hapticDigitComplete();
     await Promise.resolve();
     assert.deepEqual(vibrateCalls, [[30, 40, 30]]);
   });
 
   test('two requests in separate synchronous passes both fire independently', async () => {
-    hapticCorrectEntry();
+    hapticDigitComplete();
     await Promise.resolve();
-    hapticCorrectEntry();
+    hapticDigitComplete();
     await Promise.resolve();
-    assert.deepEqual(vibrateCalls, [10, 10]);
+    assert.deepEqual(vibrateCalls, [15, 15]);
   });
 });
 

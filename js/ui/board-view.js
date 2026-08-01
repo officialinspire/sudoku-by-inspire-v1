@@ -2,7 +2,7 @@ import { getState, onStateChange, selectCell, getPeerIndices } from '../game-sta
 import { getGameSettings, onGameSettingsChange } from '../game-settings.js';
 import { getCellAriaLabel } from './cell-aria.js';
 import { getRowIndices, getColumnIndices, getBoxIndices } from '../sudoku-engine.js';
-import { hapticCorrectEntry, hapticDigitComplete, hapticUnitComplete, hapticBoxComplete } from '../haptics.js';
+import { hapticDigitComplete, hapticUnitComplete, hapticBoxComplete } from '../haptics.js';
 
 const boardEl = document.getElementById('board');
 const timerEl = document.getElementById('game-timer');
@@ -200,11 +200,6 @@ function render(state) {
 
       if (!suppressEntryFeedback && previousText !== String(value)) {
         retriggerAnimation(valueEl, 'is-value-enter');
-        // The lightest haptic tier — a correct digit just landed. Wrong
-        // entries get their own, separate cue (js/audio.js's playError,
-        // reacting to state.mistakes rising) rather than being decided
-        // here, so this only ever fires for the happy path.
-        if (!isFixed && value === state.solution[index]) hapticCorrectEntry();
       }
     } else {
       valueEl.textContent = '';
@@ -224,8 +219,18 @@ function render(state) {
   // tier of the haptic hierarchy (js/haptics.js) the exact render a
   // digit/row/column/box first becomes complete. Gated the same way as
   // the per-cell feedback above — never on the first paint of a
-  // (re)started or restored puzzle, whatever it already contains.
-  if (!suppressEntryFeedback) {
+  // (re)started or restored puzzle, whatever it already contains — and,
+  // per a UX harmony review, never on the render that finishes the whole
+  // puzzle either: js/ui/completion-dialog.js opens its own modal
+  // synchronously within this same state-change notification, so any
+  // glow triggered here would be layered underneath (and instantly
+  // hidden by) that dialog's backdrop before the browser ever paints it
+  // — wasted animation work, not a reward anyone actually sees. The
+  // completion dialog's own celebration becomes the sole "you're done"
+  // moment; hapticPuzzleComplete() (js/audio.js) still fires regardless,
+  // since it's requested independently and already wins the haptic
+  // hierarchy's coalescing over any of these tiers.
+  if (!suppressEntryFeedback && state.status !== 'complete') {
     forEachNewlyCompleted(previousCompletedDigits, state.completedDigits, (digit) => {
       const btn = numberButtons.find((b) => Number(b.dataset.digit) === digit);
       if (btn) retriggerAnimation(btn, 'is-just-completed');

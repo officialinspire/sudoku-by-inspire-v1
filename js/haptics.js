@@ -1,13 +1,22 @@
 /**
  * Centralized haptic (vibration) feedback — the one place in the app
  * that ever calls `navigator.vibrate()`. Every trigger below is a
- * named, semantic function (`hapticCorrectEntry()`,
+ * named, semantic function (`hapticDigitComplete()`,
  * `hapticPuzzleComplete()`, ...) rather than a raw pattern at the call
  * site, so every consumer (the board's progression detection in
  * js/ui/board-view.js, the win/error cues in js/audio.js) asks for
  * *what happened*, not *what buzz to play* — keeping the actual
  * durations/patterns tunable in exactly one place instead of scattered
  * `navigator.vibrate(...)` calls.
+ *
+ * Deliberately does *not* fire on every individual correct entry — an
+ * earlier version did (a UX harmony review flagged it: a physical buzz
+ * on every single digit placed, dozens of times per puzzle, reads as
+ * repetitive/naggy over a long session, the opposite of "reward
+ * meaningful progress"). The hierarchy below starts at *Completed
+ * Number* — the first milestone actually worth a tactile nudge — and
+ * the ordinary settle-in animation (styles.css's `.is-value-enter`)
+ * still confirms each keystroke visually, without a physical one.
  *
  * Every call is gated identically, in this order:
  * 1. `navigator.vibrate` must exist — desktop browsers and iOS Safari
@@ -51,13 +60,12 @@
 
 import { getAudioSettings } from './audio-settings.js';
 
-// Ascending "light impact" hierarchy — Correct Number < Completed
-// Number < Completed Row/Column < Completed Box < Puzzle Complete.
-// `wrongEntry` sits outside that ladder (it's a distinct, pre-existing
-// cue, not a rung of "progress") but is ranked here too so it still
-// takes part in the same coalescing rule as everything else.
+// Ascending "light impact" hierarchy — Completed Number < Completed
+// Row/Column < Completed Box < Puzzle Complete. `wrongEntry` sits
+// outside that ladder (it's a distinct, pre-existing cue, not a rung of
+// "progress") but is ranked here too so it still takes part in the same
+// coalescing rule as everything else.
 const TIERS = {
-  correctEntry: { rank: 1, pattern: 10 },
   wrongEntry: { rank: 1, pattern: 40 },
   digitComplete: { rank: 2, pattern: 15 },
   unitComplete: { rank: 3, pattern: 20 }, // a row or a column — the hierarchy treats them as one rung
@@ -100,17 +108,12 @@ function requestHaptic(name) {
   });
 }
 
-/** A correct digit was just placed in a cell — the lightest tier. */
-export function hapticCorrectEntry() {
-  requestHaptic('correctEntry');
-}
-
 /** A digit entered doesn't match the solution. */
 export function hapticWrongEntry() {
   requestHaptic('wrongEntry');
 }
 
-/** All 9 correct instances of a number are now placed. */
+/** All 9 correct instances of a number are now placed — the lightest tier. */
 export function hapticDigitComplete() {
   requestHaptic('digitComplete');
 }

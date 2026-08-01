@@ -113,7 +113,23 @@ export function playClick() {
   playTone({ frequency: 620, duration: 0.06, type: 'sine', peakGain: 0.16 });
 }
 
+// Holding an arrow key (or dragging a finger/mouse across the board)
+// fires a new selection change roughly every 20-50ms at the OS's own
+// key-repeat rate — with no throttle, each one layers a fresh 80ms tone
+// on top of whatever's still decaying from the last, which reads as an
+// unpleasant flutter rather than a calm tick. A short cooldown collapses
+// a fast-moving run into one tone per pause instead of one per cell,
+// while every deliberate, human-paced tap or press still gets its own
+// — a UX harmony review flagged the un-throttled version as the app's
+// one genuinely repetitive/noisy sound.
+const SELECT_THROTTLE_SECONDS = 0.08;
+let lastSelectPlayedAt = -Infinity;
+
 export function playSelect() {
+  if (!audioContext) return;
+  const now = audioContext.currentTime;
+  if (now - lastSelectPlayedAt < SELECT_THROTTLE_SECONDS) return;
+  lastSelectPlayedAt = now;
   playTone({ frequency: 720, frequencyEnd: 900, duration: 0.08, type: 'sine', peakGain: 0.14 });
 }
 

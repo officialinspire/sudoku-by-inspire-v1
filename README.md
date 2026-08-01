@@ -334,7 +334,7 @@ For discoverability on GitHub (Settings → General → Topics):
   project's own headless CI/sandbox environment — see
   `DEVELOPMENT_LOG.md`'s Phase 1 and Phase 9 entries). Either way, the
   app should recover on its own into the main menu, not get stuck.
-- **No sound**: check Settings → Audio & Haptics — SFX/Music might be
+- **No sound**: check Settings → Audio & haptics — SFX/Music might be
   muted or their volume near zero. Also note audio only initializes
   after the very first Touch/Click-to-Start gesture (a browser
   requirement, not a bug) — if you scripted around that first click,

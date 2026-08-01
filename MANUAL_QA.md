@@ -195,7 +195,7 @@ least once:
 
 ## 9. Audio settings and missing optional music
 
-- [ ] Settings → Audio & Haptics: Music toggle + volume slider, SFX
+- [ ] Settings → Audio & haptics: Music toggle + volume slider, SFX
       toggle + volume slider, Vibration toggle are all present and
       interactive.
 - [ ] With SFX on, button presses, cell selection, mistakes, and puzzle

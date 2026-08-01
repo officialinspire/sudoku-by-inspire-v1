@@ -5,6 +5,107 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-07-31 — UX Harmony Review
+
+**Branch:** `claude/number-selector-completion-jmqlpr`
+
+A holistic pass across animations, haptics, highlighting, typography,
+spacing, transitions, audio, completion feedback, responsiveness, and
+accessibility — not a new feature, a "does everything still add up to
+one calm, intentional experience" check against the last several
+sessions' additions (number-pad completion, matching-number highlight,
+mistake detection, progression animations, haptics). Guiding question
+throughout: does this reward meaningful progress, or does it distract
+from solving? Most of what was audited held up — the board's
+selected/related/match hierarchy, the completion dialog's one real
+"celebration" moment, the reduced-motion/reduced-feedback gating, the
+existing font-size-6/-8 near-collision already flagged and deliberately
+deferred back in Phase 14h — all reviewed, nothing further needed there.
+Four concrete issues did fall out, all fixed:
+
+**1. Haptic feedback on every correct entry was the single most likely
+source of "repetitive" (`js/haptics.js`, `js/ui/board-view.js`):** the
+previous session's hierarchy started at "a correct digit placed," firing
+a physical buzz dozens of times per puzzle. A single correct digit isn't
+"meaningful progress" the way finishing a number/row/box/puzzle is, and
+unlike a quick visual pulse, a *physical* buzz repeated that often over
+a long session reads as naggy rather than rewarding — the standard
+reason most apps reserve haptics for real milestones, not every
+keystroke. Removed `hapticCorrectEntry` entirely (function, tier, call
+site, tests) rather than leaving dead code; the hierarchy now starts at
+*Completed Number* (15ms, now the lightest tier). The existing
+`.is-value-enter` settle-in pulse still confirms every keystroke
+visually — this only removes the tactile repeat, not the feedback.
+
+**2. Rapid-fire selection sound during fast board navigation
+(`js/audio.js`):** holding an arrow key (or dragging a finger/mouse
+across cells) fires a new `playSelect()` roughly every 20-50ms at the
+OS's key-repeat rate, with no throttle — each call layered a fresh tone
+on top of whatever was still decaying, an audible flutter rather than a
+calm tick. Added an 80ms cooldown local to `playSelect()`. Verified with
+an instrumented `AudioContext` in headless Chromium: 12 rapid-fire
+`ArrowRight` presses (2ms apart) now produce exactly **1** tone (was
+12); 4 deliberate presses 200ms apart still produce 4 — normal,
+human-paced play is untouched.
+
+**3. Wasted/invisible completion glow at the exact moment it matters
+least (`js/ui/board-view.js`):** the digit/row/column/box "you just
+finished this" glow (previous session) and
+`js/ui/completion-dialog.js`'s `showModal()` both react to the same
+state change synchronously — meaning on the render that finishes the
+whole puzzle, any board-level glow gets layered underneath the
+dialog's backdrop *before the browser ever paints it*. Verified via
+headless Chromium: filling a puzzle's last cell resulted in zero cells
+gaining `is-unit-complete`, confirming the glow was previously wasted
+animation work at exactly the moment a real celebration (the dialog)
+already owns the moment. Guarded the whole progression-glow block on
+`state.status !== 'complete'`; the haptic hierarchy's own coalescing
+already guaranteed `hapticPuzzleComplete()` wins regardless, so no
+haptic behavior changed.
+
+**4. Inconsistent Settings-dialog copy (`index.html`, `MANUAL_QA.md`,
+`README.md`):** "Theme pack" and "Color mode" are sentence case; the
+prior two sessions' additions, "Mistake Detection" and "Audio &
+Haptics," were Title Case — a small but real inconsistency in a dialog
+whose whole point is feeling like one coherent system. Renamed both to
+"Mistake detection" / "Audio & haptics" and updated the two docs that
+quote the exact UI text for QA/troubleshooting purposes.
+
+**Verified:** `npm test` 220/220 (one test removed along with
+`hapticCorrectEntry`, none broken). Headless Chromium confirmed: a
+correct entry no longer vibrates; a wrong entry (40) and digit
+completion (15) still do; the audio throttle numbers above; the
+finishing move produces exactly one vibrate call (the puzzle-complete
+pattern) and zero new `is-unit-complete` cells; the completion dialog
+screenshot shows a clean scrim over a dimmed board with no stray glow
+underneath.
+
+**Remaining polish opportunities (reviewed, deliberately not touched
+this pass):**
+- `--duration-fast`, `--duration-dialog`, and `--duration-progress`
+  (styles.css) are currently three identically-valued (0.2s) tokens for
+  three different semantic purposes. Each was individually justified
+  when introduced; consolidating them would be a pure internal refactor
+  with zero visible effect, out of scope for a review about the
+  *experience* rather than the token architecture — noted here for a
+  future intentional pass rather than done as a side effect of this one.
+- The Settings dialog's own action buttons ("Reset Appearance," "Clear
+  Data") are Title Case, inconsistent with the sentence-case fieldset
+  legends fixed above — a pre-existing pattern predating this app's
+  gameplay-focused sessions, and broader than this review's scope
+  (button-label style across the whole app, not the gameplay
+  experience specifically). Worth a deliberate copy-style decision
+  rather than folding into this pass.
+- `--font-size-6`/`--font-size-8` sitting oddly close (0.95rem/1.05rem)
+  was already flagged and deliberately deferred in Phase 14h/14p; still
+  true, still deferred, re-confirmed rather than silently fixed here.
+
+**Files changed:** `js/haptics.js`, `js/haptics.test.js`,
+`js/ui/board-view.js`, `js/audio.js`, `index.html`, `MANUAL_QA.md`,
+`README.md`.
+
+---
+
 ## 2026-07-31 — Centralized Haptic Feedback Hierarchy
 
 **Branch:** `claude/number-selector-completion-jmqlpr`
