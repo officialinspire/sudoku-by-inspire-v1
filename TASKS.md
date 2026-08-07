@@ -1397,6 +1397,26 @@ catching the actual failure mode.
       architectural fix for a documented failure class, not something
       provable end-to-end without the user's device.
 
+## Phase 14r — Mobile Audio Playtest Verification ✅ (2026-08-07)
+
+Follow-up to Phase 14q: playtest and verify menu/gameplay background
+music, SFX, and fade-in/fade-out quality actually work — fix whatever
+turns up. Nothing turned up; this phase is the verification record.
+
+- [x] Headless Chromium (Playwright), Pixel 5 device emulation, real
+      `Sudoku Zen.mp3`/`Logic Flow.mp3` files, `<audio>`/oscillator
+      instrumentation via `page.addInitScript`. Confirmed: smooth
+      exponential menu-music fade-in (0 → 0.5 over ~1.8s); true
+      overlapping menu↔gameplay crossfade on new-game start and on
+      pause-overlay open/close; live volume-slider response mid-fade;
+      mute fades to 0 and actually pauses, unmute fades back up; SFX
+      oscillators fire on button clicks, cell selection, and digit
+      entry. Zero page errors across all runs. Full detail and sampled
+      curves in `DEVELOPMENT_LOG.md`.
+- [x] No code changes required — Phase 14q's fix already delivers this;
+      `MANUAL_QA.md`'s real-Android confirmation item is the only thing
+      this sandbox still can't close out.
+
 ## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and

@@ -5,6 +5,75 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-08-07 — Phase 14r: Mobile Audio Playtest Verification (No Code Changes Needed)
+
+**Branch:** `claude/mobile-music-playback-issues-oymb5w`
+
+Follow-up request after Phase 14q: verify menu and gameplay background
+music actually play correctly on mobile, and that SFX/fade-in/fade-out
+quality holds up, then push. This was a verification pass, not a
+redesign — the plan going in was to fix whatever the playtest turned up,
+but the playtest didn't turn anything up.
+
+**Method.** Headless Chromium (Playwright) emulating a Pixel 5 device
+profile, served the app with the real `Sudoku Zen.mp3`/`Logic Flow.mp3`
+files already in this repo. Instrumented `window.Audio` via
+`page.addInitScript` (before any app code runs) to sample every music
+`<audio>` element's `.volume`/`.paused` every 100ms, and instrumented
+`AudioContext.prototype.createOscillator` to confirm SFX tones actually
+fire. This is the same category of instrumentation used to verify Phase
+14q's crossfade math, extended here to cover the full audio surface the
+user asked about.
+
+**Verified, all correct:**
+
+- **Menu music fade-in** (first gesture → landing on the main menu):
+  smooth exponential ramp from 0 to the 0.5 default slider level over
+  ~1.8s — sampled curve: 0.036 → 0.128 → 0.262 → 0.402 → 0.468 → 0.493 →
+  0.498, no jumps or steps.
+- **Menu → gameplay crossfade** (starting a new game): both tracks ramp
+  simultaneously in opposite directions (menu 0.5→0, gameplay 0→0.5)
+  with real overlap — gameplay's fade-in samples show it already
+  audible (0.018, 0.1, 0.179...) while menu is still well above zero
+  (0.482, 0.4, 0.321...), confirming the "incoming track starts before
+  fade-in begins, outgoing track only pauses once fade-out actually
+  finishes" design holds in practice, not just in the source.
+- **Pause-overlay crossfade** (mid-game Escape): same clean overlapping
+  fade in reverse (gameplay→menu), correctly re-verified against real
+  audio after Phase 14q's rework of the fade mechanism.
+- **Live volume-slider response**: dragging `#setting-music-volume`
+  mid-playback updates the active track's audible volume immediately
+  (not just on the next fade), confirmed by sampling right after a
+  simulated drag.
+- **Mute/unmute**: toggling the music checkbox off fades the active
+  track smoothly to 0 over ~1.9s and then actually pauses the element
+  (not just silences it); toggling back on fades it back up to the
+  slider level. Both directions sampled end-to-end.
+- **SFX**: confirmed `createOscillator` calls fire on generic button
+  clicks (`js/ui/audio-bindings.js`), board-cell selection, and digit
+  entry — the synthesized-tone pipeline Phase 14q left untouched (SFX
+  still uses the shared AudioContext; only music was decoupled from it).
+- **Zero page errors** across every run (three separate Playwright
+  sessions covering fade-in, crossfade/SFX, and mute/pause-overlay
+  respectively) — no unhandled promise rejections, no thrown exceptions.
+
+**Not re-litigated:** Phase 14q's actual bug fix (decoupling music from
+the AudioContext to survive Android's graph-death failure mode) — this
+session's job was to confirm the resulting audio *quality* (smoothness,
+timing, correctness of every trigger path), not to re-diagnose the
+mobile-specific bug again. The real-device confirmation that Phase 14q's
+fix actually holds under a genuine Android suspend/resume cycle is still
+the one thing this sandbox categorically cannot produce (see Phase 14q's
+own verification notes) — that remains the last open item in
+`MANUAL_QA.md`'s mobile-music checklist.
+
+**Outcome:** no code changes. `js/audio.js` already satisfies "background
+music plays correctly for main menu and gameplay, with quality SFX and
+fade in/out" as designed by Phase 14q; this entry exists so that
+conclusion is backed by evidence rather than asserted.
+
+---
+
 ## 2026-08-07 — Phase 14q: Mobile Music, Root-Cause Fix
 
 **Branch:** `claude/mobile-music-playback-issues-oymb5w`
