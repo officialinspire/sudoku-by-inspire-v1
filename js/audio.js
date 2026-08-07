@@ -1,6 +1,6 @@
 /**
  * The AudioManager: one shared AudioContext for every synthesized sound
- * effect and for optional background music.
+ * effect, plus independent background-music playback.
  *
  * Browsers refuse to let audio play until a real user gesture has
  * happened on the page, so `initAudioEngine()` must only ever be called
@@ -23,6 +23,23 @@
  * js/ui/intro-video.js. Only one track plays at a time; switching tracks
  * (via `js/screens.js`'s `onScreenChange`, a game-state pause/resume, or
  * game completion) crossfades rather than cutting instantly.
+ *
+ * Music deliberately does NOT run through the shared AudioContext/Web
+ * Audio graph (no `createMediaElementSource`, no `GainNode`) — each
+ * track's own `<audio>` element controls its volume directly. This was a
+ * mobile bug fix, not a style choice: earlier versions routed music
+ * through the same AudioContext as the SFX, and on Android Chrome in
+ * particular, that graph can go silently dead across a suspend/resume
+ * cycle (screen lock, backgrounding, even just cycling the context fast
+ * enough while pausing/resuming a game) — `<audio>.paused` and
+ * `AudioContext.state` both keep reporting "everything's fine" while
+ * nothing reaches the speakers, because the *connection* died, not
+ * either endpoint's own state. No amount of watching those two flags
+ * (which is all the previous recovery logic did) can catch that. Plain
+ * `<audio>` elements, played and volume-controlled directly, don't share
+ * that failure mode — they're independent of whatever the AudioContext
+ * is doing, so an SFX-related context suspend can no longer take music
+ * down with it.
  */
 
 import { getAudioSettings, onAudioSettingsChange } from './audio-settings.js';
@@ -43,7 +60,6 @@ const AudioContextCtor =
 
 let audioContext = null;
 let sfxMasterGain = null;
-let musicGain = null;
 let musicTracks = null; // { menu: Track, gameplay: Track }, built once the engine initializes
 let activeTrackName = null; // 'menu' | 'gameplay' | null
 let engineInitialized = false;
@@ -152,31 +168,43 @@ function applySfxGain() {
   sfxMasterGain.gain.value = getAudioSettings().sfxVolume;
 }
 
-function applyMusicGain() {
-  // The master `musicGain` node still tracks the volume slider directly
-  // (matches applySfxGain's reasoning: an in-flight fade updates live).
-  // Each track's *own* gain node (created in createMusicTrack) is purely
-  // the 0/1 "is this the active track" fade value — the two multiply
-  // together in the audio graph, so neither has to know about the other.
-  if (!musicGain) return;
-  musicGain.gain.value = getAudioSettings().musicVolume;
+function clamp01(value) {
+  return Math.min(1, Math.max(0, value));
+}
+
+// A track's audible volume is two independently-controlled 0..1 values
+// multiplied together: `fadeLevel` (this track's own crossfade position —
+// 0 when it's the inactive track, animated toward 1 while it's the active
+// one) and the user's music-volume slider setting. Recomputing and
+// re-applying both here, rather than only ever setting `.volume` from
+// inside the fade loop, is what makes the slider update an in-flight fade
+// live instead of only taking effect once the fade finishes.
+function applyTrackVolume(track) {
+  track.element.volume = clamp01(track.fadeLevel * getAudioSettings().musicVolume);
+}
+
+function applyMusicVolume() {
+  if (!musicTracks) return;
+  for (const track of Object.values(musicTracks)) applyTrackVolume(track);
 }
 
 /**
  * One background-music track: its own `<audio>` element (so each track
  * can be independently paused/loaded without touching the other) and its
- * own gain node used purely for fade-in/fade-out, feeding into the
- * shared `musicGain` (the actual volume-slider control) below it.
+ * own `fadeLevel` used purely for fade-in/fade-out — see the module doc
+ * comment above for why this is a plain element volume rather than a Web
+ * Audio gain node.
  */
 function createMusicTrack(name, src) {
   const track = {
     element: new Audio(encodeURI(src)),
-    gain: audioContext.createGain(),
+    fadeLevel: 0,
+    fadeAnimationId: null,
     available: false,
   };
   track.element.loop = true;
   track.element.preload = 'auto';
-  track.gain.gain.value = 0;
+  track.element.volume = 0;
 
   // Optional asset: a 404 or a decode failure just means this track
   // isn't available this session, not a broken app — same policy as the
@@ -214,33 +242,57 @@ function createMusicTrack(name, src) {
     if (activeTrackName === name) recoverMusicPlayback();
   });
 
-  const source = audioContext.createMediaElementSource(track.element);
-  source.connect(track.gain);
-  track.gain.connect(musicGain);
   return track;
 }
 
 /**
- * An exponential approach toward targetGain rather than a straight
- * linear ramp. Linear gain ramps sound abrupt to the ear — loudness is
- * perceived roughly logarithmically, so a constant-rate gain change
- * reads as "holding, holding, holding... then suddenly cut/appear" near
- * the tail end rather than a smooth crossfade. setTargetAtTime's
- * exponential curve matches how volume actually sounds instead, and
- * since it's just "keep moving toward wherever the target is *from
- * wherever gain currently sits*," re-triggering it mid-fade (e.g. a
- * fast pause/resume) blends into the new direction with no audible
- * discontinuity — restarting a linear ramp mid-flight can't do that as
- * cleanly. `seconds / 4` as the time constant: after 4 time constants
- * the curve has covered ~98% of the distance to target, so the fade
- * reads as "done" right around `seconds`, matching the old linear
- * ramp's timing for every setTimeout that waits on MUSIC_FADE_SECONDS.
+ * An exponential approach toward targetLevel rather than a straight
+ * linear ramp. Linear fades sound abrupt to the ear — loudness is
+ * perceived roughly logarithmically, so a constant-rate change reads as
+ * "holding, holding, holding... then suddenly cut/appear" near the tail
+ * end rather than a smooth crossfade. Moving `fadeLevel` a fraction of
+ * its remaining distance every animation frame matches how volume
+ * actually sounds instead, and since it's just "keep moving toward
+ * wherever the target is *from wherever fadeLevel currently sits*",
+ * re-triggering it mid-fade (e.g. a fast pause/resume) blends into the
+ * new direction with no audible discontinuity — restarting a linear ramp
+ * mid-flight can't do that as cleanly. `seconds / 4` as the time
+ * constant: after 4 time constants the curve has covered ~98% of the
+ * distance to target, so the fade reads as "done" right around `seconds`.
+ *
+ * This animates the track's own `fadeLevel` via requestAnimationFrame and
+ * writes straight to `track.element.volume` (through applyTrackVolume, so
+ * the music-volume slider is respected too) — deliberately not an
+ * AudioParam ramp, since that would mean routing music back through the
+ * AudioContext this file is built to keep music independent of (see the
+ * module doc comment).
  */
-function fadeTrackGainTo(track, targetGain, seconds) {
-  const now = audioContext.currentTime;
-  track.gain.gain.cancelScheduledValues(now);
-  track.gain.gain.setValueAtTime(track.gain.gain.value, now);
-  track.gain.gain.setTargetAtTime(targetGain, now, seconds / 4);
+function fadeTrackTo(track, targetLevel, seconds) {
+  if (track.fadeAnimationId !== null) {
+    cancelAnimationFrame(track.fadeAnimationId);
+    track.fadeAnimationId = null;
+  }
+
+  const timeConstant = seconds / 4;
+  let lastTimestamp = null;
+
+  const step = (timestamp) => {
+    const dt = lastTimestamp === null ? 0 : (timestamp - lastTimestamp) / 1000;
+    lastTimestamp = timestamp;
+
+    track.fadeLevel += (targetLevel - track.fadeLevel) * (1 - Math.exp(-dt / timeConstant));
+    applyTrackVolume(track);
+
+    if (Math.abs(targetLevel - track.fadeLevel) < 0.003) {
+      track.fadeLevel = targetLevel;
+      applyTrackVolume(track);
+      track.fadeAnimationId = null;
+      return;
+    }
+    track.fadeAnimationId = requestAnimationFrame(step);
+  };
+
+  track.fadeAnimationId = requestAnimationFrame(step);
 }
 
 function canPlayMusicNow() {
@@ -262,12 +314,11 @@ function setActiveMusicTrack(name) {
   for (const [trackName, track] of Object.entries(musicTracks)) {
     if (trackName === name) {
       if (track.available && canPlayMusicNow()) {
-        ensureContextRunning();
         track.element.play().catch(() => {});
-        fadeTrackGainTo(track, 1, MUSIC_FADE_SECONDS);
+        fadeTrackTo(track, 1, MUSIC_FADE_SECONDS);
       }
     } else {
-      fadeTrackGainTo(track, 0, MUSIC_FADE_SECONDS);
+      fadeTrackTo(track, 0, MUSIC_FADE_SECONDS);
       setTimeout(() => {
         // Only pause if nothing re-activated this track while we waited
         // out the fade (e.g. rapid screen switching).
@@ -286,12 +337,18 @@ function updateMusicPlayback() {
   const track = musicTracks[activeTrackName];
   if (!track.available) return;
   if (canPlayMusicNow()) {
-    ensureContextRunning();
     track.element.play().catch(() => {});
-    fadeTrackGainTo(track, 1, MUSIC_FADE_SECONDS);
+    fadeTrackTo(track, 1, MUSIC_FADE_SECONDS);
   } else {
-    fadeTrackGainTo(track, 0, MUSIC_FADE_SECONDS);
-    setTimeout(() => track.element.pause(), MUSIC_FADE_SECONDS * 1000 + 50);
+    fadeTrackTo(track, 0, MUSIC_FADE_SECONDS);
+    setTimeout(() => {
+      // Only pause if playback is still supposed to be off by the time the
+      // fade finishes — canPlayMusicNow() can flip back to true mid-fade
+      // (e.g. the music toggle or tab visibility changing twice in quick
+      // succession), and pausing unconditionally here would cut a track
+      // that fadeLevel has since ramped back up for.
+      if (musicTracks[activeTrackName] === track && !canPlayMusicNow()) track.element.pause();
+    }, MUSIC_FADE_SECONDS * 1000 + 50);
   }
 }
 
@@ -303,28 +360,27 @@ function loadMusicTracks() {
 }
 
 /**
- * The single shared recovery path for "music should be audible right
- * now but might not actually be" — used by the per-track 'pause'
- * listener, the AudioContext 'statechange' listener, and the
- * low-frequency safety-net poll below, so all three agree on exactly
- * what "recovered" means instead of three slightly different checks.
+ * The single shared recovery path for "music should be audible right now
+ * but might not actually be" — used by the per-track 'pause' listener and
+ * the low-frequency safety-net poll below, so both agree on exactly what
+ * "recovered" means instead of two slightly different checks.
  *
- * Critically, this resumes the *AudioContext* every time, not just the
- * <audio> element: a mobile browser reclaiming audio focus (locking the
- * screen, a phone call, another app grabbing the audio session — all
- * common on Android) can suspend the shared AudioContext independently
- * of the <audio> element's own play/pause state. When that happens,
- * `track.element.paused` still reads `false` — the element itself never
- * stopped "playing" — but nothing is actually reaching the speakers,
- * because the graph it's routed through is suspended. Checking only
- * `.paused` (the earlier version of this fix) misses that case
- * entirely: it looks fully recovered while staying completely silent.
+ * This only ever needs to check the <audio> element's own `.paused` state
+ * — unlike an earlier version of this fix, there's no AudioContext to
+ * also resume here, because music no longer routes through it at all
+ * (see the module doc comment). That's specifically what makes this
+ * simple check reliable now: previously, a suspended AudioContext could
+ * leave `track.element.paused` reading `false` while nothing actually
+ * reached the speakers, because the *graph* was suspended out from under
+ * an element that still thought it was playing — no element-level flag
+ * could ever have caught that, which is why it kept coming back after
+ * two earlier attempts to patch it from this side. Removing the shared
+ * graph removes that failure mode instead of chasing it further.
  */
 function recoverMusicPlayback() {
   if (!musicTracks || !activeTrackName || !canPlayMusicNow()) return;
   const track = musicTracks[activeTrackName];
   if (!track.available) return;
-  ensureContextRunning();
   if (track.element.paused) track.element.play().catch(() => {});
 }
 
@@ -435,39 +491,30 @@ export function initAudioEngine() {
   audioContext = new AudioContextCtor();
 
   sfxMasterGain = audioContext.createGain();
-  musicGain = audioContext.createGain();
   const compressor = audioContext.createDynamicsCompressor();
 
-  // Every sound funnels through one shared compressor before hitting
+  // Every SFX tone funnels through one shared compressor before hitting
   // the speakers — individual tone envelopes already stay well under
   // full scale (see playTone's peakGain values), but several sounds can
   // legitimately overlap (a wrong digit fires a click *and* an error
   // tone in the same instant); the compressor is a cheap safety margin
   // against that sum ever clipping, rather than something load-bearing.
+  // Music isn't part of this graph — see the module doc comment.
   sfxMasterGain.connect(compressor);
-  musicGain.connect(compressor);
   compressor.connect(audioContext.destination);
 
   applySfxGain();
-  applyMusicGain();
   ensureContextRunning();
   loadMusicTracks();
+  applyMusicVolume();
 
   onAudioSettingsChange(() => {
     applySfxGain();
-    applyMusicGain();
+    applyMusicVolume();
     updateMusicPlayback();
   });
 
   document.addEventListener('visibilitychange', handleVisibilityChange);
-
-  // Fires whenever the context itself transitions state — including a
-  // browser suspending it out from under the app (Android in particular
-  // does this readily: locking the screen, a phone call, another app
-  // taking the audio focus). This is the fast path for exactly that:
-  // recovers as soon as the browser reports the transition instead of
-  // waiting on the safety-net poll below.
-  audioContext.addEventListener('statechange', recoverMusicPlayback);
 
   // Picks the right music track for whatever screen is showing right
   // when the engine finishes initializing (e.g. the menu, if it's
@@ -483,8 +530,7 @@ export function initAudioEngine() {
   // Final backstop, on a low-frequency timer, for whatever's left: a
   // .play() call whose promise silently rejected without ever
   // transitioning the element out of paused (no 'pause' event fires for
-  // that, since it never started), or a suspend that happens not to fire
-  // a 'statechange' event in some browser. Cheap insurance against
-  // needing to enumerate every possible mobile-browser failure mode.
+  // that, since it never started). Cheap insurance against needing to
+  // enumerate every possible mobile-browser failure mode.
   setInterval(recoverMusicPlayback, 2000);
 }

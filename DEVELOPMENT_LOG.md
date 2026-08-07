@@ -5,6 +5,94 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-08-07 — Phase 14q: Mobile Music, Root-Cause Fix
+
+**Branch:** `claude/mobile-music-playback-issues-oymb5w`
+
+Direct follow-up to real-device testing: the user reported background
+music on Android Chrome still stops and doesn't resume, specifically
+around pausing/resuming the game and switching screens — meaning Phase
+14d's and 14f's fixes (a per-track `pause` listener, an `AudioContext`
+`statechange` listener, and a 2-second safety-net poll, all added
+2026-07-30 to chase the same symptom) still weren't catching the real
+failure mode.
+
+**Diagnosis.** Re-read the whole music pipeline with the specific
+question "what could make every one of those three recovery mechanisms
+see 'looks fine' while staying silent?" All three checks ultimately boil
+down to two flags: `track.element.paused` and `audioContext.state`.
+Music was routed through the *same* AudioContext graph as the SFX
+synthesis (`createMediaElementSource(track.element) → GainNode →
+compressor → destination`) — and Android Chrome has a known fragility
+where that specific graph shape (a `MediaElementAudioSourceNode` feeding
+a Web Audio graph) can go silently dead across a suspend/resume cycle,
+independent of whether the element itself is "playing" or the context
+reports "running." When that happens, `.paused` stays `false` (the
+element never stopped) and `.state` can read `'running'` (the context
+resumed fine) — but the *connection* between them is severed, and
+nothing reaches the speakers. That's a failure mode no amount of
+watching those two flags can ever detect, which is exactly why two
+successive targeted patches from the same angle didn't fully fix it.
+
+**Fix (`js/audio.js`):** decoupled background music from the Web Audio
+graph entirely.
+
+- Removed `createMediaElementSource`/`GainNode` for music tracks. Each
+  track's own `<audio>` element now controls its volume directly via the
+  native `.volume` property.
+- Replaced the `AudioParam.setTargetAtTime`-based crossfade
+  (`fadeTrackGainTo`) with a `requestAnimationFrame`-driven equivalent
+  (`fadeTrackTo`) that animates a plain per-track `fadeLevel` (0..1) and
+  writes it to `element.volume` multiplied by the music-volume slider
+  setting — same exponential-approach feel and ~`seconds`-to-settle
+  timing as before, just without an AudioParam.
+- `recoverMusicPlayback()` simplified to only check
+  `track.element.paused` — there's no AudioContext state left to also
+  resume, since music no longer touches the context at all. Removed the
+  now-pointless `AudioContext` `statechange` listener along with it (SFX
+  still uses the context normally; `ensureContextRunning()` still guards
+  every `playTone()` call).
+- Found and fixed a smaller, related bug while in this code:
+  `updateMusicPlayback()`'s trailing `pause()` call (scheduled after
+  fading out for a disabled-music/hidden-tab state) fired
+  *unconditionally* once its timeout elapsed, even if music had been
+  re-enabled again mid-fade — unlike `setActiveMusicTrack()`'s matching
+  pause, which already re-checked before pausing. Added the same guard.
+
+**Verification:**
+
+- `node --check` across every `.js` file: clean.
+- `npm test`: 181/181 (no existing test reaches into these internals
+  directly, so this was a check that the refactor didn't disturb
+  anything observable, not a targeted regression suite for the new
+  code).
+- Headless Chromium (Playwright), against the real `Sudoku Zen.mp3` /
+  `Logic Flow.mp3` files already in this repo: started a new game,
+  pressed Escape to pause, clicked Resume, then fired 6 rapid Escape
+  presses in immediate succession (~150ms apart) to stress the crossfade
+  scheduling. Zero page errors. Instrumented `Audio()` itself (via
+  `page.addInitScript`) to log every real `play`/`pause` event and each
+  track's final `.paused`/`.volume` — after the toggle sequence settled,
+  the gameplay track was correctly active, unpaused, and at the slider
+  volume (0.5), and the menu track was correctly paused and silent,
+  exactly matching what that exact sequence of toggles should produce.
+- **What this doesn't (and can't) prove:** the specific Android Chrome
+  Web-Audio-graph-death behavior this fix targets can't be reproduced in
+  this sandbox — same limitation already noted for the intro video
+  (Phase 1) and for Phase 14f's `AudioContext.suspend()` simulation
+  (real OS-level audio-focus loss isn't something headless Chromium
+  running here experiences). This is a root-cause architectural fix for
+  a well-documented class of mobile Web Audio bug, reasoned through and
+  verified as far as this sandbox allows — not something provable
+  end-to-end without the user's own device. `MANUAL_QA.md`'s mobile
+  music checklist item is updated accordingly and still needs a real
+  Android pass to close out.
+- `sw.js` `CACHE_NAME` bumped so an already-installed PWA on a phone
+  actually picks up this fix instead of continuing to serve the old
+  cached `js/audio.js`.
+
+---
+
 ## 2026-07-30 — Phase 14p: Final Polish & Performance Audit
 
 **Branch:** `claude/sudoku-inspire-setup-2jpef2`
