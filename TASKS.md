@@ -1349,6 +1349,54 @@ audit itself finds broken.
       responsiveness/reduced-motion checks above — all passing, zero
       regressions.
 
+## Phase 14q — Mobile Music: Decouple From AudioContext (Root-Cause Fix) ✅ (2026-08-07)
+
+Direct follow-up to a real-device report: the user tested on Android
+Chrome again and background music was still stopping and not resuming,
+specifically around pausing/resuming the game and switching screens —
+meaning Phase 14d's and 14f's recovery logic (pause listener,
+`AudioContext` `statechange` listener, 2s safety-net poll) still wasn't
+catching the actual failure mode.
+
+- [x] Diagnosed the likely root cause: music was routed through the
+      shared `AudioContext` via `createMediaElementSource` + `GainNode`,
+      the same graph SFX synthesis uses. Android Chrome is known to be
+      able to silently sever that graph across a suspend/resume cycle
+      (screen lock, backgrounding, or just cycling the context fast
+      enough while pausing/resuming) — and when only the *graph*
+      dies, both `<audio>.paused` and `AudioContext.state` keep
+      reporting "fine," which is exactly the blind spot both previous
+      fixes had, since they only ever watched those two flags.
+- [x] **Fix (`js/audio.js`):** removed music from the Web Audio graph
+      entirely — no more `createMediaElementSource`/`GainNode` for music
+      tracks. Each track's own `<audio>` element now controls its volume
+      directly (`element.volume`), animated via a small
+      `requestAnimationFrame`-driven exponential fade (`fadeTrackTo`)
+      that replaces the old `AudioParam.setTargetAtTime` ramp. The
+      AudioContext is now used only for SFX synthesis, so an
+      SFX-context suspend/graph issue can no longer take music down
+      with it. `recoverMusicPlayback()` simplified to only check
+      `element.paused` — there's no context state left to also resume.
+- [x] Fixed a smaller correctness bug found while in this code:
+      `updateMusicPlayback()`'s trailing `pause()` (after fading out for
+      a disabled/hidden state) fired unconditionally after the fade
+      delay, even if music had been re-enabled mid-fade — now guarded
+      the same way `setActiveMusicTrack()`'s pause already was.
+- [x] **Verification:** `node --check` on every `.js` file, `npm test`
+      181/181 (no test touches these internals directly, all still
+      green). Headless-Chromium (Playwright) run against the real
+      `Sudoku Zen.mp3`/`Logic Flow.mp3` files: new game → Escape to
+      pause → Resume → 6 rapid pause/resume toggles in immediate
+      succession — zero page errors, and the tracks' final
+      paused/volume state matched exactly what the toggle sequence
+      should produce (active track audible at the slider volume,
+      inactive track silent and paused). Real Android hardware still
+      can't be exercised from this sandbox (same limitation noted for
+      the intro video in the Phase 1 log and for Phase 14f's
+      `AudioContext.suspend()` simulation) — this is a genuine
+      architectural fix for a documented failure class, not something
+      provable end-to-end without the user's device.
+
 ## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and
