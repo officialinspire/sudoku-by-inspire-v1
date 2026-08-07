@@ -5,6 +5,75 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-08-07 — Phase 14s: Audio Edge-Case Review — Four Hardening Fixes
+
+**Branch:** `claude/mobile-music-playback-issues-oymb5w`
+
+Direct follow-up to Phase 14r: an explicit request to review `js/audio.js`
+end-to-end against the standard categories of mobile/Web Audio bugs
+(autoplay-gesture policy, AudioContext suspend/resume, unhandled play()
+rejections, NaN/out-of-range propagation, asset-load failure handling,
+stale scheduling) rather than just playtesting the happy paths again.
+Found four real gaps — none reproduced as an active symptom, all
+plausible on real mobile hardware and cheap to close.
+
+1. **NaN could throw inside the fade loop and freeze it permanently.**
+   `js/audio.js`'s own `clamp01()` (used for `<audio>.volume`) didn't
+   guard against `NaN` the way `audio-settings.js`'s equivalent already
+   does. Setting `<audio>.volume` to `NaN` throws a `DOMException`
+   synchronously; since that assignment happens inside `fadeTrackTo`'s
+   `requestAnimationFrame` loop, an uncaught throw there means the loop
+   never reschedules itself — that track's fade dies silently and
+   permanently. Unreachable today (`audio-settings.js` already validates
+   `musicVolume`), but had no defense of its own. Fixed: `clamp01` now
+   returns 0 for any non-finite input, matching `audio-settings.js`.
+2. **`playCompletion()` read `audioContext.currentTime` before resuming
+   the context.** Every other tone-scheduling path calls
+   `ensureContextRunning()` first; this one computed its `base` timestamp
+   before any resume attempt, then scheduled all four arpeggio notes
+   relative to that frozen value. If the context happened to be
+   suspended exactly at puzzle completion, the notes could all clamp to
+   "now" once the context actually resumed, collapsing the arpeggio into
+   one simultaneous chord instead of a staggered win cue. Fixed: moved
+   `ensureContextRunning()` to the top of the function, before `base` is
+   captured.
+3. **A transient network/decode error permanently disabled a track.**
+   The `error` listener unconditionally set `available = false` with no
+   way back — correct for "this file doesn't exist," but indistinguishable
+   from "this file loaded fine and then hit a momentary hiccup" (a
+   plausible failure on a flaky mobile connection mid-loop re-buffer).
+   Fixed: added a `hasLoadedOnce` flag (set once by `canplaythrough`,
+   never cleared) — an error after that point now calls `.load()` to
+   retry instead of giving up for the rest of the session. The
+   `canplaythrough` listener is no longer `{ once: true }` so this retry
+   path can re-fire it; the handler was already idempotent, so running it
+   more than once is harmless.
+4. **The menu track's first `play()` call isn't always gesture-linked.**
+   If the player lets the intro video run to completion instead of
+   tapping Skip, `finishIntro()` (`js/ui/intro-video.js`) runs off the
+   video's `ended` event — not a user gesture — and that's what triggers
+   the menu track's very first `.play()`. Browsers with a strict
+   per-element "first play must be gesture-linked" policy (historically
+   Safari, most strictly on iOS) could silently block that. Fixed: added
+   `unlockMusicElements()`, called synchronously inside
+   `initAudioEngine()` (which is itself required to run inside the real
+   Start-screen gesture) — a `play()` immediately followed by `pause()`
+   on both tracks while their volume is still 0, the standard mobile
+   "unlock" trick. Whatever later triggers the real playback no longer
+   matters, since the element is already unlocked.
+
+**Verification:** `node --check` on every `.js` file, `npm test` 181/181.
+Re-ran the Pixel-5-emulated Playwright harness from Phase 14r with
+play()/pause() call logging added: confirmed the unlock play+pause fires
+for both tracks within the same synchronous tick as the Start-screen
+click (~0.3ms apart), the real menu-track playback follows shortly after
+on an already-unlocked element, and the fade-in curve is unchanged from
+Phase 14r's baseline — these fixes are defensive hardening, not
+behavioral changes to the paths already verified working. `sw.js`
+`CACHE_NAME` bumped again so an installed PWA picks these up.
+
+---
+
 ## 2026-08-07 — Phase 14r: Mobile Audio Playtest Verification (No Code Changes Needed)
 
 **Branch:** `claude/mobile-music-playback-issues-oymb5w`

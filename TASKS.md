@@ -1417,6 +1417,37 @@ turns up. Nothing turned up; this phase is the verification record.
       `MANUAL_QA.md`'s real-Android confirmation item is the only thing
       this sandbox still can't close out.
 
+## Phase 14s — Audio Edge-Case Review: Four Hardening Fixes ✅ (2026-08-07)
+
+Explicit request to review `js/audio.js` against common Web
+Audio/mobile-audio bug categories (not just re-playtest the happy path).
+Found and fixed four real gaps, none previously observed as an active
+symptom but all plausible on real mobile hardware:
+
+- [x] NaN-safe `clamp01()` — an unguarded NaN reaching `<audio>.volume`
+      throws and permanently kills that track's `requestAnimationFrame`
+      fade loop.
+- [x] `playCompletion()` now calls `ensureContextRunning()` before
+      reading `audioContext.currentTime`, so a suspended context at
+      puzzle-completion time can't collapse the arpeggio's staggered
+      notes into one simultaneous chord.
+- [x] Transient track errors (network blip / decode hiccup after a track
+      already loaded successfully once) now retry via `.load()` instead
+      of permanently disabling that track for the session — added a
+      `hasLoadedOnce` flag to distinguish "never worked" from "worked,
+      then hiccuped."
+- [x] `unlockMusicElements()` — a play()-then-immediately-pause() on both
+      tracks, called synchronously inside `initAudioEngine()` (itself
+      required to run inside the real Start-screen gesture), so the menu
+      track's first real playback — which can end up triggered by the
+      intro video's non-gesture `ended` event if the player doesn't tap
+      Skip — always lands on an already-unlocked element.
+- [x] Verified via the Phase 14r Playwright harness (Pixel 5 emulation)
+      with play()/pause() call logging added: unlock fires for both
+      tracks within the same tick as the gesture, real playback follows
+      on an unlocked element, fade-in curve unchanged from baseline.
+      `npm test` 181/181, `node --check` clean on every file.
+
 ## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and
