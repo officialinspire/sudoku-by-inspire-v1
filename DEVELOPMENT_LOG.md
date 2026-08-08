@@ -5,6 +5,68 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-08-08 — Phase 16h: Social Share Meta Tags (Open Graph / Twitter Card)
+
+**Branch:** `claude/image-meta-tags-social-p7xu9d`
+
+Requested: make the GitHub Pages URL for this app produce a real preview
+card (title, description, image) when shared to Facebook, LinkedIn, or
+Reddit, instead of a bare link.
+
+**What changed:** added a block of `og:*` and `twitter:*` meta tags to
+`index.html`'s `<head>`, right after the existing `<title>`:
+
+- `og:type`, `og:site_name`, `og:title`, `og:description` (reusing the
+  app's existing meta description copy rather than writing new marketing
+  text), `og:url`.
+- `og:image` / `twitter:image` plus `og:image:type`, `og:image:width`,
+  `og:image:height`, and `og:image:alt`/`twitter:image:alt`.
+- `twitter:card` set to `summary_large_image` (Twitter/X's own preview
+  style; harmless even though X wasn't one of the three platforms named).
+
+**The image URL problem:** this repo's hard rule is relative paths
+everywhere, specifically so the app works when hosted at a GitHub Pages
+*subpath* (`CLAUDE.md`, `README.md`'s Pages section). Social-media
+crawlers, though, fetch `og:image` from their own servers, off-site —
+a relative path has no meaning to them, so these specific tags need
+absolute URLs. Used `https://officialinspire.github.io/sudoku-by-inspire-v1/…`,
+matching the exact Pages URL form `README.md` already documents for this
+repo (no custom domain/CNAME is configured). This is a deliberate,
+narrow exception for these meta tags only — every actual asset reference
+in the app (scripts, styles, manifest, icons, media) is untouched and
+still relative.
+
+**The image itself:** there's no dedicated social banner image (platforms
+generally want ~1200×630) anywhere in the repo, and `CLAUDE.md`'s asset
+policy is explicit that `logo.png` and the intro video are user-owned
+binaries that must never be fabricated or replaced — and generating a new
+one wasn't asked for here either. Used the existing
+`icons/icon-512.png` instead (the branded, opaque, 512×512 icon generated
+in Phase 16e): it's the highest-resolution branded image already in the
+repo. Set `og:image:width`/`height` to the real `512`/`512` (not the
+1200×630 platforms prefer) so crawlers size it correctly rather than
+guessing. The square crop means Facebook/LinkedIn/Reddit will letterbox
+or center-crop it in their wide preview layout rather than filling it
+edge-to-edge — acceptable for now, but a purpose-built wide banner would
+look better if the user wants to commission/supply one later.
+
+**Verification:** `node --check index.html` doesn't apply (not JS);
+opened the file and confirmed the new tags parse as valid HTML (properly
+closed `<meta>` tags, no stray quotes) and sit before `<link
+rel="manifest">`, not interleaving with the existing theme-flash-prevention
+script. Did not modify `sw.js`'s `CACHE_NAME` — `index.html` itself isn't
+precached by URL (it's the navigation entry point, served fresh), so no
+cache-bump is needed for a head-only change like this. Real-platform
+preview rendering (actually pasting the Pages URL into Facebook/LinkedIn/
+Reddit) can only be verified once Pages is enabled, which per
+`CLAUDE.md`/`README.md` is a repository-settings action reserved for the
+user, not something done from here.
+
+**Files changed:** `index.html` (meta tags only), `TASKS.md`,
+`DEVELOPMENT_LOG.md`.
+
+---
+
 ## 2026-08-08 — Phase 16f: Per-Difficulty Data Reset
 
 **Branch:** `claude/mobile-music-playback-issues-oymb5w`

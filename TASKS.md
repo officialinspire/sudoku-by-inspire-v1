@@ -1655,6 +1655,30 @@ gameplay/audio settings, statistics, high scores, and the active game.
       `index.js` itself — a core asset — changed too). `MANUAL_QA.md`
       updated.
 
+## Phase 16h — Social Share Meta Tags (Open Graph / Twitter Card) ✅ (2026-08-08)
+
+Requested addition: make the GitHub Pages URL produce a proper preview
+(title, description, image) when pasted into Facebook, LinkedIn, Reddit,
+or other social platforms that read Open Graph tags.
+
+- [x] Added `og:*` and `twitter:*` meta tags to `index.html`'s `<head>` —
+      title, description (reusing the existing `<meta name="description">`
+      copy), `og:type`, `og:site_name`, `og:url`, and an image block.
+- [x] Image tags use **absolute** URLs
+      (`https://officialinspire.github.io/sudoku-by-inspire-v1/...`) —
+      the one deliberate exception to this repo's relative-path rule,
+      since social crawlers fetch these off-site and can't resolve a
+      relative path. Every other asset reference in the app is untouched
+      and still relative.
+- [x] No dedicated 1200×630 banner image exists in the repo, and
+      `CLAUDE.md`'s asset policy forbids fabricating new root binaries in
+      place of user-owned ones — used `icons/icon-512.png` (the existing
+      generated, opaque, branded 512×512 icon from Phase 16e) as the
+      share image instead, with correct `og:image:width`/`height` (512,
+      not the 1200×630 platforms prefer) so crawlers don't mis-render it.
+      A dedicated banner image is a reasonable future addition if the
+      user wants a less-cropped, wider preview card.
+
 ## Phase 15 — Final QA Against Acceptance Criteria ✅ (2026-08-08)
 
 Walked all 12 items in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria"
