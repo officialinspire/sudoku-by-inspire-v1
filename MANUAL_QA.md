@@ -168,7 +168,16 @@ For **each** of Easy, Intermediate, Advanced, and Insane:
       and (if this was the best time) an updated best time.
 - [ ] High Scores for that difficulty show the new entry, ranked
       correctly relative to any existing entries (higher score first,
-      ties broken by faster time).
+      ties broken by faster time). Top-3 rows show a "medal" badge (a
+      filled #1, an outlined #2, a plainer #3); 4th-10th are plain.
+- [ ] **"New!" highlight:** go straight from a placing completion to
+      High Scores (via Menu, not directly) — the row you just achieved
+      is ringed and tagged "New!", even though the completion dialog is
+      already closed. Switch between difficulty tabs and back — the
+      highlight should still be there for the difficulty you actually
+      just played. Leave the High Scores screen (Back) and return —
+      the highlight should be gone, even though the medal badge (if
+      it's still top-3) stays.
 - [ ] Reload the page — statistics and high scores persist (they don't
       reset on reload, unlike the now-finished active game).
 

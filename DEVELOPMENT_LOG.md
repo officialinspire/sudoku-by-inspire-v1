@@ -5,6 +5,75 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-08-07 — Phase 16d: High-Scores Screen Medal Treatment + "New!" Highlight
+
+**Branch:** `claude/mobile-music-playback-issues-oymb5w`
+
+Fourth in the requested polish series: visual hierarchy for the High
+Scores list itself, plus carrying the "you just achieved this" signal
+from the completion dialog (Phase 16c) through to the leaderboard screen
+even after navigating away and back through Menu.
+
+**Medal treatment (top 3 ranks):** rather than inventing gold/silver/
+bronze colors (which would each need their own per-theme contrast
+audit — exactly the kind of risk the codebase's own history has hit
+before), all three tiers reuse pairings already proven safe elsewhere:
+rank 1 is the exact fill `.btn-primary` already uses everywhere
+(`--color-accent` behind `--color-accent-contrast`); rank 2 uses
+`--color-accent` as a border only (a 3:1 non-text use, already safe)
+with `--color-entry-player` for the number — the same accent-flavored-
+but-actually-safe-on-surface text token `.highscore-score` already
+relies on, for the same underlying reason (plain `--color-accent` text
+fails 4.5:1 against `--color-surface` in Paper/dark); rank 3 is a plain
+neutral border. The "#1"/"#2"/"#3" text itself still carries the actual
+rank — this is additional emphasis, not the only way it's conveyed.
+
+**"New!" highlight:** `js/high-scores-store.js` gained a small piece of
+deliberately in-memory (never persisted) state — `recordHighScore()` now
+always reassigns a `lastRecorded` variable, including to `null` on a
+non-placing completion (so a later non-placing game correctly clears an
+earlier placement's stale signal instead of leaving it dangling), and a
+new `consumeLastRecordedHighScore()` reads-and-clears it atomically.
+`js/ui/high-scores-screen.js`'s `refreshHighScoresScreen()` — called
+once each time the screen is navigated to — consumes it once and caches
+the target locally, so the highlight correctly survives switching
+between difficulty tabs during the same visit (each tab switch calls
+`render()` again directly, not `refreshHighScoresScreen()`) but is gone
+on the next, separate visit. No new storage, no new completion-dialog
+buttons needed — this works regardless of which path (Menu, then later
+High Scores; or any screen in between) got the player there.
+
+Styled with an inset ring (`box-shadow`, matching the board's own
+selection-ring pattern) plus a visible "New!" text badge using
+`--color-success` — paired, not color-only, consistent with the rest of
+the app's status-signaling.
+
+**Real bug caught while verifying, not just assumed fixed:** the ring
+initially rendered as nothing (`box-shadow: none`) despite the CSS rule
+being present and the class being applied. Root cause: `--cell-ring-width`
+was declared inside `.board`'s own block, not on `:root` — invisible to
+anything outside the board via CSS custom-property scoping.
+Promoted it to the global `:root` token block (a pure scope-widening
+change; `:root` is an ancestor of `.board` regardless, so every existing
+consumer — `.cell.is-selected`, `.cell.is-conflict`,
+`.number-btn.is-current-value` — gets the identical value). Re-verified
+those three existing usages render unchanged after the move.
+
+**Verification:** `node --check` clean. `npm test` 191/191 (4 new unit
+tests for `consumeLastRecordedHighScore`, including the "later
+non-placing completion clears an earlier placement" case). Headless
+Chromium: confirmed all three medal tiers' computed colors/borders in
+both Light/light and Woodgrain/dark (a gradient-surface theme); confirmed
+rank-1 + "new" combine correctly on the same row; confirmed the
+highlight persists across a difficulty-tab switch-away-and-back within
+one visit, then correctly disappears on a second, separate visit while
+the medal badge (a permanent fact about the entry, not tied to the
+one-time highlight) stays; confirmed the WAI-ARIA tab semantics
+(`aria-selected`, roving `tabindex`) are untouched. Zero page errors.
+`MANUAL_QA.md` updated with a real-device checklist item.
+
+---
+
 ## 2026-08-07 — Phase 16c: Surface High-Score Achievement in the Completion Dialog
 
 **Branch:** `claude/mobile-music-playback-issues-oymb5w`

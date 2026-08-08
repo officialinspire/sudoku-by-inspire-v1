@@ -1517,6 +1517,36 @@ returned the achieved rank, but nothing in the UI ever showed it.
       matched exactly. `npm test` 187/187 (6 new unit tests), `node
       --check` clean, zero page errors. `MANUAL_QA.md` updated.
 
+## Phase 16d — High-Scores Screen Medal Treatment + "New!" Highlight ✅ (2026-08-07)
+
+Fourth in the requested polish series. Visual hierarchy for the top 3
+leaderboard ranks, plus carrying "you just achieved this" through to the
+High Scores screen even after navigating away and back through Menu.
+
+- [x] `styles.css`: three medal tiers for ranks 1-3, built entirely from
+      pairings already proven safe elsewhere (no new gold/silver/bronze
+      colors needing their own contrast audit) — see
+      `DEVELOPMENT_LOG.md` for exactly which existing tokens/pairings
+      each tier reuses and why.
+- [x] `js/high-scores-store.js`: `recordHighScore()` now tracks the most
+      recent completion's placement in memory only (never persisted),
+      always reassigned including to `null` so a later non-placing game
+      correctly clears an earlier placement's stale signal; new
+      `consumeLastRecordedHighScore()` reads-and-clears it atomically.
+- [x] `js/ui/high-scores-screen.js`: consumes it once per screen visit,
+      caches locally so the highlight survives difficulty-tab switching
+      within that visit but not a later, separate visit. Ring +
+      "New!" text badge (color-paired, not color-only).
+- [x] Found and fixed a real bug while verifying: `--cell-ring-width`
+      was scoped inside `.board`'s own block, invisible outside it —
+      promoted to the global `:root` token block (pure scope-widening,
+      zero change for the three existing board consumers, re-verified).
+- [x] Verified via headless Chromium across two themes (including a
+      gradient-surface one), the tab-switch-persistence /
+      separate-visit-clears behavior, and WAI-ARIA tab semantics staying
+      untouched. `npm test` 191/191 (4 new tests), `node --check` clean,
+      zero page errors. `MANUAL_QA.md` updated.
+
 ## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and

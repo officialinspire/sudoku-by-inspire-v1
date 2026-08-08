@@ -209,6 +209,15 @@ button {
      future change to this token ever touched them by accident. */
   --border-width-thin: 1px;
   --focus-ring-width: 3px;
+  /* General-purpose "state ring" width (an inset box-shadow, not a
+     border) — originally declared only inside .board's own block since
+     the board was its first use, but genuinely general enough to be
+     global: js/ui/high-scores-screen.js's "you just achieved this"
+     highlight reuses it outside the board entirely. Kept as its own
+     token rather than reusing --focus-ring-width, on purpose — a future
+     change to the focus ring must never accidentally resize every one
+     of these rings too. */
+  --cell-ring-width: 2px;
 
   --touch-target-min: 44px;
 
@@ -985,15 +994,11 @@ button {
      them separately named means a future change to, say, the focus
      ring's width can never accidentally resize the board grid too.
      Declared on .board and consumed by its .cell descendants below
-     (custom properties inherit), so both stay in sync from one place. */
+     (custom properties inherit), so both stay in sync from one place.
+     --cell-ring-width, used just below, is declared globally on :root
+     instead — see its own comment there for why. */
   --board-gap-width: 2px;
   --board-line-width: 3px;
-  /* State-ring width (selection/conflict) — a separate token from the
-     two above even though it happens to share their 2px value, since
-     it means something different (an inset box-shadow ring, not a grid
-     line) and a future change to one must never accidentally resize
-     the other. */
-  --cell-ring-width: 2px;
 
   display: grid;
   grid-template-columns: repeat(9, 1fr);
@@ -1869,10 +1874,72 @@ button {
   border-radius: var(--radius-md);
 }
 
+/* A just-achieved run (js/ui/high-scores-screen.js highlights whichever
+   entry the most recent completion produced, for exactly one screen
+   visit) gets the same inset-ring treatment already used for the
+   board's own selection/current-value states — --color-accent as a
+   non-text 3:1 use, never as text itself (see .highscore-score's own
+   comment just below for why that distinction matters in this row). */
+.highscore-row--new {
+  box-shadow: inset 0 0 0 var(--cell-ring-width) var(--color-accent);
+}
+
+/* Fixed badge shape for every row's rank — a circle sized for 1-2
+   digits — so top-3 "medal" rows (below) don't shift size/alignment
+   relative to the plain 4th-10th ones. */
 .highscore-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-pill);
   font-weight: var(--font-weight-bold);
   color: var(--color-text-secondary);
+}
+
+/* Three "medal" tiers for the top 3 ranks, deliberately built from
+   pairings this app has already proven safe elsewhere rather than new
+   gold/silver/bronze colors that would each need their own per-theme
+   contrast audit:
+   - Rank 1: the exact fill .btn-primary already uses everywhere
+     (--color-accent behind --color-accent-contrast) — the strongest of
+     the three.
+   - Rank 2: --color-accent as a border only (safe as a 3:1 non-text
+     use) with --color-entry-player for the number itself — the same
+     accent-flavored-but-actually-safe-on-surface text token
+     .highscore-score uses just below, for the same reason: plain
+     --color-accent text fails 4.5:1 against --color-surface in
+     Paper/dark.
+   - Rank 3: a plain neutral border, the subtlest of the three.
+   The "#1"/"#2"/"#3" text is what actually carries the rank — this is
+   additional emphasis, not the only way the information is conveyed. */
+.highscore-row--rank-1 .highscore-rank {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+.highscore-row--rank-2 .highscore-rank {
+  border: var(--border-width-thin) solid var(--color-accent);
+  color: var(--color-entry-player);
+}
+
+.highscore-row--rank-3 .highscore-rank {
+  border: var(--border-width-thin) solid var(--color-border);
+  color: var(--color-text);
+}
+
+/* Plain visible text, not color-only — pairs with .highscore-row--new's
+   ring rather than replacing it, so the "just achieved" signal doesn't
+   rely on color alone either. Reuses --color-success, the app's
+   established "this succeeded" token (see Phase 16b's contrast
+   verification against this exact --color-surface background). */
+.highscore-new-badge {
+  font-size: var(--font-size-3);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-success);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
 }
 
 .highscore-score {
