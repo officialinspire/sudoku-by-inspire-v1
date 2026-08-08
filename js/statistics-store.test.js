@@ -8,6 +8,7 @@ import {
   getStatistics,
   getAllStatistics,
   clearStatistics,
+  clearStatisticsForDifficulty,
 } from './statistics-store.js';
 import { DIFFICULTY_IDS } from './sudoku-generator.js';
 
@@ -173,5 +174,32 @@ describe('clearStatistics', () => {
     clearStatistics();
     assert.equal(getStatistics('easy').gamesStarted, 0);
     assert.equal(getStatistics('easy').gamesCompleted, 0);
+  });
+});
+
+describe('clearStatisticsForDifficulty', () => {
+  test('resets only the given difficulty, leaving others untouched', () => {
+    recordGameStarted('easy');
+    recordGameCompleted('easy', { elapsedSeconds: 100, mistakes: 1, hintsUsed: 1 });
+    recordGameStarted('insane');
+    recordGameCompleted('insane', { elapsedSeconds: 900, mistakes: 3, hintsUsed: 2 });
+
+    clearStatisticsForDifficulty('easy');
+
+    const easy = getStatistics('easy');
+    assert.equal(easy.gamesStarted, 0);
+    assert.equal(easy.gamesCompleted, 0);
+    assert.equal(easy.bestTimeSeconds, null);
+
+    const insane = getStatistics('insane');
+    assert.equal(insane.gamesStarted, 1);
+    assert.equal(insane.gamesCompleted, 1);
+    assert.equal(insane.bestTimeSeconds, 900);
+  });
+
+  test('unknown difficulty id is silently ignored', () => {
+    recordGameStarted('easy');
+    clearStatisticsForDifficulty('not-a-difficulty');
+    assert.equal(getStatistics('easy').gamesStarted, 1);
   });
 });

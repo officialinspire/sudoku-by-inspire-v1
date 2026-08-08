@@ -43,10 +43,11 @@
   <meta name="theme-color" content="#2b6cb0">
   <title>Sudoku by Inspire</title>
   <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon-192.png" type="image/png">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <div id="app">
+  <div id="app" role="main">
 
     <p id="connection-status" class="connection-status" role="status" aria-live="polite" hidden></p>
 
@@ -64,6 +65,7 @@
     </section>
 
     <section id="screen-intro" class="screen" tabindex="-1" aria-label="Intro video" hidden>
+      <h1 class="visually-hidden">Intro</h1>
       <video id="intro-video" class="intro-video" src="./inspiresoftwareintro.mp4" playsinline></video>
       <button id="skip-intro-btn" type="button" class="skip-btn">Skip</button>
     </section>
@@ -72,7 +74,7 @@
       <div class="menu-sudoku-bg" aria-hidden="true">
         <div class="menu-sudoku-bg__pattern"></div>
       </div>
-      <h2 class="brand brand--compact">Sudoku <span>by Inspire</span></h2>
+      <h1 class="brand brand--compact">Sudoku <span>by Inspire</span></h1>
       <nav class="menu-nav" aria-label="Main menu">
         <button id="btn-new-game" type="button">
           <svg class="menu-icon" viewBox="0 0 24 24" aria-hidden="true"><polygon points="6,4 20,12 6,20" fill="currentColor"/></svg>
@@ -101,6 +103,7 @@
     </section>
 
     <section id="screen-game" class="screen screen-game" tabindex="-1" aria-label="Game" hidden>
+      <h1 class="visually-hidden">Sudoku Game</h1>
       <div class="game-header">
         <button id="btn-game-back" type="button" class="btn-secondary game-back-btn">&larr; Menu</button>
         <div class="game-meta">
@@ -126,11 +129,12 @@
 
       <p id="game-status" class="game-status" aria-live="polite"></p>
 
-      <div id="board" class="board" role="grid" aria-label="Sudoku board"></div>
+      <div id="board" class="board" role="group" aria-label="Sudoku board"></div>
 
       <div class="board-toolbar">
         <button id="btn-notes-toggle" type="button" class="btn-secondary toolbar-btn" aria-pressed="false">Notes: Off</button>
         <button id="btn-erase" type="button" class="btn-secondary toolbar-btn">Erase</button>
+        <button id="btn-undo" type="button" class="btn-secondary toolbar-btn" disabled>Undo</button>
         <button id="btn-hint" type="button" class="btn-secondary toolbar-btn" disabled>Hint</button>
       </div>
 
@@ -157,7 +161,7 @@
     <section id="screen-statistics" class="screen screen-game" tabindex="-1" aria-label="Statistics" hidden>
       <div class="game-header">
         <button id="btn-statistics-back" type="button" class="btn-secondary game-back-btn">&larr; Menu</button>
-        <h2 class="brand brand--compact">Statistics</h2>
+        <h1 class="brand brand--compact">Statistics</h1>
       </div>
 
       <div id="statistics-difficulty-filter" class="difficulty-filter" role="tablist" aria-label="Difficulty" data-panel="stats-panel">
@@ -167,24 +171,33 @@
         <button type="button" class="difficulty-filter-btn" data-difficulty="insane" aria-selected="false">Insane</button>
       </div>
 
-      <dl id="stats-panel" class="stats-grid" role="tabpanel" tabindex="0" aria-label="Statistics for the selected difficulty">
-        <div class="stats-item"><dt>Games Started</dt><dd id="stat-games-started">0</dd></div>
-        <div class="stats-item"><dt>Games Completed</dt><dd id="stat-games-completed">0</dd></div>
-        <div class="stats-item"><dt>Completion Rate</dt><dd id="stat-completion-rate">0%</dd></div>
-        <div class="stats-item"><dt>Total Play Time</dt><dd id="stat-total-time">0:00</dd></div>
-        <div class="stats-item"><dt>Best Time</dt><dd id="stat-best-time">—</dd></div>
-        <div class="stats-item"><dt>Average Time</dt><dd id="stat-average-time">—</dd></div>
-        <div class="stats-item"><dt>Current Streak</dt><dd id="stat-current-streak">0</dd></div>
-        <div class="stats-item"><dt>Best Streak</dt><dd id="stat-best-streak">0</dd></div>
-        <div class="stats-item"><dt>Total Hints</dt><dd id="stat-total-hints">0</dd></div>
-        <div class="stats-item"><dt>Total Mistakes</dt><dd id="stat-total-mistakes">0</dd></div>
-      </dl>
+      <!-- role="tabpanel" lives on this plain wrapper, not the <dl> itself:
+           overriding a <dl>'s implicit role breaks its dt/dd containment
+           semantics for assistive tech (an a11y audit caught this via
+           axe-core's dlitem/aria-allowed-role checks) even though the
+           <dl> markup itself is perfectly valid HTML. -->
+      <div id="stats-panel" role="tabpanel" tabindex="0" aria-label="Statistics for the selected difficulty">
+        <dl class="stats-grid">
+          <div class="stats-item"><dt>Games Started</dt><dd id="stat-games-started">0</dd></div>
+          <div class="stats-item"><dt>Games Completed</dt><dd id="stat-games-completed">0</dd></div>
+          <div class="stats-item"><dt>Completion Rate</dt><dd id="stat-completion-rate">0%</dd></div>
+          <div class="stats-item"><dt>Total Play Time</dt><dd id="stat-total-time">0:00</dd></div>
+          <div class="stats-item"><dt>Best Time</dt><dd id="stat-best-time">—</dd></div>
+          <div class="stats-item"><dt>Average Time</dt><dd id="stat-average-time">—</dd></div>
+          <div class="stats-item"><dt>Current Streak</dt><dd id="stat-current-streak">0</dd></div>
+          <div class="stats-item"><dt>Best Streak</dt><dd id="stat-best-streak">0</dd></div>
+          <div class="stats-item"><dt>Total Hints</dt><dd id="stat-total-hints">0</dd></div>
+          <div class="stats-item"><dt>Total Mistakes</dt><dd id="stat-total-mistakes">0</dd></div>
+        </dl>
+      </div>
+
+      <button id="btn-clear-difficulty-stats" type="button" class="btn-secondary">Clear Stats for This Difficulty</button>
     </section>
 
     <section id="screen-highscores" class="screen screen-game" tabindex="-1" aria-label="High Scores" hidden>
       <div class="game-header">
         <button id="btn-highscores-back" type="button" class="btn-secondary game-back-btn">&larr; Menu</button>
-        <h2 class="brand brand--compact">High Scores</h2>
+        <h1 class="brand brand--compact">High Scores</h1>
       </div>
 
       <div id="highscores-difficulty-filter" class="difficulty-filter" role="tablist" aria-label="Difficulty" data-panel="highscores-panel">
@@ -198,6 +211,8 @@
         <ol id="highscores-list" class="highscores-list"></ol>
         <p id="highscores-empty" class="game-status" hidden>No scores yet for this difficulty — go solve a puzzle!</p>
       </div>
+
+      <button id="btn-clear-difficulty-highscores" type="button" class="btn-secondary">Clear High Scores for This Difficulty</button>
     </section>
 
   </div>
@@ -321,6 +336,16 @@
           app removes it permanently; use Clear Data below for a
           controlled reset instead.
         </p>
+        <p class="settings-hint">
+          Export a backup file to keep a copy of everything above, or
+          restore one on this or another device.
+        </p>
+        <div class="settings-actions">
+          <button type="button" id="btn-export-data" class="btn-secondary">Export Data</button>
+          <button type="button" id="btn-import-data" class="btn-secondary">Import Data</button>
+        </div>
+        <input type="file" id="import-data-file-input" accept="application/json,.json" hidden>
+        <p id="import-data-status" class="settings-hint" aria-live="polite"></p>
       </section>
 
       <div class="settings-actions">
@@ -376,6 +401,7 @@
   <dialog id="completion-dialog" class="settings-dialog" aria-labelledby="completion-title">
     <div class="settings-form">
       <h2 id="completion-title">Puzzle Solved!</h2>
+      <p id="completion-rank-banner" class="completion-rank-banner" hidden></p>
 
       <dl class="completion-stats">
         <div class="completion-stat">
@@ -434,6 +460,28 @@
       <div class="settings-actions">
         <button type="submit" value="cancel" class="btn-secondary">Cancel</button>
         <button type="submit" value="confirm" class="btn-primary">Clear Data</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="clear-difficulty-confirm-dialog" class="settings-dialog" aria-labelledby="clear-difficulty-confirm-title">
+    <form method="dialog" class="settings-form">
+      <h2 id="clear-difficulty-confirm-title">Clear?</h2>
+      <p id="clear-difficulty-confirm-message"></p>
+      <div class="settings-actions">
+        <button type="submit" value="cancel" class="btn-secondary">Cancel</button>
+        <button type="submit" value="confirm" class="btn-primary">Clear</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="import-data-confirm-dialog" class="settings-dialog" aria-labelledby="import-data-confirm-title">
+    <form method="dialog" class="settings-form">
+      <h2 id="import-data-confirm-title">Import Backup?</h2>
+      <p id="import-data-confirm-message"></p>
+      <div class="settings-actions">
+        <button type="submit" value="cancel" class="btn-secondary">Cancel</button>
+        <button type="submit" value="confirm" class="btn-primary">Import</button>
       </div>
     </form>
   </dialog>

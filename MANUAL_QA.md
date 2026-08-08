@@ -153,6 +153,14 @@ For **each** of Easy, Intermediate, Advanced, and Insane:
 - [ ] Solve a puzzle completely (correctly). The completion dialog
       appears automatically with difficulty, time, mistakes, hints, and
       a score, plus a brief animation on the "Puzzle Solved!" heading.
+- [ ] **Leaderboard banner:** with that difficulty's High Scores empty
+      (or Clear Data first), solve a puzzle — the completion dialog
+      should show a "New High Score — Ranked #1!" chip under the
+      heading, and "Copy Results" text should mention the rank too.
+      Solve a few more (without clearing) until one lands 4th-10th —
+      same idea, but a quieter "Made the leaderboard — ranked #N" line
+      instead of the chip. Once 10 entries exist and a new run doesn't
+      beat any of them, no banner appears at all.
 - [ ] "Copy Results" copies (or, if clipboard access is denied, falls
       back to selecting) shareable text describing the result.
 - [ ] After closing the dialog, Statistics for that difficulty show an
@@ -160,7 +168,16 @@ For **each** of Easy, Intermediate, Advanced, and Insane:
       and (if this was the best time) an updated best time.
 - [ ] High Scores for that difficulty show the new entry, ranked
       correctly relative to any existing entries (higher score first,
-      ties broken by faster time).
+      ties broken by faster time). Top-3 rows show a "medal" badge (a
+      filled #1, an outlined #2, a plainer #3); 4th-10th are plain.
+- [ ] **"New!" highlight:** go straight from a placing completion to
+      High Scores (via Menu, not directly) — the row you just achieved
+      is ringed and tagged "New!", even though the completion dialog is
+      already closed. Switch between difficulty tabs and back — the
+      highlight should still be there for the difficulty you actually
+      just played. Leave the High Scores screen (Back) and return —
+      the highlight should be gone, even though the medal badge (if
+      it's still top-3) stays.
 - [ ] Reload the page — statistics and high scores persist (they don't
       reset on reload, unlike the now-finished active game).
 
@@ -276,6 +293,33 @@ least once:
 - [ ] Go back online and reload again — everything still works, no
       stale-cache weirdness.
 
+## 10a. Installability and app icon (real device)
+
+New as of Phase 16e — `manifest.webmanifest`'s `icons` array was empty
+before this, so installability itself was previously unverifiable. This
+is the one item in this file that categorically needs a real phone/
+desktop browser; a sandboxed headless pass can confirm the manifest is
+valid and the files are reachable/precached, but not what the OS/browser
+actually does with them.
+
+- [ ] Android Chrome: visit the app, wait for (or trigger via the menu)
+      the "Install app"/"Add to Home Screen" prompt. Install it, then
+      check the resulting home-screen icon — should be the 3×3 grid
+      mark with the INSPIRE badge, not a generic globe/placeholder icon,
+      and should render with rounded/masked corners cleanly (the
+      maskable icon's safe-zone padding doing its job) rather than
+      clipping into the grid or the wordmark badge.
+- [ ] iOS Safari: "Add to Home Screen" from the share sheet — same icon
+      check. iOS has historically preferred `apple-touch-icon` link tags
+      over manifest icons in some versions; if the home-screen icon
+      looks wrong specifically on iOS while Android is fine, that's a
+      real, separate follow-up (not covered by this phase).
+- [ ] Desktop Chrome/Edge: the install icon in the address bar, or
+      Settings → "Install Sudoku by Inspire" — confirm the installed
+      window/taskbar icon matches, not a blank/default icon.
+- [ ] Browser tab favicon (any browser, no install needed) shows the
+      same grid mark, not the browser's default blank-page icon.
+
 ## 11. Keyboard-only use
 
 - [ ] Unplug the mouse (or just don't touch it) and play a complete
@@ -293,12 +337,26 @@ least once:
       content behind it) and returns focus to whatever button opened it
       once closed (native `<dialog>` behavior — confirm at least once
       per dialog: Settings, difficulty picker, Hint, New Game
-      confirmation, Clear Data confirmation).
+      confirmation, Clear Data confirmation, the per-difficulty clear
+      confirmation, and the import-backup confirmation).
 - [ ] The difficulty-filter tabs on Statistics/High Scores respond to
       Left/Right/Home/End arrow keys, and only the currently-selected
       tab is reachable via plain Tab (roving tabindex).
 - [ ] A visible focus outline is present on every focused element, in
       every theme/mode combination.
+- [ ] Screen reader spot-check (VoiceOver/TalkBack/NVDA — whichever is
+      available): landmark navigation finds one main region; each
+      screen announces a heading when it becomes active; the board
+      reads as a labeled group of 81 buttons, each announcing its own
+      row/column/value/selected state on focus (not as a formal ARIA
+      grid — Phase 15's a11y audit deliberately moved away from
+      `role="grid"`/`gridcell`, since this board doesn't implement the
+      full ARIA grid keyboard pattern and the mismatch was flagged as a
+      critical axe-core violation; see `DEVELOPMENT_LOG.md`). An
+      automated `axe-core` pass (WCAG 2.0/2.1 A+AA + best-practice
+      rules) shows zero violations on every screen and dialog as of
+      Phase 15 — this item is for whatever only a real screen reader can
+      still catch.
 
 ## 12. 320px mobile and desktop layouts
 
@@ -367,6 +425,58 @@ it's easy to only half-check.)
 - [ ] If a game was in progress on the game screen when Clear Data is
       confirmed, the app returns to the menu rather than showing a
       broken/stale board.
+
+## 15a. Per-difficulty data reset
+
+New as of Phase 16f — narrower than Clear Data above: clears just one
+difficulty's own Statistics or High Scores, not everything.
+
+- [ ] With scores/stats on at least two difficulties (e.g. play a game
+      each on Easy and Intermediate), open Statistics, select Easy, tap
+      "Clear Stats for This Difficulty" — the confirmation names Easy
+      specifically and says High Scores aren't touched.
+- [ ] Confirming zeroes out Easy's Statistics only — switch to the
+      Intermediate tab and confirm its numbers are unchanged. Easy's
+      High Scores (a different store) are also unchanged.
+- [ ] Same check on the High Scores screen with its own "Clear High
+      Scores for This Difficulty" button — clearing Easy empties just
+      that tab's list (the "no scores yet" message appears) while
+      Intermediate's list is untouched, and Easy's Statistics are
+      unaffected.
+- [ ] Cancelling either confirmation leaves everything untouched.
+- [ ] The global Clear Data flow (section 15 above) still clears
+      everything for every difficulty, unaffected by these narrower
+      controls existing alongside it.
+
+## 15b. Data export/import (backup)
+
+New as of Phase 16g — Settings → "Your data" → Export/Import.
+
+- [ ] With some real data present (play a game or two, adjust a
+      setting), tap "Export Data" — a `sudoku-by-inspire-backup-
+      YYYY-MM-DD.json` file downloads, and a "Backup downloaded."
+      confirmation appears. Open the file in a text editor — it's
+      readable JSON, not a scrambled/binary blob.
+- [ ] Tap "Import Data" and pick that same file — a confirmation names
+      the backup's export date and warns it overwrites current
+      settings/statistics/high scores/saved game. Cancelling changes
+      nothing (check a stat value before and after to confirm).
+- [ ] Confirming reloads the app. After reload, everything from the
+      backup is back — theme/color mode, gameplay/audio settings,
+      Statistics and High Scores for every difficulty you had data on,
+      and (if you had one) the in-progress saved game via Continue Game.
+- [ ] Round-trip across a data change: export, change a setting or play
+      another game, import the *original* file back — confirms the
+      import actually overwrites the newer state, not just re-applies
+      what's already there.
+- [ ] Selecting a file that isn't a Sudoku by Inspire backup (a
+      random `.json` file, or a `.txt` renamed to `.json`) shows a clear
+      "doesn't look like a backup" message and never opens the overwrite
+      confirmation — nothing gets touched.
+- [ ] Cross-device/browser check (if convenient): export from one
+      browser or device, import into a completely fresh one (or a
+      private/incognito window) — the backup is self-contained, no
+      dependency on where it came from.
 
 ---
 

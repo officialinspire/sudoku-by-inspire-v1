@@ -136,6 +136,15 @@ export function playError() {
 
 export function playCompletion() {
   if (!audioContext) return;
+  // Resume *before* reading currentTime, not after: every note below is
+  // scheduled at a fixed offset from `base`, so if the context happened
+  // to be suspended right at puzzle completion, capturing `base` first
+  // and only resuming inside the first playTone() call risks scheduling
+  // some/all of the notes at a moment that's already in the past by the
+  // time the context actually resumes — browsers clamp that to "now,"
+  // which can collapse the arpeggio's stagger into one simultaneous
+  // chord instead of four notes in sequence.
+  ensureContextRunning();
   const base = audioContext.currentTime;
   // A short ascending major-triad-plus-octave arpeggio (C5, E5, G5, C6) —
   // a small, deliberately simple "win" cue rather than anything busy.
@@ -169,6 +178,15 @@ function applySfxGain() {
 }
 
 function clamp01(value) {
+  // NaN-safe: Math.min/max with NaN silently propagates NaN, and setting
+  // <audio>.volume to NaN *throws* a DOMException. That throw would land
+  // inside fadeTrackTo's requestAnimationFrame loop (applyTrackVolume is
+  // called from there) and kill that fade permanently — the loop dies
+  // without ever calling requestAnimationFrame again. Nothing upstream
+  // should ever hand this a NaN today (audio-settings.js already
+  // validates musicVolume), but this is cheap insurance against that
+  // invariant ever quietly breaking.
+  if (!Number.isFinite(value)) return 0;
   return Math.min(1, Math.max(0, value));
 }
 
@@ -201,6 +219,13 @@ function createMusicTrack(name, src) {
     fadeLevel: 0,
     fadeAnimationId: null,
     available: false,
+    // Distinct from `available`: this one is never reset back to false.
+    // It's what tells the 'error' handler below whether a failure means
+    // "this asset never worked" (leave it disabled — the normal missing-
+    // file case) or "this asset worked before and just hiccuped" (worth
+    // retrying — a flaky mobile connection dropping a mid-loop re-buffer
+    // is a real, transient failure, not a missing file).
+    hasLoadedOnce: false,
   };
   track.element.loop = true;
   track.element.preload = 'auto';
@@ -208,23 +233,30 @@ function createMusicTrack(name, src) {
 
   // Optional asset: a 404 or a decode failure just means this track
   // isn't available this session, not a broken app — same policy as the
-  // intro video's missing-file handling in js/ui/intro-video.js.
+  // intro video's missing-file handling in js/ui/intro-video.js. But if
+  // this track already loaded fine earlier in the session, a later
+  // 'error' is something else entirely — a network blip or decode
+  // hiccup mid-playback — and treating that the same as "file doesn't
+  // exist" would silence this track for the rest of the session over
+  // what's likely a momentary connectivity issue. Retry with `.load()`
+  // instead of just giving up in that case.
   track.element.addEventListener('error', () => {
     track.available = false;
+    if (track.hasLoadedOnce) track.element.load();
   });
-  track.element.addEventListener(
-    'canplaythrough',
-    () => {
-      track.available = true;
-      // Loading is async — the screen that wants this track playing may
-      // already have been shown (and setActiveMusicTrack already called)
-      // *before* the file finished loading, in which case that earlier
-      // call saw `available: false` and did nothing. This is the retry:
-      // if this track is (still) the active one, actually start it now.
-      if (activeTrackName === name) updateMusicPlayback();
-    },
-    { once: true }
-  );
+  track.element.addEventListener('canplaythrough', () => {
+    track.available = true;
+    track.hasLoadedOnce = true;
+    // Loading is async — the screen that wants this track playing may
+    // already have been shown (and setActiveMusicTrack already called)
+    // *before* the file finished loading, in which case that earlier
+    // call saw `available: false` and did nothing. This is the retry:
+    // if this track is (still) the active one, actually start it now.
+    // Deliberately not `{ once: true }` — canplaythrough can legitimately
+    // fire again after the error-triggered `.load()` above, and this
+    // handler is idempotent/safe to run more than once.
+    if (activeTrackName === name) updateMusicPlayback();
+  });
 
   // Mobile browsers can pause an already-playing <audio> element for
   // reasons entirely outside this app's control — a native <dialog>
@@ -357,6 +389,28 @@ function loadMusicTracks() {
     menu: createMusicTrack('menu', MUSIC_TRACK_SOURCES.menu),
     gameplay: createMusicTrack('gameplay', MUSIC_TRACK_SOURCES.gameplay),
   };
+}
+
+/**
+ * The standard mobile "unlock" trick: some browsers (historically Safari,
+ * most strictly on iOS) only allow an `<audio>` element's *first* play()
+ * call to succeed if it's directly inside a user gesture — later
+ * programmatic play() calls on that same element are then fine. The menu
+ * track's real first play() doesn't necessarily happen there, though: if
+ * the player lets the intro video run to the end instead of tapping Skip,
+ * it's triggered by the video's 'ended' event (js/ui/intro-video.js),
+ * which is not a gesture. Calling play() immediately followed by pause()
+ * here — synchronously inside initAudioEngine(), which callers are
+ * required to invoke from the real gesture — counts as that first
+ * unlocking play() for both tracks, without producing any sound (their
+ * volume is still 0 at this point; see createMusicTrack). Whatever the
+ * later real play() call turns out to be triggered by no longer matters.
+ */
+function unlockMusicElements() {
+  for (const track of Object.values(musicTracks)) {
+    track.element.play().catch(() => {});
+    track.element.pause();
+  }
 }
 
 /**
@@ -506,6 +560,7 @@ export function initAudioEngine() {
   applySfxGain();
   ensureContextRunning();
   loadMusicTracks();
+  unlockMusicElements();
   applyMusicVolume();
 
   onAudioSettingsChange(() => {

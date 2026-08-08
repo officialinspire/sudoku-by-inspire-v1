@@ -5,6 +5,737 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-08-08 — Phase 16f: Per-Difficulty Data Reset
+
+**Branch:** `claude/mobile-music-playback-issues-oymb5w`
+
+Sixth item in the requested polish series (optional, per the original
+recommendation list) — the only reset control before this was the
+global "Clear Data" (everything, every difficulty at once); added a
+narrower option scoped to whichever difficulty is currently selected on
+Statistics or High Scores.
+
+**Store layer:** `clearStatisticsForDifficulty(id)`
+(`js/statistics-store.js`) and `clearHighScoresForDifficulty(id)`
+(`js/high-scores-store.js`) — both trivial reuses of the existing
+`byDifficulty[id]` shape (reset to `emptyDifficultyStats()` / `[]`
+respectively), no new storage schema. `getStatistics`/`getHighScores`
+already default a missing/reset difficulty to empty, so nothing else
+needed to change.
+
+**UI:** rather than duplicate a confirm dialog for Statistics and
+another for High Scores (the two want the exact same shape — a message
+naming what's about to be cleared, Cancel/Confirm — just different
+wording and a different store), added one shared
+`js/ui/clear-difficulty-dialog.js` with a single `openClearDifficultyDialog(title, message, onConfirm)`, backed by one new
+`<dialog id="clear-difficulty-confirm-dialog">` in `index.html`. Each
+screen supplies its own difficulty-aware text (reading
+`filter.getSelected()`, the same difficulty-tab state the screen's own
+rendering already depends on) and its own store call. A "Clear Stats for
+This Difficulty" button sits below the stats grid; "Clear High Scores
+for This Difficulty" below the leaderboard list — both plain
+`.btn-secondary`, picking up the screen's existing flex-column spacing
+for free (no new CSS needed).
+
+**Verification:** `node --check` clean. `npm test` 195/195 (4 new unit
+tests: clearing one difficulty leaves another's stats/scores untouched,
+and an unknown difficulty id is silently ignored, matching every other
+store function's existing convention). Headless Chromium, seeding both
+Statistics and High Scores for two difficulties directly via
+localStorage: confirmed clearing Easy's stats zeroes it while
+Intermediate's stay at their seeded values (and Easy's High Scores are
+untouched, a different store); confirmed clearing Easy's high scores
+empties just that list (the "no scores yet" message correctly appears)
+while Intermediate's stays; confirmed cancelling either dialog leaves
+everything untouched; re-ran the existing global Clear Data flow
+end-to-end afterward and confirmed both storage keys still get fully
+removed exactly as before — the new narrower controls don't interfere
+with it. Zero page errors. `MANUAL_QA.md` updated.
+
+---
+
+## 2026-08-08 — Phase 16g: Settings Backup/Restore (Export/Import)
+
+**Branch:** `claude/mobile-music-playback-issues-oymb5w`
+
+Seventh (optional) item in the requested polish series — a manual local
+backup file. This app has no account or cloud sync by design
+(`PROJECT_BRIEF.md`'s non-goals), so "back up my data" otherwise means
+"hope your browser's local storage never gets cleared" — a real gap for
+anyone reinstalling, switching browsers, or just wanting a safety copy
+before clearing site data.
+
+**`js/data-backup.js`** (new, pure aside from `localStorage` itself):
+`buildBackup()` reads all six `inspireSudoku:v1:*` keys (appearance,
+gameplay settings, audio settings, statistics, high scores, active game
+— enumerated from every module's own `STORAGE_KEY` constant) straight
+from localStorage and bundles them with an app name, a backup-format
+version, and an export timestamp. `applyBackup(parsed)` only checks the
+*envelope* — is this recognizably a Sudoku by Inspire backup, is its
+version one this code understands — before writing each present key
+back to localStorage. Deliberately does **not** re-implement each
+store's own content validation: every store's `load()` (via
+`js/storage.js`'s `loadJSON`) already re-validates whatever's actually
+in localStorage on every read, rejecting anything malformed back to safe
+defaults — the exact mechanism that already protects against a
+hand-edited or corrupted localStorage value today. Duplicating that
+logic here would just be a second copy that could silently drift out of
+sync with the original; letting the existing one run naturally on the
+next read is both simpler and can't disagree with it.
+
+**`js/ui/data-backup-controls.js`** (new) + two buttons in Settings'
+existing "Your data" section: Export builds a Blob, a temporary
+`<a download>`, clicks it, revokes the object URL — standard
+browser-only download pattern, no new dependency. Import triggers a
+hidden `<input type="file">`, reads it via `FileReader`, does a cheap
+upfront shape check (so an obviously-wrong file gets an instant answer
+instead of opening a confirmation for an import that would just fail
+anyway), then — since import is destructive, overwriting current
+settings/statistics/high-scores/saved-game — gates the actual write
+behind a new confirm dialog naming the backup's export date, matching
+every other destructive action in this app (Clear Data, the per-
+difficulty clears). On confirmed success, calls `location.reload()`
+rather than trying to live-patch every affected module: `js/theme.js`,
+`js/game-settings.js`, and `js/audio-settings.js` all cache their
+settings in memory after their own `init()` and only update that cache
+through their own setters, so a raw localStorage write alone wouldn't
+reach them until the next load anyway — a reload sidesteps needing to
+add a "re-sync from storage" method to three separate modules for a
+one-time-per-import action.
+
+**Verification:** `node --check` clean. `npm test` 205/205 — 10 new unit
+tests in `js/data-backup.test.js` (export includes only present keys,
+skips already-corrupt values rather than exporting garbage, a full
+export→clear→import round-trip restores identical data, rejects a
+wrong-app file / incompatible version / malformed input without
+throwing, ignores unrecognized extra keys in a backup rather than
+writing them). Headless Chromium end-to-end: exported a real backup with
+seeded statistics/high-scores data, verified the downloaded JSON's shape
+and content directly; cleared localStorage and imported the same file
+back, confirming the confirm dialog's date-stamped message and that the
+post-reload data matched exactly; separately verified cancelling the
+import confirmation leaves existing data untouched, and that a
+wrong-app-name file and a non-JSON file are both rejected immediately
+with a clear status message and never open the overwrite confirmation.
+Zero page errors throughout. `sw.js` `CACHE_NAME` bumped (`index.js`, a
+core asset, changed to wire in the new module). `MANUAL_QA.md` updated
+with a new export/import section, including a real-device
+cross-browser/cross-device check this sandbox can't itself perform.
+
+---
+
+## 2026-08-08 — Phase 15: Final QA Against Acceptance Criteria
+
+**Branch:** `claude/mobile-music-playback-issues-oymb5w`
+
+The last item of the requested polish series (Prompt 8): walk every one
+of `PROJECT_BRIEF.md`'s 12 v1 acceptance criteria against the codebase
+as it stands after Phases 14q-16g, with fresh evidence for each rather
+than assuming prior phases' verification still holds. Most criteria
+re-confirmed cleanly; one line of investigation (criterion 12) turned up
+real, previously-unfixed accessibility bugs.
+
+**Criteria 1-11**, briefly (full command/script detail lives in this
+session's own scratch work, not reproduced here — the important part is
+what was checked and what it found):
+
+- **Boot flow / no console errors** — clean at the repo root and at a
+  simulated GitHub Pages subpath.
+- **Generation/solvability/keyboard+mouse+touch completion** — a real
+  (not simulated) keyboard-only session — arrow keys and digit keys —
+  solved a puzzle with 0 mistakes; `npm test` already covers
+  generation/uniqueness/solvability per difficulty directly.
+- **Autosave + exact Continue Game restore** — captured exact
+  `entries`/`notes`/`elapsedSeconds`/`difficulty` before a reload,
+  confirmed a byte-for-byte match after restoring via Continue Game.
+- **Settings persist + apply live** — theme/mode confirmed applied
+  *before* any reload, then confirmed to still be applied *after* one,
+  with audio settings alongside them.
+- **4 themes × 3 modes** — 24 combinations (12 pairs × 320px/1280px)
+  all loaded with zero errors, zero horizontal overflow. A quick
+  automated contrast pass across the same 12 combinations initially
+  reported several "failures" — turned out to be a bug in that pass
+  itself, not the app: Woodgrain/Paper's surfaces are `linear-gradient`
+  backgrounds, and the script's DOM-walk only checked
+  `background-color`, so it walked straight past the real (light
+  cream) gradient surface to some unrelated ancestor's color and
+  computed a nonsense ratio. Verified this directly (dumped the actual
+  computed `background-image` on the flagged elements — confirmed
+  light gradients, not the dark colors the script had used) before
+  discarding the false positives rather than either reporting a
+  regression that wasn't there or silently ignoring an unexplained
+  contradiction. The rigorous, gradient-stop-aware contrast work this
+  relies on is Phase 11's original audit plus this session's own Phase
+  16b/16d verifications — not redone from scratch here.
+- **Stats/high scores persist** — completed a real puzzle, confirmed
+  both updated immediately and matched exactly after a reload.
+- **Keyboard-only, visible focus** — same real keyboard session as
+  above; confirmed a visible focus outline at every step (menu button,
+  dialog's Start button, board cell, completion dialog's Menu button).
+- **Offline** — installed the service worker, went fully offline,
+  reloaded, generated a genuinely *new* puzzle and solved it to
+  completion — not just reloading a cached static page, actually using
+  the app's core feature with zero network.
+- **PWA installable** — re-confirmed post-Phase-16e: manifest still
+  valid JSON, icons still precache and serve correctly.
+- **GitHub Pages subpath** — static grep for absolute-root paths across
+  every file type (none found), plus an actual subpath-hosted run
+  (copied the repo under a `/sudoku-by-inspire-v1/` prefix on a second
+  local server) — manifest, favicon, service worker scope, and a full
+  new-game playthrough all resolved correctly relative to that subpath.
+- **No third-party requests** — monitored every network request during
+  the full real keyboard playthrough; zero non-same-origin requests.
+
+**Criterion 12 — a11y check, reduced-motion — is where this phase
+earned its keep.** `npm install --no-save axe-core` (network access
+confirmed available) and ran real WCAG 2.0/2.1 A+AA + best-practice
+scans across every screen and dialog via Playwright, rather than
+asserting "prior phases already covered accessibility" without
+re-checking. It found four real, previously-unnoticed issues:
+
+1. **No `<main>` landmark anywhere** (moderate, every screen) — added
+   `role="main"` to the existing `#app` div (a pure attribute addition,
+   zero risk — confirmed no tag-specific CSS/JS selector depended on it
+   being a plain `<div>`).
+2. **Several screens had no `<h1>`** (moderate) — Menu/Statistics/High
+   Scores were using `<h2 class="brand brand--compact">`; promoted to
+   `<h1>` (purely semantic, zero visual change — `.brand`/`.brand--compact`
+   are class-based styles with no tag-specific CSS). The Game and Intro
+   screens had no heading at all; added a new `.visually-hidden`
+   utility (the standard clip-based screen-reader-only pattern) rather
+   than a visible one, since Game's header is an already-tightly-tuned
+   layout with a documented "four things fighting for one line" comment
+   and no room to spare, and Intro is a brief, self-contained moment
+   that doesn't need a second visible "Sudoku" title. Start screen
+   already had a proper `<h1>`; multiple `<h1>` elements coexisting in
+   the DOM is fine here since only one screen is ever un-`hidden` at a
+   time, and the `hidden` attribute removes an element from the
+   accessibility tree entirely — confirmed empirically (re-scanning
+   each screen showed zero heading-related violations once its own
+   became visible).
+3. **The Sudoku board's `role="grid"`/`role="gridcell"` was structurally
+   invalid — critical.** An ARIA `grid` requires each `gridcell` to sit
+   inside a `role="row"` ancestor; this board has 81 flat
+   `role="gridcell"` buttons directly under `role="grid"`, no row
+   grouping at all — axe correctly flagged both `aria-required-children`
+   and `aria-required-parent` as critical. Rather than retrofitting a
+   proper row structure (a real DOM/CSS restructure of the board's
+   existing `display: grid` layout, carrying meaningful risk to a
+   heavily-tested, heavily-styled core surface for a payoff this specific
+   implementation wouldn't actually earn), stepped back and checked what
+   the board *actually* does: no roving-tabindex, no `aria-rowindex`/
+   `aria-colindex` — Tab cycles through all 81 buttons individually
+   (confirmed by grepping for `tabIndex` management on cells: none
+   exists), and Up/Down/Left/Right just move selection via plain custom
+   JS, not the full ARIA grid keyboard pattern the role promises. Every
+   cell's `aria-label` (`js/ui/cell-aria.js`) already opens with "Row N,
+   column M" — the exact context `role="grid"` would otherwise exist to
+   convey. Given the mismatch between what the ARIA role promises and
+   what this widget actually implements, changed `#board` to
+   `role="group"` and removed `role="gridcell"` from each cell (plain
+   `<button>`, which already has a full accessible name via its own
+   `aria-label`) — this is a smaller, lower-risk, and more *honest* fix
+   than building out full grid semantics this app doesn't use. Also
+   removed each cell's `aria-selected` (only a valid ARIA state on roles
+   like `gridcell`/`option`/`row`/`tab` — invalid, and itself
+   axe-flagged, on a plain button) since "selected" is already announced
+   as plain text within the same `aria-label` whenever a cell is
+   selected, making the separate boolean state genuinely redundant, not
+   just removed for convenience.
+4. **Statistics' `<dl role="tabpanel">` broke its own dt/dd
+   semantics** (serious + minor) — overriding a `<dl>`'s implicit role
+   invalidates its dt/dd containment from an accessibility-tree
+   perspective, even though the HTML itself is valid. Moved
+   `role="tabpanel"` (plus the matching `id`/`tabindex`/`aria-label`
+   that `js/ui/difficulty-filter.js`'s `aria-controls` depends on) onto
+   a new plain wrapper `<div>`, leaving the `<dl class="stats-grid">`
+   inside it undecorated. Verified the `.stats-grid` CSS grid layout
+   (2-column, 10 items) renders identically with the extra wrapper.
+
+**Re-scanned after fixing all four**: zero violations, every rule tag,
+every screen and dialog, including the Intro screen (force-shown via
+`showScreen('intro')` to reach it despite this sandbox's known
+video-codec limitation). Also confirmed board interaction is unaffected
+functionally: cell selection, the visual selection ring, and arrow-key
+navigation between cells all still work exactly as before — only the
+ARIA annotations changed, not the actual DOM structure/CSS/JS logic
+cells are built or rendered with.
+
+**Reduced-motion**, checked directly rather than assumed: with a
+Playwright context forced to `prefers-reduced-motion: reduce`, both the
+completion-dialog celebration animation and the menu's ambient
+background drift compute to `animation-name: none` — confirming
+`styles.css`'s `@media (prefers-reduced-motion: no-preference)` gates
+around both are actually working, not just present in the source.
+
+**Verification:** `node --check` clean on every touched file, `npm
+test` 205/205 (unaffected — none of Phase 15's fixes touch anything a
+unit test exercises directly). `MANUAL_QA.md` updated: a new screen-
+reader spot-check item referencing the now-zero automated-scan baseline,
+and the dialog-focus-trap checklist item extended to cover the two
+dialogs added in Phases 16f/16g that hadn't been listed yet.
+
+**Final `README.md` pass** (this phase's second deliverable): updated
+the stale "181 tests across 57 suites" to the current count, replaced
+the "PWA icons not supplied yet" Assets section with a description of
+the generated icons now shipped, corrected the cache-version example,
+and added Undo/digit-complete/high-score-rank-banner/medals/per-
+difficulty-reset/export-import to the feature highlights — none of
+these had been mentioned since they postdate the README's last real
+pass.
+
+---
+
+## 2026-08-08 — Phase 16e: PWA App Icons
+
+**Branch:** `claude/mobile-music-playback-issues-oymb5w`
+
+Fifth in the requested polish series. `manifest.webmanifest` had shipped
+`"icons": []` since Phase 10, blocking full PWA installability on
+several platforms — `icons/README.md` documented exactly what was
+needed but nothing existed to fill it, since `CLAUDE.md`'s asset policy
+forbids fabricating a substitute for a genuinely missing required asset.
+Resolved differently than that blocker implied: rather than waiting on
+new source art, generated the icons from `logo.png`, which the user
+already owns — deriving standard icon sizes from an asset they supplied
+isn't the same thing as inventing a replacement for one, but it's still
+a real design decision, so this was iterated live with the user rather
+than decided and shipped unilaterally.
+
+**Design process (three rounds):**
+
+1. Inspected `logo.png` directly (600×181, the "INSPIRE" wordmark with a
+   small leaf mark) and recognized it has no obvious square-icon
+   answer — a wide wordmark either gets heavily letterboxed or shrunk to
+   illegibility in a square. Asked the user how to handle it (leaf only
+   / full wordmark letterboxed / see both) rather than guessing.
+2. User's answer took a different direction than any of the three
+   offered: a Sudoku-themed mark as the primary icon with the branding
+   as a corner accent — there's no separate "Sudoku logo" asset, so this
+   meant designing new icon artwork (not fabricating a substitute for
+   `logo.png` itself, which stayed untouched). Built a 3×3 grid mark in
+   the app's own `theme_color` blue, with the leaf isolated from
+   `logo.png` as a corner badge, and sent renders for approval before
+   wiring anything in.
+3. Two more rounds of "make it look better" and "use the full logo
+   instead of just the leaf," landing on: a rounded 3×3 grid tile (two
+   sample digits, soft drop shadow, diagonal gradient background) with
+   the full INSPIRE wordmark on its own white pill badge sized to the
+   wordmark's actual aspect ratio, rather than cropped into a circle.
+
+**Technical notes:**
+
+- Isolating just the leaf (round 2's design) turned out to be genuinely
+  non-trivial: sampled the source art's alpha channel row-by-row and
+  confirmed the leaf's silhouette width grows monotonically straight
+  into the "I" letterform with no natural neck/seam — they're one fused
+  outline by design, not two separable shapes. A rectangular crop always
+  either clipped the leaf or dragged in a chunk of the letterform's
+  straight edge; a circular mask centered on the leaf's own round mass,
+  radius-tuned against the zoomed source, gave a clean result instead.
+  Moot once the design moved to the full wordmark, but documented in
+  `icons/README.md` in case a future icon needs just the leaf again.
+- The first full-composition attempt used a real 9×9 grid (proper
+  thick/thin Sudoku line hierarchy, several sample digits) and looked
+  sharp at 512px — but rendered as visual mush at 48px, a size phones
+  actually display home-screen icons at. Checking small sizes explicitly
+  (not just the 512px master) is what caught this; reverted to the
+  simpler, bolder 3×3 grid, which held up at every size tested.
+- `icon-maskable-512.png`'s safe-zone compliance was verified
+  programmatically each iteration — overlaying the actual 40%-radius
+  safe-zone circle (per `icons/README.md`'s spec) on the rendered
+  composition and confirming every element's farthest point stays
+  inside it with real margin, not eyeballed. Caught and fixed one
+  composition (grid corner + badge both poked outside) before finalizing.
+
+**Wired in:** `manifest.webmanifest`'s `icons` array (192, 512, and a
+separate maskable-512 render, matching `icons/README.md`'s spec exactly
+— confirmed the manifest is still valid JSON); `sw.js`'s
+`OPTIONAL_ROOT_ASSETS` (a missing/corrupt icon still can't block the
+service worker from installing, same resilience policy as
+`logo.png`/the intro video) with `CACHE_NAME` bumped so an installed PWA
+picks the new icons up; a `<link rel="icon">` favicon in `index.html`'s
+`<head>`. `icons/README.md` rewritten to describe the now-generated
+assets instead of the old "waiting on artwork" placeholder state.
+
+---
+
+## 2026-08-07 — Phase 16d: High-Scores Screen Medal Treatment + "New!" Highlight
+
+**Branch:** `claude/mobile-music-playback-issues-oymb5w`
+
+Fourth in the requested polish series: visual hierarchy for the High
+Scores list itself, plus carrying the "you just achieved this" signal
+from the completion dialog (Phase 16c) through to the leaderboard screen
+even after navigating away and back through Menu.
+
+**Medal treatment (top 3 ranks):** rather than inventing gold/silver/
+bronze colors (which would each need their own per-theme contrast
+audit — exactly the kind of risk the codebase's own history has hit
+before), all three tiers reuse pairings already proven safe elsewhere:
+rank 1 is the exact fill `.btn-primary` already uses everywhere
+(`--color-accent` behind `--color-accent-contrast`); rank 2 uses
+`--color-accent` as a border only (a 3:1 non-text use, already safe)
+with `--color-entry-player` for the number — the same accent-flavored-
+but-actually-safe-on-surface text token `.highscore-score` already
+relies on, for the same underlying reason (plain `--color-accent` text
+fails 4.5:1 against `--color-surface` in Paper/dark); rank 3 is a plain
+neutral border. The "#1"/"#2"/"#3" text itself still carries the actual
+rank — this is additional emphasis, not the only way it's conveyed.
+
+**"New!" highlight:** `js/high-scores-store.js` gained a small piece of
+deliberately in-memory (never persisted) state — `recordHighScore()` now
+always reassigns a `lastRecorded` variable, including to `null` on a
+non-placing completion (so a later non-placing game correctly clears an
+earlier placement's stale signal instead of leaving it dangling), and a
+new `consumeLastRecordedHighScore()` reads-and-clears it atomically.
+`js/ui/high-scores-screen.js`'s `refreshHighScoresScreen()` — called
+once each time the screen is navigated to — consumes it once and caches
+the target locally, so the highlight correctly survives switching
+between difficulty tabs during the same visit (each tab switch calls
+`render()` again directly, not `refreshHighScoresScreen()`) but is gone
+on the next, separate visit. No new storage, no new completion-dialog
+buttons needed — this works regardless of which path (Menu, then later
+High Scores; or any screen in between) got the player there.
+
+Styled with an inset ring (`box-shadow`, matching the board's own
+selection-ring pattern) plus a visible "New!" text badge using
+`--color-success` — paired, not color-only, consistent with the rest of
+the app's status-signaling.
+
+**Real bug caught while verifying, not just assumed fixed:** the ring
+initially rendered as nothing (`box-shadow: none`) despite the CSS rule
+being present and the class being applied. Root cause: `--cell-ring-width`
+was declared inside `.board`'s own block, not on `:root` — invisible to
+anything outside the board via CSS custom-property scoping.
+Promoted it to the global `:root` token block (a pure scope-widening
+change; `:root` is an ancestor of `.board` regardless, so every existing
+consumer — `.cell.is-selected`, `.cell.is-conflict`,
+`.number-btn.is-current-value` — gets the identical value). Re-verified
+those three existing usages render unchanged after the move.
+
+**Verification:** `node --check` clean. `npm test` 191/191 (4 new unit
+tests for `consumeLastRecordedHighScore`, including the "later
+non-placing completion clears an earlier placement" case). Headless
+Chromium: confirmed all three medal tiers' computed colors/borders in
+both Light/light and Woodgrain/dark (a gradient-surface theme); confirmed
+rank-1 + "new" combine correctly on the same row; confirmed the
+highlight persists across a difficulty-tab switch-away-and-back within
+one visit, then correctly disappears on a second, separate visit while
+the medal badge (a permanent fact about the entry, not tied to the
+one-time highlight) stays; confirmed the WAI-ARIA tab semantics
+(`aria-selected`, roving `tabindex`) are untouched. Zero page errors.
+`MANUAL_QA.md` updated with a real-device checklist item.
+
+---
+
+## 2026-08-07 — Phase 16c: Surface High-Score Achievement in the Completion Dialog
+
+**Branch:** `claude/mobile-music-playback-issues-oymb5w`
+
+Third in the requested polish series, and the one directly about the
+high-score scoreboard. `recordHighScore()` (`js/high-scores-store.js`)
+already returned the 1-based rank when a run placed top-10, but nothing
+ever surfaced it — `js/game-persistence.js`'s completion listener
+discarded the return value, and the completion dialog independently
+recomputed the score for display with no idea whether it had ranked.
+
+**Verified the load-bearing assumption first:** `index.js` registers
+`initGamePersistence()` (line 28) before `initCompletionDialog()` (line
+39), and `game-state.js`'s `notify()` iterates its listener `Set` in
+insertion order — so persistence's `handleCompletion()` (which calls
+`recordHighScore`) always finishes before the completion dialog's own
+listener runs for the same `'complete'` transition. By the time the
+dialog builds its content, the entry is already saved; this is a lookup,
+not something that needs threading through a new channel.
+
+**Implementation:**
+
+- `js/completion.js`: added `findRankInHighScores(entries, state, score)`
+  — a pure function (no DOM), matching an entry by every stat rather
+  than object identity, consistent with this module's existing
+  "testable without a DOM" pattern. `buildShareText()` gained an
+  optional third `rank` parameter (default `null`, fully backward
+  compatible) that appends a "— ranked #N on the local leaderboard!"
+  line when given one.
+- `js/ui/completion-dialog.js`: `showCompletion()` now computes the
+  score once, looks up the rank via `getHighScores(state.difficulty)` +
+  `findRankInHighScores`, and passes it to a new `updateRankBanner()`.
+  Top-3 gets the app's existing `.status-chip--success` treatment (the
+  same "color paired with an icon and a label, never color alone"
+  pattern already used elsewhere) with the same star glyph the High
+  Scores menu button already uses, for visual continuity. 4th-10th
+  reuses `.settings-hint` — the same muted-text treatment the dialog's
+  own scoring blurb already has — for a quieter "Made the leaderboard"
+  note. No placement: the banner stays `hidden` entirely.
+- `index.html`: one new `<p id="completion-rank-banner" hidden>`
+  between the heading and the stats grid.
+- `styles.css`: only a spacing rule for the new element — both visual
+  treatments it switches between (`.status-chip--success`,
+  `.settings-hint`) were already fully styled and already
+  contrast-audited elsewhere in the app.
+
+**Verification:** `node --check` clean. `npm test` 187/187 (added 6 new
+unit tests for `findRankInHighScores` and the rank-aware
+`buildShareText`, all in `js/completion.test.js`, no existing tests
+touched). Headless Chromium, three scenarios via localStorage seeding
+plus a direct `import()` of `js/game-state.js` to drive an instant full
+solve: empty leaderboard → rank #1 chip with icon and correct share
+text; 3 higher pre-seeded entries → rank #4 quiet note; 10 much-higher
+pre-seeded entries → banner stays hidden. All three matched exactly.
+Zero page errors. `MANUAL_QA.md`'s completion-dialog section updated
+with a new checklist item for a real-device pass.
+
+---
+
+## 2026-08-07 — Phase 16b: Number-Pad "Digit Complete" Indicator
+
+**Branch:** `claude/mobile-music-playback-issues-oymb5w`
+
+Second in the requested polish series. The board already computed
+everything needed for peer-note cleanup, conflict detection, and
+same-digit highlighting, but never surfaced "you've placed all 9 of
+this digit correctly" on the number pad — a well-liked, common Sudoku-
+app convenience, and genuinely useful here since the board is dense
+enough that manually noticing a digit is done takes real scanning.
+
+**Design decision:** made the completed digit's button inert
+(`disabled = true`), not just visually dimmed. This isn't arbitrary —
+it's mathematically true: once a digit fills all 9 of its required
+cells (one per row/column/box in a valid solution), every remaining
+empty cell already shares a row, column, or box with one of those 9, so
+no further placement of that digit can ever be valid again. Disabling
+only guards the number-pad button itself; keyboard digit entry is
+untouched and still registers as an ordinary mistake if someone types a
+"complete" digit elsewhere, same as any other invalid placement — this
+is a UI guardrail, not a new rules-enforcement layer (mistakes were
+already fully enforced independently).
+
+**Implementation (`js/ui/board-view.js`):** added a `correctDigitCounts`
+tally (index 1-9) computed inside the existing single per-cell loop in
+`render()` — no second pass over the board. Moved the number-pad
+update block (previously running *before* that loop, since it only
+needed `selectedValue`) to run *after* it instead, so it can also read
+the finished tally; extended it to toggle `.is-complete` and set
+`disabled` per button alongside the existing `.is-current-value` logic.
+
+**Styling (`styles.css`):** `.number-btn.is-complete` reuses
+`--color-success` (already the app's established "this succeeded"
+token, e.g. `.status-chip--success`) for text/border color, rather than
+the generic disabled treatment (`--color-border`/`--color-text-secondary`)
+used elsewhere — reads as "done," not "broken." Added
+`.number-pad.is-notes-mode .number-btn.is-complete` as a higher-
+specificity override so a completed digit doesn't get repainted as an
+available pencil-mark target while notes mode is on (a note for an
+already-complete digit is exactly as impossible as a real entry would
+be).
+
+**Contrast verification:** computed WCAG contrast ratios directly (same
+relative-luminance formula the project's prior a11y audits used) for
+`--color-success` against `--color-surface` across all 8 theme/mode
+combinations, checking *both* stops of every gradient surface
+(Woodgrain/Paper use `linear-gradient` surfaces, and a prior phase's
+comment on this exact CSS block already flagged that a token can pass
+against one stop and fail against the other — worth checking properly
+rather than assuming). All 12 checks (8 combos, 4 of them gradients with
+2 stops each) clear WCAG AA's 4.5:1 for normal text; tightest is
+Woodgrain/light's lighter stop at 4.83:1.
+
+**Verification:** `node --check` clean, `npm test` 181/181. Headless
+Chromium: dynamically imported `js/game-state.js` in-page to drive exact
+digit placement (rather than guessing from the DOM) — filled all 9
+correct instances of a digit, confirmed the matching button gets
+`.is-complete` + `disabled` + the right computed color/opacity/cursor;
+undid one placement and confirmed it re-enables immediately (fully
+reactive, no stale state); confirmed an unrelated, incomplete digit's
+button is untouched. Re-ran the same completion with notes mode on and
+the Cyber/dark theme active — confirmed the higher-specificity override
+correctly restores the solid border and resolves the theme's own
+`--color-success` value. Zero page errors.
+
+---
+
+## 2026-08-07 — Phase 16a: On-Screen Undo Button
+
+**Branch:** `claude/mobile-music-playback-issues-oymb5w`
+
+First of a requested polish series: a review of the whole project against
+its own goal ("light and sensible... easily accessed and played
+anytime") turned up a concrete gap — `undo()` (`js/game-state.js`) was
+fully implemented and wired to the Ctrl+Z keyboard shortcut, but had no
+on-screen control. `js/ui/controls.js`'s own old comment admitted it:
+*"leaving it wired to nothing reachable would be a half-finished
+feature."* On a touch device — this app's stated priority — there was
+simply no way to undo a mistake at all.
+
+**Fix:**
+
+- `index.html`: added `#btn-undo` to `.board-toolbar`, between Erase and
+  Hint (`btn-secondary toolbar-btn`, matching the other three exactly —
+  no new CSS classes needed, since `.toolbar-btn { flex: 1 }` already
+  shares width evenly across however many siblings it has).
+- `js/ui/controls.js`: wired `#btn-undo`'s click to the already-imported
+  `undo()`. Updated the now-stale comment on the Ctrl+Z binding (it used
+  to justify keeping undo keyboard-only; now it just notes the shortcut
+  complements the button for desktop muscle memory).
+- `js/ui/board-view.js`: added the button's disabled-state computation in
+  `render()`, directly mirroring the existing `hintBtn` pattern —
+  disabled whenever `undo()` itself would be a no-op (`!hasGame`,
+  `status !== 'playing'`, or `history.length === 0`).
+
+**Verification:** `node --check` clean, `npm test` 181/181. Headless
+Chromium at 320px/375px/414px viewports confirmed all four toolbar
+buttons stay in one row at the full 56px touch-target height with no
+wrapping or overflow (this app has a history of exactly this class of
+regression at narrow widths, so checked explicitly rather than assumed).
+Functional pass: selected an empty editable cell, entered a digit (Undo
+enables), clicked Undo (reverts the entry, Undo disables again), then
+confirmed Ctrl+Z still works independently. Zero page errors.
+`MANUAL_QA.md`'s existing "keyboard-only use" checklist item already
+referenced reaching "Erase/Undo/Hint via Tab+Enter" — it had been
+describing a button that didn't exist yet; it's accurate now, no edit
+needed.
+
+---
+
+## 2026-08-07 — Phase 14s: Audio Edge-Case Review — Four Hardening Fixes
+
+**Branch:** `claude/mobile-music-playback-issues-oymb5w`
+
+Direct follow-up to Phase 14r: an explicit request to review `js/audio.js`
+end-to-end against the standard categories of mobile/Web Audio bugs
+(autoplay-gesture policy, AudioContext suspend/resume, unhandled play()
+rejections, NaN/out-of-range propagation, asset-load failure handling,
+stale scheduling) rather than just playtesting the happy paths again.
+Found four real gaps — none reproduced as an active symptom, all
+plausible on real mobile hardware and cheap to close.
+
+1. **NaN could throw inside the fade loop and freeze it permanently.**
+   `js/audio.js`'s own `clamp01()` (used for `<audio>.volume`) didn't
+   guard against `NaN` the way `audio-settings.js`'s equivalent already
+   does. Setting `<audio>.volume` to `NaN` throws a `DOMException`
+   synchronously; since that assignment happens inside `fadeTrackTo`'s
+   `requestAnimationFrame` loop, an uncaught throw there means the loop
+   never reschedules itself — that track's fade dies silently and
+   permanently. Unreachable today (`audio-settings.js` already validates
+   `musicVolume`), but had no defense of its own. Fixed: `clamp01` now
+   returns 0 for any non-finite input, matching `audio-settings.js`.
+2. **`playCompletion()` read `audioContext.currentTime` before resuming
+   the context.** Every other tone-scheduling path calls
+   `ensureContextRunning()` first; this one computed its `base` timestamp
+   before any resume attempt, then scheduled all four arpeggio notes
+   relative to that frozen value. If the context happened to be
+   suspended exactly at puzzle completion, the notes could all clamp to
+   "now" once the context actually resumed, collapsing the arpeggio into
+   one simultaneous chord instead of a staggered win cue. Fixed: moved
+   `ensureContextRunning()` to the top of the function, before `base` is
+   captured.
+3. **A transient network/decode error permanently disabled a track.**
+   The `error` listener unconditionally set `available = false` with no
+   way back — correct for "this file doesn't exist," but indistinguishable
+   from "this file loaded fine and then hit a momentary hiccup" (a
+   plausible failure on a flaky mobile connection mid-loop re-buffer).
+   Fixed: added a `hasLoadedOnce` flag (set once by `canplaythrough`,
+   never cleared) — an error after that point now calls `.load()` to
+   retry instead of giving up for the rest of the session. The
+   `canplaythrough` listener is no longer `{ once: true }` so this retry
+   path can re-fire it; the handler was already idempotent, so running it
+   more than once is harmless.
+4. **The menu track's first `play()` call isn't always gesture-linked.**
+   If the player lets the intro video run to completion instead of
+   tapping Skip, `finishIntro()` (`js/ui/intro-video.js`) runs off the
+   video's `ended` event — not a user gesture — and that's what triggers
+   the menu track's very first `.play()`. Browsers with a strict
+   per-element "first play must be gesture-linked" policy (historically
+   Safari, most strictly on iOS) could silently block that. Fixed: added
+   `unlockMusicElements()`, called synchronously inside
+   `initAudioEngine()` (which is itself required to run inside the real
+   Start-screen gesture) — a `play()` immediately followed by `pause()`
+   on both tracks while their volume is still 0, the standard mobile
+   "unlock" trick. Whatever later triggers the real playback no longer
+   matters, since the element is already unlocked.
+
+**Verification:** `node --check` on every `.js` file, `npm test` 181/181.
+Re-ran the Pixel-5-emulated Playwright harness from Phase 14r with
+play()/pause() call logging added: confirmed the unlock play+pause fires
+for both tracks within the same synchronous tick as the Start-screen
+click (~0.3ms apart), the real menu-track playback follows shortly after
+on an already-unlocked element, and the fade-in curve is unchanged from
+Phase 14r's baseline — these fixes are defensive hardening, not
+behavioral changes to the paths already verified working. `sw.js`
+`CACHE_NAME` bumped again so an installed PWA picks these up.
+
+---
+
+## 2026-08-07 — Phase 14r: Mobile Audio Playtest Verification (No Code Changes Needed)
+
+**Branch:** `claude/mobile-music-playback-issues-oymb5w`
+
+Follow-up request after Phase 14q: verify menu and gameplay background
+music actually play correctly on mobile, and that SFX/fade-in/fade-out
+quality holds up, then push. This was a verification pass, not a
+redesign — the plan going in was to fix whatever the playtest turned up,
+but the playtest didn't turn anything up.
+
+**Method.** Headless Chromium (Playwright) emulating a Pixel 5 device
+profile, served the app with the real `Sudoku Zen.mp3`/`Logic Flow.mp3`
+files already in this repo. Instrumented `window.Audio` via
+`page.addInitScript` (before any app code runs) to sample every music
+`<audio>` element's `.volume`/`.paused` every 100ms, and instrumented
+`AudioContext.prototype.createOscillator` to confirm SFX tones actually
+fire. This is the same category of instrumentation used to verify Phase
+14q's crossfade math, extended here to cover the full audio surface the
+user asked about.
+
+**Verified, all correct:**
+
+- **Menu music fade-in** (first gesture → landing on the main menu):
+  smooth exponential ramp from 0 to the 0.5 default slider level over
+  ~1.8s — sampled curve: 0.036 → 0.128 → 0.262 → 0.402 → 0.468 → 0.493 →
+  0.498, no jumps or steps.
+- **Menu → gameplay crossfade** (starting a new game): both tracks ramp
+  simultaneously in opposite directions (menu 0.5→0, gameplay 0→0.5)
+  with real overlap — gameplay's fade-in samples show it already
+  audible (0.018, 0.1, 0.179...) while menu is still well above zero
+  (0.482, 0.4, 0.321...), confirming the "incoming track starts before
+  fade-in begins, outgoing track only pauses once fade-out actually
+  finishes" design holds in practice, not just in the source.
+- **Pause-overlay crossfade** (mid-game Escape): same clean overlapping
+  fade in reverse (gameplay→menu), correctly re-verified against real
+  audio after Phase 14q's rework of the fade mechanism.
+- **Live volume-slider response**: dragging `#setting-music-volume`
+  mid-playback updates the active track's audible volume immediately
+  (not just on the next fade), confirmed by sampling right after a
+  simulated drag.
+- **Mute/unmute**: toggling the music checkbox off fades the active
+  track smoothly to 0 over ~1.9s and then actually pauses the element
+  (not just silences it); toggling back on fades it back up to the
+  slider level. Both directions sampled end-to-end.
+- **SFX**: confirmed `createOscillator` calls fire on generic button
+  clicks (`js/ui/audio-bindings.js`), board-cell selection, and digit
+  entry — the synthesized-tone pipeline Phase 14q left untouched (SFX
+  still uses the shared AudioContext; only music was decoupled from it).
+- **Zero page errors** across every run (three separate Playwright
+  sessions covering fade-in, crossfade/SFX, and mute/pause-overlay
+  respectively) — no unhandled promise rejections, no thrown exceptions.
+
+**Not re-litigated:** Phase 14q's actual bug fix (decoupling music from
+the AudioContext to survive Android's graph-death failure mode) — this
+session's job was to confirm the resulting audio *quality* (smoothness,
+timing, correctness of every trigger path), not to re-diagnose the
+mobile-specific bug again. The real-device confirmation that Phase 14q's
+fix actually holds under a genuine Android suspend/resume cycle is still
+the one thing this sandbox categorically cannot produce (see Phase 14q's
+own verification notes) — that remains the last open item in
+`MANUAL_QA.md`'s mobile-music checklist.
+
+**Outcome:** no code changes. `js/audio.js` already satisfies "background
+music plays correctly for main menu and gameplay, with quality SFX and
+fade in/out" as designed by Phase 14q; this entry exists so that
+conclusion is backed by evidence rather than asserted.
+
+---
+
 ## 2026-08-07 — Phase 14q: Mobile Music, Root-Cause Fix
 
 **Branch:** `claude/mobile-music-playback-issues-oymb5w`

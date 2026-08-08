@@ -114,3 +114,11 @@ export function getAllStatistics() {
 export function clearStatistics() {
   removeJSON(STORAGE_KEY);
 }
+
+/** Resets just one difficulty's counters to empty, leaving every other difficulty untouched. */
+export function clearStatisticsForDifficulty(difficultyId) {
+  if (!DIFFICULTY_IDS.includes(difficultyId)) return;
+  const stats = load();
+  stats.byDifficulty[difficultyId] = emptyDifficultyStats();
+  save(stats);
+}

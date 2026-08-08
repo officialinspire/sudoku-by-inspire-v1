@@ -209,6 +209,15 @@ button {
      future change to this token ever touched them by accident. */
   --border-width-thin: 1px;
   --focus-ring-width: 3px;
+  /* General-purpose "state ring" width (an inset box-shadow, not a
+     border) — originally declared only inside .board's own block since
+     the board was its first use, but genuinely general enough to be
+     global: js/ui/high-scores-screen.js's "you just achieved this"
+     highlight reuses it outside the board entirely. Kept as its own
+     token rather than reusing --focus-ring-width, on purpose — a future
+     change to the focus ring must never accidentally resize every one
+     of these rings too. */
+  --cell-ring-width: 2px;
 
   --touch-target-min: 44px;
 
@@ -678,6 +687,24 @@ button {
   border-radius: var(--radius-sm);
 }
 
+/* Standard screen-reader-only pattern (present in the accessibility
+   tree, removed from visual/layout flow) — used for the Intro and Game
+   screens' own <h1> (an a11y audit found every screen needs one, but
+   Game's header is already a tightly-tuned layout with no room to
+   spare, and Intro is a brief, self-contained moment neither screen
+   needs a second visible "Sudoku" title for). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .start-logo {
   /* Sized as a supporting brand mark, not a dominant graphic — the
      "Sudoku by Inspire" title (.brand) is the primary hierarchy
@@ -985,15 +1012,11 @@ button {
      them separately named means a future change to, say, the focus
      ring's width can never accidentally resize the board grid too.
      Declared on .board and consumed by its .cell descendants below
-     (custom properties inherit), so both stay in sync from one place. */
+     (custom properties inherit), so both stay in sync from one place.
+     --cell-ring-width, used just below, is declared globally on :root
+     instead — see its own comment there for why. */
   --board-gap-width: 2px;
   --board-line-width: 3px;
-  /* State-ring width (selection/conflict) — a separate token from the
-     two above even though it happens to share their 2px value, since
-     it means something different (an inset box-shadow ring, not a grid
-     line) and a future change to one must never accidentally resize
-     the other. */
-  --cell-ring-width: 2px;
 
   display: grid;
   grid-template-columns: repeat(9, 1fr);
@@ -1296,6 +1319,24 @@ button {
   box-shadow: inset 0 0 0 var(--cell-ring-width) var(--color-accent);
 }
 
+/* A digit whose 9 correct instances are all already on the board (see
+   js/ui/board-view.js's render() for why this is provably "nothing left
+   to place," not just a guess) — --color-success rather than the
+   app-wide disabled treatment (--color-border/--color-text-secondary,
+   used by .btn-primary/.btn-secondary/.menu-nav button above) so it
+   reads as "done," not "broken" or "unavailable." Verified against
+   --color-surface (this button's own background) at >=4.5:1 across all
+   8 theme/mode combinations, checking both stops of every gradient
+   surface — tightest is Woodgrain/light at 4.83:1. Lower opacity is the
+   secondary, non-color cue (never rely on color alone) — legible enough
+   to still read the digit, quiet enough not to compete with the board. */
+.number-btn.is-complete {
+  color: var(--color-success);
+  border-color: var(--color-success);
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 /* Notes mode: every number button gets a dashed, accent-tinted border
    instead of its normal solid one — "pencil marks," not "ink" — so a
    press's *consequence* (candidate note vs. final answer) is clear
@@ -1314,6 +1355,18 @@ button {
   border-style: dashed;
   border-color: var(--color-accent);
   color: var(--color-entry-player);
+}
+
+/* A complete digit stays complete-looking even while notes mode is on
+   (higher specificity than the notes-mode rule above, which would
+   otherwise win and paint it as an available pencil-mark target) — a
+   pencil mark for a digit that already has all 9 correct instances
+   placed is exactly as impossible as a real entry would be, so it
+   shouldn't visually invite one either. */
+.number-pad.is-notes-mode .number-btn.is-complete {
+  border-style: solid;
+  border-color: var(--color-success);
+  color: var(--color-success);
 }
 
 /* ---------- Pause overlay ----------
@@ -1699,6 +1752,16 @@ button {
   }
 }
 
+/* Sits between the heading and the stats grid, whichever of the two
+   treatments js/ui/completion-dialog.js applies (.status-chip--success
+   for a top-3 finish, .settings-hint for 4th-10th) — both are already
+   fully styled elsewhere, this only adds the spacing this particular
+   spot needs. [hidden] (no game/no placement) needs nothing here at
+   all: the attribute alone removes it from layout. */
+.completion-rank-banner {
+  margin: 0 0 var(--space-3);
+}
+
 .completion-stats {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -1829,10 +1892,72 @@ button {
   border-radius: var(--radius-md);
 }
 
+/* A just-achieved run (js/ui/high-scores-screen.js highlights whichever
+   entry the most recent completion produced, for exactly one screen
+   visit) gets the same inset-ring treatment already used for the
+   board's own selection/current-value states — --color-accent as a
+   non-text 3:1 use, never as text itself (see .highscore-score's own
+   comment just below for why that distinction matters in this row). */
+.highscore-row--new {
+  box-shadow: inset 0 0 0 var(--cell-ring-width) var(--color-accent);
+}
+
+/* Fixed badge shape for every row's rank — a circle sized for 1-2
+   digits — so top-3 "medal" rows (below) don't shift size/alignment
+   relative to the plain 4th-10th ones. */
 .highscore-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-pill);
   font-weight: var(--font-weight-bold);
   color: var(--color-text-secondary);
+}
+
+/* Three "medal" tiers for the top 3 ranks, deliberately built from
+   pairings this app has already proven safe elsewhere rather than new
+   gold/silver/bronze colors that would each need their own per-theme
+   contrast audit:
+   - Rank 1: the exact fill .btn-primary already uses everywhere
+     (--color-accent behind --color-accent-contrast) — the strongest of
+     the three.
+   - Rank 2: --color-accent as a border only (safe as a 3:1 non-text
+     use) with --color-entry-player for the number itself — the same
+     accent-flavored-but-actually-safe-on-surface text token
+     .highscore-score uses just below, for the same reason: plain
+     --color-accent text fails 4.5:1 against --color-surface in
+     Paper/dark.
+   - Rank 3: a plain neutral border, the subtlest of the three.
+   The "#1"/"#2"/"#3" text is what actually carries the rank — this is
+   additional emphasis, not the only way the information is conveyed. */
+.highscore-row--rank-1 .highscore-rank {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+.highscore-row--rank-2 .highscore-rank {
+  border: var(--border-width-thin) solid var(--color-accent);
+  color: var(--color-entry-player);
+}
+
+.highscore-row--rank-3 .highscore-rank {
+  border: var(--border-width-thin) solid var(--color-border);
+  color: var(--color-text);
+}
+
+/* Plain visible text, not color-only — pairs with .highscore-row--new's
+   ring rather than replacing it, so the "just achieved" signal doesn't
+   rely on color alone either. Reuses --color-success, the app's
+   established "this succeeded" token (see Phase 16b's contrast
+   verification against this exact --color-surface background). */
+.highscore-new-badge {
+  font-size: var(--font-size-3);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-success);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
 }
 
 .highscore-score {

@@ -1397,19 +1397,349 @@ catching the actual failure mode.
       architectural fix for a documented failure class, not something
       provable end-to-end without the user's device.
 
-## Phase 15 — Final QA Against Acceptance Criteria
+## Phase 14r — Mobile Audio Playtest Verification ✅ (2026-08-07)
 
-- [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and
-      check it off with evidence (manual test note in
-      `DEVELOPMENT_LOG.md`).
-- [ ] Final `README.md` pass (install/run/deploy instructions accurate).
+Follow-up to Phase 14q: playtest and verify menu/gameplay background
+music, SFX, and fade-in/fade-out quality actually work — fix whatever
+turns up. Nothing turned up; this phase is the verification record.
+
+- [x] Headless Chromium (Playwright), Pixel 5 device emulation, real
+      `Sudoku Zen.mp3`/`Logic Flow.mp3` files, `<audio>`/oscillator
+      instrumentation via `page.addInitScript`. Confirmed: smooth
+      exponential menu-music fade-in (0 → 0.5 over ~1.8s); true
+      overlapping menu↔gameplay crossfade on new-game start and on
+      pause-overlay open/close; live volume-slider response mid-fade;
+      mute fades to 0 and actually pauses, unmute fades back up; SFX
+      oscillators fire on button clicks, cell selection, and digit
+      entry. Zero page errors across all runs. Full detail and sampled
+      curves in `DEVELOPMENT_LOG.md`.
+- [x] No code changes required — Phase 14q's fix already delivers this;
+      `MANUAL_QA.md`'s real-Android confirmation item is the only thing
+      this sandbox still can't close out.
+
+## Phase 14s — Audio Edge-Case Review: Four Hardening Fixes ✅ (2026-08-07)
+
+Explicit request to review `js/audio.js` against common Web
+Audio/mobile-audio bug categories (not just re-playtest the happy path).
+Found and fixed four real gaps, none previously observed as an active
+symptom but all plausible on real mobile hardware:
+
+- [x] NaN-safe `clamp01()` — an unguarded NaN reaching `<audio>.volume`
+      throws and permanently kills that track's `requestAnimationFrame`
+      fade loop.
+- [x] `playCompletion()` now calls `ensureContextRunning()` before
+      reading `audioContext.currentTime`, so a suspended context at
+      puzzle-completion time can't collapse the arpeggio's staggered
+      notes into one simultaneous chord.
+- [x] Transient track errors (network blip / decode hiccup after a track
+      already loaded successfully once) now retry via `.load()` instead
+      of permanently disabling that track for the session — added a
+      `hasLoadedOnce` flag to distinguish "never worked" from "worked,
+      then hiccuped."
+- [x] `unlockMusicElements()` — a play()-then-immediately-pause() on both
+      tracks, called synchronously inside `initAudioEngine()` (itself
+      required to run inside the real Start-screen gesture), so the menu
+      track's first real playback — which can end up triggered by the
+      intro video's non-gesture `ended` event if the player doesn't tap
+      Skip — always lands on an already-unlocked element.
+- [x] Verified via the Phase 14r Playwright harness (Pixel 5 emulation)
+      with play()/pause() call logging added: unlock fires for both
+      tracks within the same tick as the gesture, real playback follows
+      on an unlocked element, fade-in curve unchanged from baseline.
+      `npm test` 181/181, `node --check` clean on every file.
+
+## Phase 16a — On-Screen Undo Button ✅ (2026-08-07)
+
+First of a requested polish/feature series (recommendations tracked in
+chat, not a separate doc). `undo()` in `js/game-state.js` was fully
+implemented and Ctrl+Z-bound but had no touch/click-accessible control —
+a real gap on this app's stated mobile-first priority.
+
+- [x] Added `#btn-undo` to the board toolbar in `index.html` (between
+      Erase and Hint), wired to the existing `undo()` in
+      `js/ui/controls.js`, with disabled-state logic in
+      `js/ui/board-view.js`'s `render()` mirroring the existing `hintBtn`
+      pattern (disabled exactly when `undo()` would itself be a no-op).
+- [x] Verified via headless Chromium at 320/375/414px: all four toolbar
+      buttons stay in one row at full touch-target height, no
+      wrapping/overflow. Functional pass confirmed enable/disable
+      transitions and that Ctrl+Z still works alongside the button.
+      `npm test` 181/181, `node --check` clean, zero page errors.
+
+## Phase 16b — Number-Pad "Digit Complete" Indicator ✅ (2026-08-07)
+
+Second in the requested polish series. A digit whose 9 correct instances
+are all already on the board now gets marked complete on the number pad.
+
+- [x] `js/ui/board-view.js`: tallies correct placements per digit inside
+      the existing per-cell render loop (no second board pass); toggles
+      `.is-complete` and disables the matching number-pad button when a
+      digit hits 9 — provably safe to disable, not just cosmetic (see
+      `DEVELOPMENT_LOG.md` for the "every remaining cell already
+      conflicts" reasoning). Keyboard entry is unaffected.
+- [x] `styles.css`: `.number-btn.is-complete` reuses the existing
+      `--color-success` token (already used for `.status-chip--success`)
+      rather than the generic disabled treatment, plus a higher-
+      specificity override so it stays correctly styled while notes mode
+      is also on.
+- [x] Verified contrast of `--color-success` against `--color-surface`
+      programmatically across all 8 theme/mode combinations (both
+      gradient stops each for Woodgrain/Paper) — all clear WCAG AA
+      4.5:1, tightest 4.83:1.
+- [x] Headless Chromium: drove exact digit placement via a dynamic
+      `import()` of `js/game-state.js` in-page; confirmed complete/
+      disabled/re-enable-on-undo behavior, an unrelated digit staying
+      untouched, and the notes-mode override in a non-default theme
+      (Cyber/dark). `npm test` 181/181, `node --check` clean, zero page
+      errors.
+
+## Phase 16c — Surface High-Score Achievement in the Completion Dialog ✅ (2026-08-07)
+
+Third in the requested polish series. `recordHighScore()` already
+returned the achieved rank, but nothing in the UI ever showed it.
+
+- [x] `js/completion.js`: added the pure, tested `findRankInHighScores()`
+      helper; `buildShareText()` gained an optional `rank` parameter
+      (backward compatible, defaults to `null`).
+- [x] `js/ui/completion-dialog.js`: looks up the rank via the
+      already-recorded entry (verified the listener-registration order
+      in `index.js` guarantees it's saved by the time the dialog reads
+      it) and shows a top-3 "New High Score" chip (reusing
+      `.status-chip--success` and the High Scores menu's own star icon)
+      or a quieter 4th-10th note (reusing `.settings-hint`) — hidden
+      entirely if the run didn't place.
+- [x] `index.html`/`styles.css`: one new element, one spacing rule — both
+      visual treatments it switches between were already fully styled
+      and contrast-audited elsewhere.
+- [x] Verified via headless Chromium across all three outcomes (rank 1,
+      rank 4, no placement) using localStorage-seeded leaderboards and a
+      direct `game-state.js` import to drive an instant full solve — all
+      matched exactly. `npm test` 187/187 (6 new unit tests), `node
+      --check` clean, zero page errors. `MANUAL_QA.md` updated.
+
+## Phase 16d — High-Scores Screen Medal Treatment + "New!" Highlight ✅ (2026-08-07)
+
+Fourth in the requested polish series. Visual hierarchy for the top 3
+leaderboard ranks, plus carrying "you just achieved this" through to the
+High Scores screen even after navigating away and back through Menu.
+
+- [x] `styles.css`: three medal tiers for ranks 1-3, built entirely from
+      pairings already proven safe elsewhere (no new gold/silver/bronze
+      colors needing their own contrast audit) — see
+      `DEVELOPMENT_LOG.md` for exactly which existing tokens/pairings
+      each tier reuses and why.
+- [x] `js/high-scores-store.js`: `recordHighScore()` now tracks the most
+      recent completion's placement in memory only (never persisted),
+      always reassigned including to `null` so a later non-placing game
+      correctly clears an earlier placement's stale signal; new
+      `consumeLastRecordedHighScore()` reads-and-clears it atomically.
+- [x] `js/ui/high-scores-screen.js`: consumes it once per screen visit,
+      caches locally so the highlight survives difficulty-tab switching
+      within that visit but not a later, separate visit. Ring +
+      "New!" text badge (color-paired, not color-only).
+- [x] Found and fixed a real bug while verifying: `--cell-ring-width`
+      was scoped inside `.board`'s own block, invisible outside it —
+      promoted to the global `:root` token block (pure scope-widening,
+      zero change for the three existing board consumers, re-verified).
+- [x] Verified via headless Chromium across two themes (including a
+      gradient-surface one), the tab-switch-persistence /
+      separate-visit-clears behavior, and WAI-ARIA tab semantics staying
+      untouched. `npm test` 191/191 (4 new tests), `node --check` clean,
+      zero page errors. `MANUAL_QA.md` updated.
+
+## Phase 16e — PWA App Icons ✅ (2026-08-08)
+
+Fifth in the requested polish series. `manifest.webmanifest` had
+declared `"icons": []` since Phase 10 — never fabricated, per
+`CLAUDE.md`'s asset policy, since no icon source art existed. Resolved
+without waiting on new artwork: generated from the user's own existing
+`logo.png`, with the user approving the design direction and two rounds
+of revision before anything was wired in.
+
+- [x] Design iterated live with the user rather than decided
+      unilaterally: first checked whether to use the full wordmark or a
+      cropped mark (the wordmark is a wide ~3.3:1 lockup, not a
+      square-friendly symbol); user asked for a Sudoku-themed mark with
+      the branding as a corner accent instead; iterated twice more on
+      polish (gradient/shadow/depth) and which part of the logo to
+      feature (isolated leaf, then the full INSPIRE wordmark instead).
+- [x] Final design: a 3×3 grid tile (two sample digits, rounded corners,
+      soft drop shadow, diagonal gradient background in the app's own
+      `theme_color` blue) with the full INSPIRE wordmark on a white pill
+      badge — sized to the wordmark's own aspect ratio rather than
+      cropped into a circle.
+- [x] Isolating just the leaf from `logo.png` (an early iteration) turned
+      out to be non-trivial — verified programmatically that the leaf
+      and the "I" letterform are one continuous fused outline in the
+      source art with no natural seam, so a circular mask centered on
+      the leaf's own round mass was used instead of a rectangular crop.
+      Moot once the design moved to the full wordmark instead, but kept
+      as a documented technique in case a future icon needs just the
+      leaf again.
+- [x] `icon-maskable-512.png`'s safe-zone compliance checked
+      programmatically (overlaying the actual 40%-radius safe-zone
+      circle and confirming every element's farthest point stays inside
+      it with real margin), not eyeballed — caught and fixed one
+      composition that poked outside it before finalizing.
+- [x] Legibility checked at actual small home-screen sizes (48px, 96px),
+      not just at the 512px master — this is what ruled out an earlier
+      full-9×9-grid-with-more-numbers direction, which looked sharp at
+      512px but turned to visual mush at 48px; the simpler 3×3 grid held
+      up at every size tested.
+- [x] Wired in: `manifest.webmanifest`'s `icons` array, `sw.js`'s
+      `OPTIONAL_ROOT_ASSETS` (+ `CACHE_NAME` bump), a `<link rel="icon">`
+      favicon in `index.html`. `icons/README.md` updated to describe the
+      generated assets in place of the old "waiting on artwork" state.
+
+## Phase 16f — Per-Difficulty Data Reset ✅ (2026-08-08)
+
+Sixth (optional) item in the requested polish series. The only reset
+control before this was the global "Clear Data" (everything, every
+difficulty) — added a narrower option scoped to whichever difficulty
+tab is currently selected.
+
+- [x] `js/statistics-store.js`/`js/high-scores-store.js`:
+      `clearStatisticsForDifficulty`/`clearHighScoresForDifficulty`,
+      reusing the existing `byDifficulty[id]` storage shape rather than
+      a new schema.
+- [x] New shared `js/ui/clear-difficulty-dialog.js` + one new `<dialog>`
+      in `index.html`, opened from either Statistics or High Scores with
+      screen-specific title/message text — avoids duplicating dialog
+      markup/wiring for what's otherwise the identical confirm shape in
+      two places.
+- [x] A "Clear Stats for This Difficulty" button on Statistics and
+      "Clear High Scores for This Difficulty" on High Scores, each
+      operating on whatever difficulty tab is currently selected.
+- [x] Verified via headless Chromium: clearing Easy's stats leaves
+      Intermediate's untouched (and Easy's High Scores untouched);
+      clearing Easy's high scores leaves Intermediate's untouched (and
+      Easy's Statistics untouched); cancelling either changes nothing;
+      the existing global Clear Data flow still clears everything for
+      every difficulty, unaffected. `npm test` 195/195 (4 new unit
+      tests), `node --check` clean, zero page errors. `MANUAL_QA.md`
+      updated.
+
+## Phase 16g — Settings Backup/Restore (Export/Import) ✅ (2026-08-08)
+
+Seventh (optional) item in the requested polish series. A manual local
+JSON backup file — no cloud, no account, matching the app's fully local
+storage model — covering every `inspireSudoku:v1:*` key: appearance,
+gameplay/audio settings, statistics, high scores, and the active game.
+
+- [x] New `js/data-backup.js` (`buildBackup`/`applyBackup`, no DOM
+      dependency beyond `localStorage` itself) — deliberately doesn't
+      re-validate each key's *content* on import; every store's own
+      `load()` already re-validates whatever's in localStorage on every
+      read (the same safety net that already protects against
+      hand-edited/corrupted localStorage), so a malformed or tampered
+      key just gets silently discarded by the existing mechanism the
+      next time anything reads it, same as today.
+- [x] New `js/ui/data-backup-controls.js` + Export/Import buttons in
+      Settings' existing "Your data" section, and a new confirm dialog
+      (import is destructive — overwrites current data — so it's gated
+      behind an explicit confirmation naming the backup's export date,
+      matching every other destructive action in this app). Import
+      reloads the page on success, since several store modules cache
+      their settings in memory after their own `init()` and only update
+      through their own setters — a raw localStorage write alone
+      wouldn't reach them until the next load.
+- [x] Verified via headless Chromium: full export → clear → import
+      round-trip restores identical data; cancelling the import
+      confirmation changes nothing; a wrong-app or non-JSON file is
+      rejected immediately with a clear message and never opens the
+      overwrite confirmation. `npm test` 205/205 (10 new unit tests
+      covering export/import including a round-trip, rejecting bad
+      input, and ignoring unrecognized extra keys), `node --check`
+      clean, zero page errors. `sw.js` `CACHE_NAME` bumped (the two new
+      JS files are picked up via the existing runtime cache-fill, but
+      `index.js` itself — a core asset — changed too). `MANUAL_QA.md`
+      updated.
+
+## Phase 15 — Final QA Against Acceptance Criteria ✅ (2026-08-08)
+
+Walked all 12 items in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria"
+against the codebase as it stands after Phases 14q-16g, with fresh
+evidence for each rather than relying on memory of earlier phases (full
+detail and exact commands/scripts in `DEVELOPMENT_LOG.md`'s Phase 15
+entry):
+
+- [x] **1. Boot flow, no console errors** — verified via headless
+      Chromium at the repo root and, separately, served from a
+      simulated GitHub Pages subpath. Zero console/page errors either
+      way.
+- [x] **2. Generation/solvability/keyboard+mouse+touch completion** —
+      `npm test` covers generation/uniqueness/solvability at all 4
+      difficulties directly; a real keyboard-only session (arrow keys +
+      digit keys, not simulated) solved a puzzle to completion with 0
+      mistakes. Mouse/touch completion already exercised repeatedly
+      across Phases 14q-16g's own verification passes.
+- [x] **3. Autosave + exact Continue Game restore** — played real
+      moves (an entry, a note) via direct game-state calls, captured
+      exact `entries`/`notes`/`elapsedSeconds`/`difficulty`, reloaded,
+      restored via Continue Game, and confirmed byte-for-byte match.
+- [x] **4. Settings persist + apply without a full reload** — changed
+      theme/mode live (confirmed applied before any reload) and audio
+      settings, reloaded, confirmed both persisted with no extra action
+      needed.
+- [x] **5. 4 themes × 3 modes, contrast + no breakage** — 24
+      combinations (12 theme/mode pairs × 320px/1280px) all loaded with
+      zero errors and zero horizontal overflow. Contrast itself relies
+      on the existing rigorous per-token gradient-aware audits from
+      Phase 11 and this session's own Phase 16b/16d work, re-confirmed
+      by direct computed-style inspection rather than re-deriving a
+      full new audit from scratch (a naive automated attempt at one
+      produced false positives from not accounting for gradient
+      surfaces — caught and discarded, see dev log).
+- [x] **6. Stats/high scores update + persist** — completed a real
+      puzzle, confirmed Statistics and High Scores updated immediately,
+      reloaded, confirmed both matched exactly.
+- [x] **7. Keyboard-only, visible focus throughout** — same real
+      keyboard session as #2; focus outline confirmed present at every
+      step (menu button, dialog Start button, board cell, completion
+      dialog's Menu button).
+- [x] **8. Offline reload + fully offline play** — installed the
+      service worker, went fully offline, reloaded, generated a *new*
+      puzzle and solved it to completion — all with zero network.
+- [x] **9. PWA installable** — completed in Phase 16e; re-confirmed the
+      manifest is still valid JSON and icons still precache/serve
+      correctly as part of this phase's subpath test.
+- [x] **10. GitHub Pages subpath compatibility** — static grep for any
+      absolute-root path across every file type (none found) plus an
+      actual subpath-hosted run (manifest, favicon, service worker
+      scope, and full new-game gameplay all resolved correctly relative
+      to `/sudoku-by-inspire-v1/`).
+- [x] **11. No third-party CDN requests** — monitored every network
+      request during the full real keyboard playthrough (#2/#7); zero
+      non-same-origin requests.
+- [x] **12. No critical a11y violations, reduced-motion respected** —
+      ran a real automated scan (`axe-core`, WCAG 2.0/2.1 A+AA +
+      best-practice rules) across every screen and dialog. **Found real
+      issues, not just confirmed a clean bill of health**: no `<main>`
+      landmark, several screens missing an `<h1>`, and — the significant
+      one — the Sudoku board's `role="grid"`/`gridcell` was structurally
+      invalid (critical: cells must be grouped under `role="row"`
+      ancestors, and this board doesn't implement the full ARIA grid
+      keyboard pattern the role promises anyway) plus a `<dl
+      role="tabpanel">` on Statistics breaking its own dt/dd semantics.
+      Fixed all of them (see dev log for exactly what changed) and
+      re-ran the scan: zero violations on every screen and dialog.
+      Reduced-motion confirmed separately: completion celebration and
+      menu ambient-background animations both compute to
+      `animation-name: none` under `prefers-reduced-motion: reduce`.
+- [x] Final `README.md` pass — updated feature list, test count, PWA
+      icons section (no longer "not supplied"), cache version reference,
+      and added the Phase 16 features (Undo, digit-complete indicator,
+      high-score rank banner/medals, per-difficulty reset,
+      export/import) to the feature highlights.
 
 ## Outstanding / Blocked
 
 - [x] `./inspiresoftwareintro.mp4` and `./logo.png` supplied by user
       (2026-07-28) and wired into the Phase 1 intro screen / menu footer.
-- [ ] Still waiting on app icon source image(s) for the PWA manifest
-      (needed for Phase 10).
+- [x] App icons resolved without a separately-supplied source image —
+      generated (Phase 16e, 2026-08-08) from the existing user-owned
+      `logo.png` rather than waiting on new artwork; approved by the
+      user before being wired into the manifest. See Phase 16e below.
 - [x] `./Sudoku Zen.mp3` (menu music) and `./Logic Flow.mp3` (gameplay
       music) supplied by the user (2026-07-28, Phase 14) via a direct
       GitHub upload merged into this branch; verified real playback with

@@ -1,7 +1,14 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { recordHighScore, getHighScores, getAllHighScores, clearHighScores } from './high-scores-store.js';
+import {
+  recordHighScore,
+  getHighScores,
+  getAllHighScores,
+  clearHighScores,
+  clearHighScoresForDifficulty,
+  consumeLastRecordedHighScore,
+} from './high-scores-store.js';
 import { DIFFICULTY_IDS } from './sudoku-generator.js';
 
 function createFakeStorage() {
@@ -113,5 +120,55 @@ describe('clearHighScores', () => {
     recordHighScore('easy', entry());
     clearHighScores();
     assert.deepEqual(getHighScores('easy'), []);
+  });
+});
+
+describe('clearHighScoresForDifficulty', () => {
+  test('empties only the given difficulty, leaving others untouched', () => {
+    recordHighScore('easy', entry({ score: 500 }));
+    recordHighScore('insane', entry({ score: 900 }));
+
+    clearHighScoresForDifficulty('easy');
+
+    assert.deepEqual(getHighScores('easy'), []);
+    assert.equal(getHighScores('insane').length, 1);
+    assert.equal(getHighScores('insane')[0].score, 900);
+  });
+
+  test('unknown difficulty id is silently ignored', () => {
+    recordHighScore('easy', entry({ score: 500 }));
+    clearHighScoresForDifficulty('not-a-difficulty');
+    assert.equal(getHighScores('easy').length, 1);
+  });
+});
+
+describe('consumeLastRecordedHighScore', () => {
+  test('returns the difficulty and entry of a placing completion', () => {
+    recordHighScore('advanced', entry({ score: 700 }));
+    const result = consumeLastRecordedHighScore();
+    assert.equal(result.difficultyId, 'advanced');
+    assert.equal(result.entry.score, 700);
+  });
+
+  test('returns null after a completion that did not place', () => {
+    for (let i = 0; i < 10; i++) recordHighScore('easy', entry({ score: 1000 }));
+    consumeLastRecordedHighScore(); // drain the 10th placing call above first
+    recordHighScore('easy', entry({ score: 1 })); // does not place
+    assert.equal(consumeLastRecordedHighScore(), null);
+  });
+
+  test('consuming clears it — a second call in a row returns null', () => {
+    recordHighScore('easy', entry({ score: 500 }));
+    consumeLastRecordedHighScore();
+    assert.equal(consumeLastRecordedHighScore(), null);
+  });
+
+  test('a later non-placing completion clears an earlier placement instead of leaving it stale', () => {
+    recordHighScore('easy', entry({ score: 500 })); // places (list not full yet)
+    for (let i = 0; i < 9; i++) recordHighScore('easy', entry({ score: 1000 + i })); // fills the list to 10; the 500 entry is still on it
+    // The list is now full with a floor of 500 — this one is too low to place,
+    // even though the 500 entry recorded earlier is still validly on the board.
+    recordHighScore('easy', entry({ score: 1 }));
+    assert.equal(consumeLastRecordedHighScore(), null);
   });
 });

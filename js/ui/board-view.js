@@ -8,6 +8,7 @@ const mistakesEl = document.getElementById('game-mistakes');
 const hintsEl = document.getElementById('game-hints');
 const difficultyEl = document.getElementById('game-difficulty-label');
 const notesToggleBtn = document.getElementById('btn-notes-toggle');
+const undoBtn = document.getElementById('btn-undo');
 const hintBtn = document.getElementById('btn-hint');
 const pauseOverlay = document.getElementById('pause-overlay');
 const resumeBtn = document.getElementById('btn-resume');
@@ -44,7 +45,18 @@ function buildBoard() {
     cell.type = 'button';
     cell.className = 'cell';
     cell.dataset.index = String(index);
-    cell.setAttribute('role', 'gridcell');
+    // No role="gridcell" here, and #board (index.html) is role="group",
+    // not role="grid" — an ARIA grid requires each gridcell to sit
+    // inside a role="row" ancestor (a real WCAG failure axe-core flags
+    // as critical: "aria-required-parent"), and this board doesn't have
+    // that structure. It also doesn't implement the roving-tabindex
+    // keyboard pattern a real ARIA grid promises (every cell is
+    // independently tabbable here; Up/Down/Left/Right just move
+    // selection, not a full grid navigation model) — so claiming the
+    // grid role would promise more than this widget delivers. Each
+    // cell's rich aria-label (js/ui/cell-aria.js) already announces its
+    // row/column/box context in plain language, which is what the grid
+    // role would otherwise exist to convey.
     if (col % 3 === 0 && col !== 0) cell.classList.add('grid-line-left');
     if (row % 3 === 0 && row !== 0) cell.classList.add('grid-line-top');
 
@@ -99,16 +111,12 @@ function render(state) {
       ? state.puzzle[state.selectedIndex] || state.entries[state.selectedIndex]
       : 0;
   const ariaState = { ...state, immediateErrorChecking };
-
-  // Number pad: highlight the button matching the selected cell's
-  // current value (mirrors the board's own "matching number" cells, so
-  // the same digit is easy to spot both on the board and on the pad),
-  // and mark the whole pad while notes mode is active so its buttons
-  // read as "adding a pencil mark" rather than "entering the answer."
-  for (const btn of numberButtons) {
-    btn.classList.toggle('is-current-value', selectedValue !== 0 && Number(btn.dataset.digit) === selectedValue);
-  }
   numberPadEl?.classList.toggle('is-notes-mode', state.notesMode);
+
+  // Correctly-placed count per digit (1-9), tallied alongside the main
+  // per-cell loop below rather than in a second pass over the board —
+  // this is what tells the number pad a digit is "done" afterward.
+  const correctDigitCounts = new Array(10).fill(0);
 
   for (let index = 0; index < 81; index++) {
     const { el, valueEl, notesEl, noteDigits } = cells[index];
@@ -122,13 +130,20 @@ function render(state) {
     const isConflict = !isFixed && entry !== 0 && state.conflicts.has(index);
     const isError = immediateErrorChecking && !isFixed && entry !== 0 && entry !== state.solution[index];
 
+    if (value !== 0 && value === state.solution[index]) correctDigitCounts[value]++;
+
     el.classList.toggle('is-fixed', isFixed);
     el.classList.toggle('is-selected', isSelected);
     el.classList.toggle('is-related', isRelated);
     el.classList.toggle('is-match', isMatch);
     el.classList.toggle('is-conflict', isConflict);
     el.disabled = !hasGame;
-    el.setAttribute('aria-selected', String(isSelected));
+    // No aria-selected here (it's only a supported state on roles like
+    // gridcell/option/row/tab — invalid, and axe-core flags it, on a
+    // plain button). "Selected" is already announced as plain text by
+    // getCellAriaLabel below whenever this cell is selected, which is
+    // both valid and, unlike a boolean state a screen reader would
+    // announce out of context, actually meaningful on its own.
 
     // Captured before this render overwrites them below, so the two
     // one-shot feedback effects further down can tell "just changed"
@@ -174,6 +189,25 @@ function render(state) {
 
   suppressEntryFeedback = false;
 
+  // Number pad: highlight the button matching the selected cell's
+  // current value (mirrors the board's own "matching number" cells, so
+  // the same digit is easy to spot both on the board and on the pad).
+  // A digit whose 9 correct instances are all already on the board gets
+  // marked complete and disabled — not just cosmetic: once a digit fills
+  // all 9 of its required cells, every remaining empty cell already
+  // shares a row, column, or box with one of them, so no further
+  // placement of that digit can ever be valid again. Disabling it here
+  // only guards the number pad itself; keyboard digit entry is
+  // unaffected and still registers as an ordinary mistake if attempted,
+  // same as any other invalid placement.
+  for (const btn of numberButtons) {
+    const digit = Number(btn.dataset.digit);
+    const isComplete = hasGame && correctDigitCounts[digit] === 9;
+    btn.classList.toggle('is-current-value', selectedValue !== 0 && digit === selectedValue);
+    btn.classList.toggle('is-complete', isComplete);
+    btn.disabled = isComplete;
+  }
+
   // Keep DOM focus following the selected cell (arrow-key navigation
   // moves selection; this is what makes the browser's focus ring move
   // with it). A no-op when the selected cell already has focus, which
@@ -196,6 +230,13 @@ function render(state) {
   if (notesToggleBtn) {
     notesToggleBtn.setAttribute('aria-pressed', String(state.notesMode));
     notesToggleBtn.textContent = state.notesMode ? 'Notes: On' : 'Notes: Off';
+  }
+
+  if (undoBtn) {
+    // Mirrors undo()'s own no-op guard in js/game-state.js exactly
+    // (playing + non-empty history) — the button is never enabled for a
+    // tap that would do nothing.
+    undoBtn.disabled = !hasGame || state.status !== 'playing' || state.history.length === 0;
   }
 
   if (hintBtn) {

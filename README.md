@@ -27,16 +27,25 @@ keeps working with the network off.
 - Four visual theme packs × three color modes (see [Themes and
   modes](#themes-and-modes)).
 - Full keyboard, mouse, and touch controls (see [Controls](#controls)).
-- Local autosave with Continue Game, notes/pencil-marks, undo, hints,
-  and pause.
-- Statistics, best times, and a top-10 high-score list per difficulty.
+- Local autosave with Continue Game, notes/pencil-marks, an on-screen
+  Undo button (also `Ctrl`/`Cmd`+`Z`), hints, and pause. The number pad
+  marks a digit complete once all 9 correct instances are on the board.
+- Statistics, best times, and a top-10 high-score list per difficulty —
+  the completion dialog surfaces a "New High Score" banner when a run
+  places, the leaderboard gives its top 3 a medal treatment, and either
+  can be reset per-difficulty independently of the global data reset.
+- Export/import a local backup file covering every setting, statistic,
+  high score, and saved game — no account, no cloud, just a JSON file
+  you keep (see [Local-Data Behavior](#local-data-behavior)).
 - Background music and short synthesized UI sound effects, each
   independently mutable, plus an optional vibration toggle.
-- Installable and fully offline-capable via a web app manifest and
-  service worker.
+- Installable and fully offline-capable via a web app manifest, app
+  icons, and a service worker.
 - Accessible: keyboard-navigable, ARIA-labeled board cells, visible
   focus states, `prefers-reduced-motion` support, and WCAG AA color
-  contrast in every theme/mode combination.
+  contrast in every theme/mode combination — verified with a real
+  automated accessibility scan (`axe-core`), not just asserted; see
+  `DEVELOPMENT_LOG.md`'s Phase 15 entry.
 
 ## Local Development
 
@@ -111,9 +120,12 @@ Either music file's absence never causes an error, a broken install, or
 blocked service worker installation (see `sw.js`'s optional-asset
 precaching).
 
-PWA icons (192×192, 512×512, and a maskable 512×512) are not supplied
-yet either — see `icons/README.md` for exactly what's needed and how to
-wire them in once available.
+PWA icons (192×192, 512×512, and a maskable 512×512) live in `icons/` —
+generated from `logo.png` rather than a separately-supplied source image
+(a 3×3 Sudoku-grid mark in the app's own `theme_color` blue, with the
+full INSPIRE wordmark as a badge; see `icons/README.md` and
+`DEVELOPMENT_LOG.md`'s Phase 16e entry for how, and why that's a design
+decision rather than a mechanical rebuild if it ever needs to change).
 
 ## Tests
 
@@ -124,7 +136,7 @@ dependency to install:
 npm test
 ```
 
-This runs every `*.test.js` file under `js/` (181 tests across 57
+This runs every `*.test.js` file under `js/` (205 tests across 63
 suites as of this writing, covering the Sudoku engine, puzzle generator,
 game state, scoring, and every persisted store) in a few seconds. See
 `DEVELOPMENT_LOG.md`'s Phase 12 entry for what's covered here versus
@@ -162,14 +174,23 @@ no data ever leaves the device. Clearing the browser's site data for
 this app removes everything permanently and cannot be undone from
 within the app; use Settings → Clear Data for a controlled, in-app reset
 instead (it explains exactly what it will and won't remove before you
-confirm).
+confirm), or Statistics/High Scores' own "Clear ... for This Difficulty"
+buttons for a narrower reset scoped to just one difficulty.
+
+Settings → Export Data downloads a JSON backup of everything above;
+Import Data restores from one (after a confirmation, since it overwrites
+whatever's currently stored) — the closest thing this app has to a
+"move to a new device" or "just-in-case backup" feature, without adding
+an account or a server to do it.
 
 ## Cache Reset and Update Instructions
 
 The service worker (`sw.js`) uses one explicitly-versioned cache name
-(currently `inspire-sudoku-shell-v1`). Nothing about cache invalidation
-is automatic — this is deliberate, documented in `sw.js`'s own header
-comment:
+(see the `CACHE_NAME` constant near the top of that file for the current
+version — deliberately not restated here as a specific number, since
+that would just go stale the next time it's bumped). Nothing about cache
+invalidation is automatic — this is deliberate, documented in `sw.js`'s
+own header comment:
 
 - **To ship an update that existing visitors actually pick up**: bump
   the `CACHE_NAME` version suffix in `sw.js` (`...-v1` → `...-v2`) any

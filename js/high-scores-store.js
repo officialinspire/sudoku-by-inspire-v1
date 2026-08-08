@@ -2,7 +2,9 @@
  * Top-10 local leaderboard per difficulty. Best completion *times* live
  * in js/statistics-store.js (bestTimeSeconds) — this module is purely
  * about the score leaderboard, so "best time" isn't tracked twice in
- * two places that could disagree.
+ * two places that could disagree. Also tracks (in memory only, see
+ * `lastRecorded` below) whether the most recent completion just placed,
+ * for the High Scores screen's "you just got this one" highlight.
  */
 
 import { loadJSON, saveJSON, removeJSON } from './storage.js';
@@ -56,6 +58,14 @@ function sortEntries(entries) {
   return entries.slice().sort((a, b) => b.score - a.score || a.elapsedSeconds - b.elapsedSeconds);
 }
 
+// In-memory only, deliberately never persisted: "the most recent
+// completion's placement, if any" is a session-only fact, not something
+// that should survive a reload. Exists purely so js/ui/high-scores-screen.js
+// can highlight "the entry you just got" the next time it's shown,
+// without new storage or new UI plumbing to thread the achievement
+// through screen navigation (Menu, Statistics, etc. can sit in between).
+let lastRecorded = null; // { difficultyId, entry } | null
+
 /**
  * Inserts a new score, re-sorts, and truncates to the top 10 for that
  * difficulty. Returns the entry's rank (1-based) if it made the top 10,
@@ -69,7 +79,26 @@ export function recordHighScore(difficultyId, { score, elapsedSeconds, mistakes,
   data.byDifficulty[difficultyId] = sorted;
   save(data);
   const rank = sorted.indexOf(entry);
+  // Always reassigned — including to null on a non-placing completion —
+  // so this tracks "did the single most recent game place," not "the
+  // last time any game placed." Otherwise an earlier placement's stale
+  // highlight could linger and get shown again after a later game that
+  // didn't actually place.
+  lastRecorded = rank === -1 ? null : { difficultyId, entry };
   return rank === -1 ? null : rank + 1;
+}
+
+/**
+ * Returns the `{ difficultyId, entry }` of the most recent placing
+ * completion, and clears it in the same call — a caller can't forget
+ * the clear step and accidentally re-highlight the same entry on a
+ * later, unrelated visit. Returns `null` if the last completion didn't
+ * place, or if this has already been consumed since.
+ */
+export function consumeLastRecordedHighScore() {
+  const result = lastRecorded;
+  lastRecorded = null;
+  return result;
 }
 
 /** Returns up to 10 entries for `difficultyId`, highest score first. */
@@ -86,4 +115,12 @@ export function getAllHighScores() {
 
 export function clearHighScores() {
   removeJSON(STORAGE_KEY);
+}
+
+/** Empties just one difficulty's leaderboard, leaving every other difficulty untouched. */
+export function clearHighScoresForDifficulty(difficultyId) {
+  if (!DIFFICULTY_IDS.includes(difficultyId)) return;
+  const data = load();
+  data.byDifficulty[difficultyId] = [];
+  save(data);
 }
