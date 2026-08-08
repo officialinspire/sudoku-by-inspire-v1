@@ -1448,6 +1448,24 @@ symptom but all plausible on real mobile hardware:
       on an unlocked element, fade-in curve unchanged from baseline.
       `npm test` 181/181, `node --check` clean on every file.
 
+## Phase 16a — On-Screen Undo Button ✅ (2026-08-07)
+
+First of a requested polish/feature series (recommendations tracked in
+chat, not a separate doc). `undo()` in `js/game-state.js` was fully
+implemented and Ctrl+Z-bound but had no touch/click-accessible control —
+a real gap on this app's stated mobile-first priority.
+
+- [x] Added `#btn-undo` to the board toolbar in `index.html` (between
+      Erase and Hint), wired to the existing `undo()` in
+      `js/ui/controls.js`, with disabled-state logic in
+      `js/ui/board-view.js`'s `render()` mirroring the existing `hintBtn`
+      pattern (disabled exactly when `undo()` would itself be a no-op).
+- [x] Verified via headless Chromium at 320/375/414px: all four toolbar
+      buttons stay in one row at full touch-target height, no
+      wrapping/overflow. Functional pass confirmed enable/disable
+      transitions and that Ctrl+Z still works alongside the button.
+      `npm test` 181/181, `node --check` clean, zero page errors.
+
 ## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and

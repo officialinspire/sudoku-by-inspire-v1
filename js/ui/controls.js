@@ -15,6 +15,7 @@ import {
 const numberPad = document.getElementById('number-pad');
 const notesToggleBtn = document.getElementById('btn-notes-toggle');
 const eraseBtn = document.getElementById('btn-erase');
+const undoBtn = document.getElementById('btn-undo');
 const resumeBtn = document.getElementById('btn-resume');
 const pauseOverlay = document.getElementById('pause-overlay');
 
@@ -76,10 +77,9 @@ function handleKeydown(event) {
     return;
   }
 
-  // Not in the phase's required control list, but built alongside a
-  // fully working undo mechanism in game-state.js (required by name) —
-  // leaving it wired to nothing reachable would be a half-finished
-  // feature. Standard, low-risk binding, no new UI chrome needed.
+  // The standard desktop shortcut, in addition to the on-screen Undo
+  // button (js/ui/board-view.js wires that one's disabled state; this
+  // just gives keyboard/desktop users the muscle-memory shortcut too).
   if ((ctrlKey || metaKey) && (key === 'z' || key === 'Z')) {
     event.preventDefault();
     undo();
@@ -120,6 +120,7 @@ export function initControls() {
   });
 
   eraseBtn.addEventListener('click', () => eraseSelectedCell());
+  undoBtn.addEventListener('click', () => undo());
   notesToggleBtn.addEventListener('click', () => toggleNotesMode());
   resumeBtn.addEventListener('click', () => resumeGame());
   pauseOverlay.addEventListener('click', () => resumeGame());

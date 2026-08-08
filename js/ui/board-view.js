@@ -8,6 +8,7 @@ const mistakesEl = document.getElementById('game-mistakes');
 const hintsEl = document.getElementById('game-hints');
 const difficultyEl = document.getElementById('game-difficulty-label');
 const notesToggleBtn = document.getElementById('btn-notes-toggle');
+const undoBtn = document.getElementById('btn-undo');
 const hintBtn = document.getElementById('btn-hint');
 const pauseOverlay = document.getElementById('pause-overlay');
 const resumeBtn = document.getElementById('btn-resume');
@@ -196,6 +197,13 @@ function render(state) {
   if (notesToggleBtn) {
     notesToggleBtn.setAttribute('aria-pressed', String(state.notesMode));
     notesToggleBtn.textContent = state.notesMode ? 'Notes: On' : 'Notes: Off';
+  }
+
+  if (undoBtn) {
+    // Mirrors undo()'s own no-op guard in js/game-state.js exactly
+    // (playing + non-empty history) — the button is never enabled for a
+    // tap that would do nothing.
+    undoBtn.disabled = !hasGame || state.status !== 'playing' || state.history.length === 0;
   }
 
   if (hintBtn) {

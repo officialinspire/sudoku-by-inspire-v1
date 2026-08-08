@@ -5,6 +5,49 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-08-07 — Phase 16a: On-Screen Undo Button
+
+**Branch:** `claude/mobile-music-playback-issues-oymb5w`
+
+First of a requested polish series: a review of the whole project against
+its own goal ("light and sensible... easily accessed and played
+anytime") turned up a concrete gap — `undo()` (`js/game-state.js`) was
+fully implemented and wired to the Ctrl+Z keyboard shortcut, but had no
+on-screen control. `js/ui/controls.js`'s own old comment admitted it:
+*"leaving it wired to nothing reachable would be a half-finished
+feature."* On a touch device — this app's stated priority — there was
+simply no way to undo a mistake at all.
+
+**Fix:**
+
+- `index.html`: added `#btn-undo` to `.board-toolbar`, between Erase and
+  Hint (`btn-secondary toolbar-btn`, matching the other three exactly —
+  no new CSS classes needed, since `.toolbar-btn { flex: 1 }` already
+  shares width evenly across however many siblings it has).
+- `js/ui/controls.js`: wired `#btn-undo`'s click to the already-imported
+  `undo()`. Updated the now-stale comment on the Ctrl+Z binding (it used
+  to justify keeping undo keyboard-only; now it just notes the shortcut
+  complements the button for desktop muscle memory).
+- `js/ui/board-view.js`: added the button's disabled-state computation in
+  `render()`, directly mirroring the existing `hintBtn` pattern —
+  disabled whenever `undo()` itself would be a no-op (`!hasGame`,
+  `status !== 'playing'`, or `history.length === 0`).
+
+**Verification:** `node --check` clean, `npm test` 181/181. Headless
+Chromium at 320px/375px/414px viewports confirmed all four toolbar
+buttons stay in one row at the full 56px touch-target height with no
+wrapping or overflow (this app has a history of exactly this class of
+regression at narrow widths, so checked explicitly rather than assumed).
+Functional pass: selected an empty editable cell, entered a digit (Undo
+enables), clicked Undo (reverts the entry, Undo disables again), then
+confirmed Ctrl+Z still works independently. Zero page errors.
+`MANUAL_QA.md`'s existing "keyboard-only use" checklist item already
+referenced reaching "Erase/Undo/Hint via Tab+Enter" — it had been
+describing a button that didn't exist yet; it's accurate now, no edit
+needed.
+
+---
+
 ## 2026-08-07 — Phase 14s: Audio Edge-Case Review — Four Hardening Fixes
 
 **Branch:** `claude/mobile-music-playback-issues-oymb5w`
