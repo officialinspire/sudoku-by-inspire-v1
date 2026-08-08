@@ -412,6 +412,28 @@ it's easy to only half-check.)
       confirmed, the app returns to the menu rather than showing a
       broken/stale board.
 
+## 15a. Per-difficulty data reset
+
+New as of Phase 16f — narrower than Clear Data above: clears just one
+difficulty's own Statistics or High Scores, not everything.
+
+- [ ] With scores/stats on at least two difficulties (e.g. play a game
+      each on Easy and Intermediate), open Statistics, select Easy, tap
+      "Clear Stats for This Difficulty" — the confirmation names Easy
+      specifically and says High Scores aren't touched.
+- [ ] Confirming zeroes out Easy's Statistics only — switch to the
+      Intermediate tab and confirm its numbers are unchanged. Easy's
+      High Scores (a different store) are also unchanged.
+- [ ] Same check on the High Scores screen with its own "Clear High
+      Scores for This Difficulty" button — clearing Easy empties just
+      that tab's list (the "no scores yet" message appears) while
+      Intermediate's list is untouched, and Easy's Statistics are
+      unaffected.
+- [ ] Cancelling either confirmation leaves everything untouched.
+- [ ] The global Clear Data flow (section 15 above) still clears
+      everything for every difficulty, unaffected by these narrower
+      controls existing alongside it.
+
 ---
 
 ## Known environment limitations (not bugs)

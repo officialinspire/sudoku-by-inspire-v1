@@ -5,6 +5,55 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-08-08 — Phase 16f: Per-Difficulty Data Reset
+
+**Branch:** `claude/mobile-music-playback-issues-oymb5w`
+
+Sixth item in the requested polish series (optional, per the original
+recommendation list) — the only reset control before this was the
+global "Clear Data" (everything, every difficulty at once); added a
+narrower option scoped to whichever difficulty is currently selected on
+Statistics or High Scores.
+
+**Store layer:** `clearStatisticsForDifficulty(id)`
+(`js/statistics-store.js`) and `clearHighScoresForDifficulty(id)`
+(`js/high-scores-store.js`) — both trivial reuses of the existing
+`byDifficulty[id]` shape (reset to `emptyDifficultyStats()` / `[]`
+respectively), no new storage schema. `getStatistics`/`getHighScores`
+already default a missing/reset difficulty to empty, so nothing else
+needed to change.
+
+**UI:** rather than duplicate a confirm dialog for Statistics and
+another for High Scores (the two want the exact same shape — a message
+naming what's about to be cleared, Cancel/Confirm — just different
+wording and a different store), added one shared
+`js/ui/clear-difficulty-dialog.js` with a single `openClearDifficultyDialog(title, message, onConfirm)`, backed by one new
+`<dialog id="clear-difficulty-confirm-dialog">` in `index.html`. Each
+screen supplies its own difficulty-aware text (reading
+`filter.getSelected()`, the same difficulty-tab state the screen's own
+rendering already depends on) and its own store call. A "Clear Stats for
+This Difficulty" button sits below the stats grid; "Clear High Scores
+for This Difficulty" below the leaderboard list — both plain
+`.btn-secondary`, picking up the screen's existing flex-column spacing
+for free (no new CSS needed).
+
+**Verification:** `node --check` clean. `npm test` 195/195 (4 new unit
+tests: clearing one difficulty leaves another's stats/scores untouched,
+and an unknown difficulty id is silently ignored, matching every other
+store function's existing convention). Headless Chromium, seeding both
+Statistics and High Scores for two difficulties directly via
+localStorage: confirmed clearing Easy's stats zeroes it while
+Intermediate's stay at their seeded values (and Easy's High Scores are
+untouched, a different store); confirmed clearing Easy's high scores
+empties just that list (the "no scores yet" message correctly appears)
+while Intermediate's stays; confirmed cancelling either dialog leaves
+everything untouched; re-ran the existing global Clear Data flow
+end-to-end afterward and confirmed both storage keys still get fully
+removed exactly as before — the new narrower controls don't interfere
+with it. Zero page errors. `MANUAL_QA.md` updated.
+
+---
+
 ## 2026-08-08 — Phase 16e: PWA App Icons
 
 **Branch:** `claude/mobile-music-playback-issues-oymb5w`

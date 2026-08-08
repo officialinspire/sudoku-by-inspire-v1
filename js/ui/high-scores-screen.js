@@ -1,12 +1,15 @@
 import { showScreen } from '../screens.js';
-import { getHighScores, consumeLastRecordedHighScore } from '../high-scores-store.js';
+import { getHighScores, consumeLastRecordedHighScore, clearHighScoresForDifficulty } from '../high-scores-store.js';
+import { DIFFICULTIES } from '../sudoku-generator.js';
 import { initDifficultyFilter } from './difficulty-filter.js';
+import { openClearDifficultyDialog } from './clear-difficulty-dialog.js';
 import { formatElapsedTime } from '../completion.js';
 
 const backBtn = document.getElementById('btn-highscores-back');
 const filterEl = document.getElementById('highscores-difficulty-filter');
 const listEl = document.getElementById('highscores-list');
 const emptyEl = document.getElementById('highscores-empty');
+const clearBtn = document.getElementById('btn-clear-difficulty-highscores');
 
 function formatDate(timestampMs) {
   return new Date(timestampMs).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
@@ -67,6 +70,19 @@ let filter;
 export function initHighScoresScreen() {
   filter = initDifficultyFilter(filterEl, render);
   backBtn.addEventListener('click', () => showScreen('menu'));
+
+  clearBtn.addEventListener('click', () => {
+    const id = filter.getSelected();
+    const label = DIFFICULTIES[id].label;
+    openClearDifficultyDialog(
+      `Clear ${label} High Scores?`,
+      `This clears the leaderboard for ${label} only — other difficulties and your Statistics for ${label} are not affected. This can't be undone.`,
+      () => {
+        clearHighScoresForDifficulty(id);
+        render(id);
+      }
+    );
+  });
 }
 
 export function refreshHighScoresScreen() {

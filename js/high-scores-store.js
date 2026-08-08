@@ -116,3 +116,11 @@ export function getAllHighScores() {
 export function clearHighScores() {
   removeJSON(STORAGE_KEY);
 }
+
+/** Empties just one difficulty's leaderboard, leaving every other difficulty untouched. */
+export function clearHighScoresForDifficulty(difficultyId) {
+  if (!DIFFICULTY_IDS.includes(difficultyId)) return;
+  const data = load();
+  data.byDifficulty[difficultyId] = [];
+  save(data);
+}

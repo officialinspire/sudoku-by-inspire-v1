@@ -181,6 +181,8 @@
         <div class="stats-item"><dt>Total Hints</dt><dd id="stat-total-hints">0</dd></div>
         <div class="stats-item"><dt>Total Mistakes</dt><dd id="stat-total-mistakes">0</dd></div>
       </dl>
+
+      <button id="btn-clear-difficulty-stats" type="button" class="btn-secondary">Clear Stats for This Difficulty</button>
     </section>
 
     <section id="screen-highscores" class="screen screen-game" tabindex="-1" aria-label="High Scores" hidden>
@@ -200,6 +202,8 @@
         <ol id="highscores-list" class="highscores-list"></ol>
         <p id="highscores-empty" class="game-status" hidden>No scores yet for this difficulty — go solve a puzzle!</p>
       </div>
+
+      <button id="btn-clear-difficulty-highscores" type="button" class="btn-secondary">Clear High Scores for This Difficulty</button>
     </section>
 
   </div>
@@ -437,6 +441,17 @@
       <div class="settings-actions">
         <button type="submit" value="cancel" class="btn-secondary">Cancel</button>
         <button type="submit" value="confirm" class="btn-primary">Clear Data</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="clear-difficulty-confirm-dialog" class="settings-dialog" aria-labelledby="clear-difficulty-confirm-title">
+    <form method="dialog" class="settings-form">
+      <h2 id="clear-difficulty-confirm-title">Clear?</h2>
+      <p id="clear-difficulty-confirm-message"></p>
+      <div class="settings-actions">
+        <button type="submit" value="cancel" class="btn-secondary">Cancel</button>
+        <button type="submit" value="confirm" class="btn-primary">Clear</button>
       </div>
     </form>
   </dialog>

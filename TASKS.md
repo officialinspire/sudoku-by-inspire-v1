@@ -1591,6 +1591,34 @@ of revision before anything was wired in.
       favicon in `index.html`. `icons/README.md` updated to describe the
       generated assets in place of the old "waiting on artwork" state.
 
+## Phase 16f — Per-Difficulty Data Reset ✅ (2026-08-08)
+
+Sixth (optional) item in the requested polish series. The only reset
+control before this was the global "Clear Data" (everything, every
+difficulty) — added a narrower option scoped to whichever difficulty
+tab is currently selected.
+
+- [x] `js/statistics-store.js`/`js/high-scores-store.js`:
+      `clearStatisticsForDifficulty`/`clearHighScoresForDifficulty`,
+      reusing the existing `byDifficulty[id]` storage shape rather than
+      a new schema.
+- [x] New shared `js/ui/clear-difficulty-dialog.js` + one new `<dialog>`
+      in `index.html`, opened from either Statistics or High Scores with
+      screen-specific title/message text — avoids duplicating dialog
+      markup/wiring for what's otherwise the identical confirm shape in
+      two places.
+- [x] A "Clear Stats for This Difficulty" button on Statistics and
+      "Clear High Scores for This Difficulty" on High Scores, each
+      operating on whatever difficulty tab is currently selected.
+- [x] Verified via headless Chromium: clearing Easy's stats leaves
+      Intermediate's untouched (and Easy's High Scores untouched);
+      clearing Easy's high scores leaves Intermediate's untouched (and
+      Easy's Statistics untouched); cancelling either changes nothing;
+      the existing global Clear Data flow still clears everything for
+      every difficulty, unaffected. `npm test` 195/195 (4 new unit
+      tests), `node --check` clean, zero page errors. `MANUAL_QA.md`
+      updated.
+
 ## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and

@@ -6,6 +6,7 @@ import {
   getHighScores,
   getAllHighScores,
   clearHighScores,
+  clearHighScoresForDifficulty,
   consumeLastRecordedHighScore,
 } from './high-scores-store.js';
 import { DIFFICULTY_IDS } from './sudoku-generator.js';
@@ -119,6 +120,25 @@ describe('clearHighScores', () => {
     recordHighScore('easy', entry());
     clearHighScores();
     assert.deepEqual(getHighScores('easy'), []);
+  });
+});
+
+describe('clearHighScoresForDifficulty', () => {
+  test('empties only the given difficulty, leaving others untouched', () => {
+    recordHighScore('easy', entry({ score: 500 }));
+    recordHighScore('insane', entry({ score: 900 }));
+
+    clearHighScoresForDifficulty('easy');
+
+    assert.deepEqual(getHighScores('easy'), []);
+    assert.equal(getHighScores('insane').length, 1);
+    assert.equal(getHighScores('insane')[0].score, 900);
+  });
+
+  test('unknown difficulty id is silently ignored', () => {
+    recordHighScore('easy', entry({ score: 500 }));
+    clearHighScoresForDifficulty('not-a-difficulty');
+    assert.equal(getHighScores('easy').length, 1);
   });
 });
 
