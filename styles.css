@@ -1296,6 +1296,24 @@ button {
   box-shadow: inset 0 0 0 var(--cell-ring-width) var(--color-accent);
 }
 
+/* A digit whose 9 correct instances are all already on the board (see
+   js/ui/board-view.js's render() for why this is provably "nothing left
+   to place," not just a guess) — --color-success rather than the
+   app-wide disabled treatment (--color-border/--color-text-secondary,
+   used by .btn-primary/.btn-secondary/.menu-nav button above) so it
+   reads as "done," not "broken" or "unavailable." Verified against
+   --color-surface (this button's own background) at >=4.5:1 across all
+   8 theme/mode combinations, checking both stops of every gradient
+   surface — tightest is Woodgrain/light at 4.83:1. Lower opacity is the
+   secondary, non-color cue (never rely on color alone) — legible enough
+   to still read the digit, quiet enough not to compete with the board. */
+.number-btn.is-complete {
+  color: var(--color-success);
+  border-color: var(--color-success);
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 /* Notes mode: every number button gets a dashed, accent-tinted border
    instead of its normal solid one — "pencil marks," not "ink" — so a
    press's *consequence* (candidate note vs. final answer) is clear
@@ -1314,6 +1332,18 @@ button {
   border-style: dashed;
   border-color: var(--color-accent);
   color: var(--color-entry-player);
+}
+
+/* A complete digit stays complete-looking even while notes mode is on
+   (higher specificity than the notes-mode rule above, which would
+   otherwise win and paint it as an available pencil-mark target) — a
+   pencil mark for a digit that already has all 9 correct instances
+   placed is exactly as impossible as a real entry would be, so it
+   shouldn't visually invite one either. */
+.number-pad.is-notes-mode .number-btn.is-complete {
+  border-style: solid;
+  border-color: var(--color-success);
+  color: var(--color-success);
 }
 
 /* ---------- Pause overlay ----------

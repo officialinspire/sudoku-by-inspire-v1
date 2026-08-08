@@ -100,16 +100,12 @@ function render(state) {
       ? state.puzzle[state.selectedIndex] || state.entries[state.selectedIndex]
       : 0;
   const ariaState = { ...state, immediateErrorChecking };
-
-  // Number pad: highlight the button matching the selected cell's
-  // current value (mirrors the board's own "matching number" cells, so
-  // the same digit is easy to spot both on the board and on the pad),
-  // and mark the whole pad while notes mode is active so its buttons
-  // read as "adding a pencil mark" rather than "entering the answer."
-  for (const btn of numberButtons) {
-    btn.classList.toggle('is-current-value', selectedValue !== 0 && Number(btn.dataset.digit) === selectedValue);
-  }
   numberPadEl?.classList.toggle('is-notes-mode', state.notesMode);
+
+  // Correctly-placed count per digit (1-9), tallied alongside the main
+  // per-cell loop below rather than in a second pass over the board —
+  // this is what tells the number pad a digit is "done" afterward.
+  const correctDigitCounts = new Array(10).fill(0);
 
   for (let index = 0; index < 81; index++) {
     const { el, valueEl, notesEl, noteDigits } = cells[index];
@@ -122,6 +118,8 @@ function render(state) {
     const isMatch = !isSelected && selectedValue !== 0 && value === selectedValue;
     const isConflict = !isFixed && entry !== 0 && state.conflicts.has(index);
     const isError = immediateErrorChecking && !isFixed && entry !== 0 && entry !== state.solution[index];
+
+    if (value !== 0 && value === state.solution[index]) correctDigitCounts[value]++;
 
     el.classList.toggle('is-fixed', isFixed);
     el.classList.toggle('is-selected', isSelected);
@@ -174,6 +172,25 @@ function render(state) {
   }
 
   suppressEntryFeedback = false;
+
+  // Number pad: highlight the button matching the selected cell's
+  // current value (mirrors the board's own "matching number" cells, so
+  // the same digit is easy to spot both on the board and on the pad).
+  // A digit whose 9 correct instances are all already on the board gets
+  // marked complete and disabled — not just cosmetic: once a digit fills
+  // all 9 of its required cells, every remaining empty cell already
+  // shares a row, column, or box with one of them, so no further
+  // placement of that digit can ever be valid again. Disabling it here
+  // only guards the number pad itself; keyboard digit entry is
+  // unaffected and still registers as an ordinary mistake if attempted,
+  // same as any other invalid placement.
+  for (const btn of numberButtons) {
+    const digit = Number(btn.dataset.digit);
+    const isComplete = hasGame && correctDigitCounts[digit] === 9;
+    btn.classList.toggle('is-current-value', selectedValue !== 0 && digit === selectedValue);
+    btn.classList.toggle('is-complete', isComplete);
+    btn.disabled = isComplete;
+  }
 
   // Keep DOM focus following the selected cell (arrow-key navigation
   // moves selection; this is what makes the browser's focus ring move

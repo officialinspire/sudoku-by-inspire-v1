@@ -1466,6 +1466,33 @@ a real gap on this app's stated mobile-first priority.
       transitions and that Ctrl+Z still works alongside the button.
       `npm test` 181/181, `node --check` clean, zero page errors.
 
+## Phase 16b — Number-Pad "Digit Complete" Indicator ✅ (2026-08-07)
+
+Second in the requested polish series. A digit whose 9 correct instances
+are all already on the board now gets marked complete on the number pad.
+
+- [x] `js/ui/board-view.js`: tallies correct placements per digit inside
+      the existing per-cell render loop (no second board pass); toggles
+      `.is-complete` and disables the matching number-pad button when a
+      digit hits 9 — provably safe to disable, not just cosmetic (see
+      `DEVELOPMENT_LOG.md` for the "every remaining cell already
+      conflicts" reasoning). Keyboard entry is unaffected.
+- [x] `styles.css`: `.number-btn.is-complete` reuses the existing
+      `--color-success` token (already used for `.status-chip--success`)
+      rather than the generic disabled treatment, plus a higher-
+      specificity override so it stays correctly styled while notes mode
+      is also on.
+- [x] Verified contrast of `--color-success` against `--color-surface`
+      programmatically across all 8 theme/mode combinations (both
+      gradient stops each for Woodgrain/Paper) — all clear WCAG AA
+      4.5:1, tightest 4.83:1.
+- [x] Headless Chromium: drove exact digit placement via a dynamic
+      `import()` of `js/game-state.js` in-page; confirmed complete/
+      disabled/re-enable-on-undo behavior, an unrelated digit staying
+      untouched, and the notes-mode override in a non-default theme
+      (Cyber/dark). `npm test` 181/181, `node --check` clean, zero page
+      errors.
+
 ## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and

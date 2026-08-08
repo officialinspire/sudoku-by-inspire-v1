@@ -5,6 +5,73 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-08-07 — Phase 16b: Number-Pad "Digit Complete" Indicator
+
+**Branch:** `claude/mobile-music-playback-issues-oymb5w`
+
+Second in the requested polish series. The board already computed
+everything needed for peer-note cleanup, conflict detection, and
+same-digit highlighting, but never surfaced "you've placed all 9 of
+this digit correctly" on the number pad — a well-liked, common Sudoku-
+app convenience, and genuinely useful here since the board is dense
+enough that manually noticing a digit is done takes real scanning.
+
+**Design decision:** made the completed digit's button inert
+(`disabled = true`), not just visually dimmed. This isn't arbitrary —
+it's mathematically true: once a digit fills all 9 of its required
+cells (one per row/column/box in a valid solution), every remaining
+empty cell already shares a row, column, or box with one of those 9, so
+no further placement of that digit can ever be valid again. Disabling
+only guards the number-pad button itself; keyboard digit entry is
+untouched and still registers as an ordinary mistake if someone types a
+"complete" digit elsewhere, same as any other invalid placement — this
+is a UI guardrail, not a new rules-enforcement layer (mistakes were
+already fully enforced independently).
+
+**Implementation (`js/ui/board-view.js`):** added a `correctDigitCounts`
+tally (index 1-9) computed inside the existing single per-cell loop in
+`render()` — no second pass over the board. Moved the number-pad
+update block (previously running *before* that loop, since it only
+needed `selectedValue`) to run *after* it instead, so it can also read
+the finished tally; extended it to toggle `.is-complete` and set
+`disabled` per button alongside the existing `.is-current-value` logic.
+
+**Styling (`styles.css`):** `.number-btn.is-complete` reuses
+`--color-success` (already the app's established "this succeeded"
+token, e.g. `.status-chip--success`) for text/border color, rather than
+the generic disabled treatment (`--color-border`/`--color-text-secondary`)
+used elsewhere — reads as "done," not "broken." Added
+`.number-pad.is-notes-mode .number-btn.is-complete` as a higher-
+specificity override so a completed digit doesn't get repainted as an
+available pencil-mark target while notes mode is on (a note for an
+already-complete digit is exactly as impossible as a real entry would
+be).
+
+**Contrast verification:** computed WCAG contrast ratios directly (same
+relative-luminance formula the project's prior a11y audits used) for
+`--color-success` against `--color-surface` across all 8 theme/mode
+combinations, checking *both* stops of every gradient surface
+(Woodgrain/Paper use `linear-gradient` surfaces, and a prior phase's
+comment on this exact CSS block already flagged that a token can pass
+against one stop and fail against the other — worth checking properly
+rather than assuming). All 12 checks (8 combos, 4 of them gradients with
+2 stops each) clear WCAG AA's 4.5:1 for normal text; tightest is
+Woodgrain/light's lighter stop at 4.83:1.
+
+**Verification:** `node --check` clean, `npm test` 181/181. Headless
+Chromium: dynamically imported `js/game-state.js` in-page to drive exact
+digit placement (rather than guessing from the DOM) — filled all 9
+correct instances of a digit, confirmed the matching button gets
+`.is-complete` + `disabled` + the right computed color/opacity/cursor;
+undid one placement and confirmed it re-enables immediately (fully
+reactive, no stale state); confirmed an unrelated, incomplete digit's
+button is untouched. Re-ran the same completion with notes mode on and
+the Cyber/dark theme active — confirmed the higher-specificity override
+correctly restores the solid border and resolves the theme's own
+`--color-success` value. Zero page errors.
+
+---
+
 ## 2026-08-07 — Phase 16a: On-Screen Undo Button
 
 **Branch:** `claude/mobile-music-playback-issues-oymb5w`
