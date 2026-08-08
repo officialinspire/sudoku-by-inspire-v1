@@ -54,6 +54,76 @@ with it. Zero page errors. `MANUAL_QA.md` updated.
 
 ---
 
+## 2026-08-08 — Phase 16g: Settings Backup/Restore (Export/Import)
+
+**Branch:** `claude/mobile-music-playback-issues-oymb5w`
+
+Seventh (optional) item in the requested polish series — a manual local
+backup file. This app has no account or cloud sync by design
+(`PROJECT_BRIEF.md`'s non-goals), so "back up my data" otherwise means
+"hope your browser's local storage never gets cleared" — a real gap for
+anyone reinstalling, switching browsers, or just wanting a safety copy
+before clearing site data.
+
+**`js/data-backup.js`** (new, pure aside from `localStorage` itself):
+`buildBackup()` reads all six `inspireSudoku:v1:*` keys (appearance,
+gameplay settings, audio settings, statistics, high scores, active game
+— enumerated from every module's own `STORAGE_KEY` constant) straight
+from localStorage and bundles them with an app name, a backup-format
+version, and an export timestamp. `applyBackup(parsed)` only checks the
+*envelope* — is this recognizably a Sudoku by Inspire backup, is its
+version one this code understands — before writing each present key
+back to localStorage. Deliberately does **not** re-implement each
+store's own content validation: every store's `load()` (via
+`js/storage.js`'s `loadJSON`) already re-validates whatever's actually
+in localStorage on every read, rejecting anything malformed back to safe
+defaults — the exact mechanism that already protects against a
+hand-edited or corrupted localStorage value today. Duplicating that
+logic here would just be a second copy that could silently drift out of
+sync with the original; letting the existing one run naturally on the
+next read is both simpler and can't disagree with it.
+
+**`js/ui/data-backup-controls.js`** (new) + two buttons in Settings'
+existing "Your data" section: Export builds a Blob, a temporary
+`<a download>`, clicks it, revokes the object URL — standard
+browser-only download pattern, no new dependency. Import triggers a
+hidden `<input type="file">`, reads it via `FileReader`, does a cheap
+upfront shape check (so an obviously-wrong file gets an instant answer
+instead of opening a confirmation for an import that would just fail
+anyway), then — since import is destructive, overwriting current
+settings/statistics/high-scores/saved-game — gates the actual write
+behind a new confirm dialog naming the backup's export date, matching
+every other destructive action in this app (Clear Data, the per-
+difficulty clears). On confirmed success, calls `location.reload()`
+rather than trying to live-patch every affected module: `js/theme.js`,
+`js/game-settings.js`, and `js/audio-settings.js` all cache their
+settings in memory after their own `init()` and only update that cache
+through their own setters, so a raw localStorage write alone wouldn't
+reach them until the next load anyway — a reload sidesteps needing to
+add a "re-sync from storage" method to three separate modules for a
+one-time-per-import action.
+
+**Verification:** `node --check` clean. `npm test` 205/205 — 10 new unit
+tests in `js/data-backup.test.js` (export includes only present keys,
+skips already-corrupt values rather than exporting garbage, a full
+export→clear→import round-trip restores identical data, rejects a
+wrong-app file / incompatible version / malformed input without
+throwing, ignores unrecognized extra keys in a backup rather than
+writing them). Headless Chromium end-to-end: exported a real backup with
+seeded statistics/high-scores data, verified the downloaded JSON's shape
+and content directly; cleared localStorage and imported the same file
+back, confirming the confirm dialog's date-stamped message and that the
+post-reload data matched exactly; separately verified cancelling the
+import confirmation leaves existing data untouched, and that a
+wrong-app-name file and a non-JSON file are both rejected immediately
+with a clear status message and never open the overwrite confirmation.
+Zero page errors throughout. `sw.js` `CACHE_NAME` bumped (`index.js`, a
+core asset, changed to wire in the new module). `MANUAL_QA.md` updated
+with a new export/import section, including a real-device
+cross-browser/cross-device check this sandbox can't itself perform.
+
+---
+
 ## 2026-08-08 — Phase 16e: PWA App Icons
 
 **Branch:** `claude/mobile-music-playback-issues-oymb5w`

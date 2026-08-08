@@ -1619,6 +1619,42 @@ tab is currently selected.
       tests), `node --check` clean, zero page errors. `MANUAL_QA.md`
       updated.
 
+## Phase 16g — Settings Backup/Restore (Export/Import) ✅ (2026-08-08)
+
+Seventh (optional) item in the requested polish series. A manual local
+JSON backup file — no cloud, no account, matching the app's fully local
+storage model — covering every `inspireSudoku:v1:*` key: appearance,
+gameplay/audio settings, statistics, high scores, and the active game.
+
+- [x] New `js/data-backup.js` (`buildBackup`/`applyBackup`, no DOM
+      dependency beyond `localStorage` itself) — deliberately doesn't
+      re-validate each key's *content* on import; every store's own
+      `load()` already re-validates whatever's in localStorage on every
+      read (the same safety net that already protects against
+      hand-edited/corrupted localStorage), so a malformed or tampered
+      key just gets silently discarded by the existing mechanism the
+      next time anything reads it, same as today.
+- [x] New `js/ui/data-backup-controls.js` + Export/Import buttons in
+      Settings' existing "Your data" section, and a new confirm dialog
+      (import is destructive — overwrites current data — so it's gated
+      behind an explicit confirmation naming the backup's export date,
+      matching every other destructive action in this app). Import
+      reloads the page on success, since several store modules cache
+      their settings in memory after their own `init()` and only update
+      through their own setters — a raw localStorage write alone
+      wouldn't reach them until the next load.
+- [x] Verified via headless Chromium: full export → clear → import
+      round-trip restores identical data; cancelling the import
+      confirmation changes nothing; a wrong-app or non-JSON file is
+      rejected immediately with a clear message and never opens the
+      overwrite confirmation. `npm test` 205/205 (10 new unit tests
+      covering export/import including a round-trip, rejecting bad
+      input, and ignoring unrecognized extra keys), `node --check`
+      clean, zero page errors. `sw.js` `CACHE_NAME` bumped (the two new
+      JS files are picked up via the existing runtime cache-fill, but
+      `index.js` itself — a core asset — changed too). `MANUAL_QA.md`
+      updated.
+
 ## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and

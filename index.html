@@ -327,6 +327,16 @@
           app removes it permanently; use Clear Data below for a
           controlled reset instead.
         </p>
+        <p class="settings-hint">
+          Export a backup file to keep a copy of everything above, or
+          restore one on this or another device.
+        </p>
+        <div class="settings-actions">
+          <button type="button" id="btn-export-data" class="btn-secondary">Export Data</button>
+          <button type="button" id="btn-import-data" class="btn-secondary">Import Data</button>
+        </div>
+        <input type="file" id="import-data-file-input" accept="application/json,.json" hidden>
+        <p id="import-data-status" class="settings-hint" aria-live="polite"></p>
       </section>
 
       <div class="settings-actions">
@@ -452,6 +462,17 @@
       <div class="settings-actions">
         <button type="submit" value="cancel" class="btn-secondary">Cancel</button>
         <button type="submit" value="confirm" class="btn-primary">Clear</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="import-data-confirm-dialog" class="settings-dialog" aria-labelledby="import-data-confirm-title">
+    <form method="dialog" class="settings-form">
+      <h2 id="import-data-confirm-title">Import Backup?</h2>
+      <p id="import-data-confirm-message"></p>
+      <div class="settings-actions">
+        <button type="submit" value="cancel" class="btn-secondary">Cancel</button>
+        <button type="submit" value="confirm" class="btn-primary">Import</button>
       </div>
     </form>
   </dialog>

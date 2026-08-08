@@ -434,6 +434,36 @@ difficulty's own Statistics or High Scores, not everything.
       everything for every difficulty, unaffected by these narrower
       controls existing alongside it.
 
+## 15b. Data export/import (backup)
+
+New as of Phase 16g — Settings → "Your data" → Export/Import.
+
+- [ ] With some real data present (play a game or two, adjust a
+      setting), tap "Export Data" — a `sudoku-by-inspire-backup-
+      YYYY-MM-DD.json` file downloads, and a "Backup downloaded."
+      confirmation appears. Open the file in a text editor — it's
+      readable JSON, not a scrambled/binary blob.
+- [ ] Tap "Import Data" and pick that same file — a confirmation names
+      the backup's export date and warns it overwrites current
+      settings/statistics/high scores/saved game. Cancelling changes
+      nothing (check a stat value before and after to confirm).
+- [ ] Confirming reloads the app. After reload, everything from the
+      backup is back — theme/color mode, gameplay/audio settings,
+      Statistics and High Scores for every difficulty you had data on,
+      and (if you had one) the in-progress saved game via Continue Game.
+- [ ] Round-trip across a data change: export, change a setting or play
+      another game, import the *original* file back — confirms the
+      import actually overwrites the newer state, not just re-applies
+      what's already there.
+- [ ] Selecting a file that isn't a Sudoku by Inspire backup (a
+      random `.json` file, or a `.txt` renamed to `.json`) shows a clear
+      "doesn't look like a backup" message and never opens the overwrite
+      confirmation — nothing gets touched.
+- [ ] Cross-device/browser check (if convenient): export from one
+      browser or device, import into a completely fresh one (or a
+      private/incognito window) — the backup is self-contained, no
+      dependency on where it came from.
+
 ---
 
 ## Known environment limitations (not bugs)
