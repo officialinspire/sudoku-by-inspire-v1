@@ -1493,6 +1493,30 @@ are all already on the board now gets marked complete on the number pad.
       (Cyber/dark). `npm test` 181/181, `node --check` clean, zero page
       errors.
 
+## Phase 16c — Surface High-Score Achievement in the Completion Dialog ✅ (2026-08-07)
+
+Third in the requested polish series. `recordHighScore()` already
+returned the achieved rank, but nothing in the UI ever showed it.
+
+- [x] `js/completion.js`: added the pure, tested `findRankInHighScores()`
+      helper; `buildShareText()` gained an optional `rank` parameter
+      (backward compatible, defaults to `null`).
+- [x] `js/ui/completion-dialog.js`: looks up the rank via the
+      already-recorded entry (verified the listener-registration order
+      in `index.js` guarantees it's saved by the time the dialog reads
+      it) and shows a top-3 "New High Score" chip (reusing
+      `.status-chip--success` and the High Scores menu's own star icon)
+      or a quieter 4th-10th note (reusing `.settings-hint`) — hidden
+      entirely if the run didn't place.
+- [x] `index.html`/`styles.css`: one new element, one spacing rule — both
+      visual treatments it switches between were already fully styled
+      and contrast-audited elsewhere.
+- [x] Verified via headless Chromium across all three outcomes (rank 1,
+      rank 4, no placement) using localStorage-seeded leaderboards and a
+      direct `game-state.js` import to drive an instant full solve — all
+      matched exactly. `npm test` 187/187 (6 new unit tests), `node
+      --check` clean, zero page errors. `MANUAL_QA.md` updated.
+
 ## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and

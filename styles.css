@@ -1729,6 +1729,16 @@ button {
   }
 }
 
+/* Sits between the heading and the stats grid, whichever of the two
+   treatments js/ui/completion-dialog.js applies (.status-chip--success
+   for a top-3 finish, .settings-hint for 4th-10th) — both are already
+   fully styled elsewhere, this only adds the spacing this particular
+   spot needs. [hidden] (no game/no placement) needs nothing here at
+   all: the attribute alone removes it from layout. */
+.completion-rank-banner {
+  margin: 0 0 var(--space-3);
+}
+
 .completion-stats {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

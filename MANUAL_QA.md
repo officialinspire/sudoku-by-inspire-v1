@@ -153,6 +153,14 @@ For **each** of Easy, Intermediate, Advanced, and Insane:
 - [ ] Solve a puzzle completely (correctly). The completion dialog
       appears automatically with difficulty, time, mistakes, hints, and
       a score, plus a brief animation on the "Puzzle Solved!" heading.
+- [ ] **Leaderboard banner:** with that difficulty's High Scores empty
+      (or Clear Data first), solve a puzzle — the completion dialog
+      should show a "New High Score — Ranked #1!" chip under the
+      heading, and "Copy Results" text should mention the rank too.
+      Solve a few more (without clearing) until one lands 4th-10th —
+      same idea, but a quieter "Made the leaderboard — ranked #N" line
+      instead of the chip. Once 10 entries exist and a new run doesn't
+      beat any of them, no banner appears at all.
 - [ ] "Copy Results" copies (or, if clipboard access is denied, falls
       back to selecting) shareable text describing the result.
 - [ ] After closing the dialog, Statistics for that difficulty show an

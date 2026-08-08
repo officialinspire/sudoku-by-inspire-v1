@@ -5,6 +5,65 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-08-07 — Phase 16c: Surface High-Score Achievement in the Completion Dialog
+
+**Branch:** `claude/mobile-music-playback-issues-oymb5w`
+
+Third in the requested polish series, and the one directly about the
+high-score scoreboard. `recordHighScore()` (`js/high-scores-store.js`)
+already returned the 1-based rank when a run placed top-10, but nothing
+ever surfaced it — `js/game-persistence.js`'s completion listener
+discarded the return value, and the completion dialog independently
+recomputed the score for display with no idea whether it had ranked.
+
+**Verified the load-bearing assumption first:** `index.js` registers
+`initGamePersistence()` (line 28) before `initCompletionDialog()` (line
+39), and `game-state.js`'s `notify()` iterates its listener `Set` in
+insertion order — so persistence's `handleCompletion()` (which calls
+`recordHighScore`) always finishes before the completion dialog's own
+listener runs for the same `'complete'` transition. By the time the
+dialog builds its content, the entry is already saved; this is a lookup,
+not something that needs threading through a new channel.
+
+**Implementation:**
+
+- `js/completion.js`: added `findRankInHighScores(entries, state, score)`
+  — a pure function (no DOM), matching an entry by every stat rather
+  than object identity, consistent with this module's existing
+  "testable without a DOM" pattern. `buildShareText()` gained an
+  optional third `rank` parameter (default `null`, fully backward
+  compatible) that appends a "— ranked #N on the local leaderboard!"
+  line when given one.
+- `js/ui/completion-dialog.js`: `showCompletion()` now computes the
+  score once, looks up the rank via `getHighScores(state.difficulty)` +
+  `findRankInHighScores`, and passes it to a new `updateRankBanner()`.
+  Top-3 gets the app's existing `.status-chip--success` treatment (the
+  same "color paired with an icon and a label, never color alone"
+  pattern already used elsewhere) with the same star glyph the High
+  Scores menu button already uses, for visual continuity. 4th-10th
+  reuses `.settings-hint` — the same muted-text treatment the dialog's
+  own scoring blurb already has — for a quieter "Made the leaderboard"
+  note. No placement: the banner stays `hidden` entirely.
+- `index.html`: one new `<p id="completion-rank-banner" hidden>`
+  between the heading and the stats grid.
+- `styles.css`: only a spacing rule for the new element — both visual
+  treatments it switches between (`.status-chip--success`,
+  `.settings-hint`) were already fully styled and already
+  contrast-audited elsewhere in the app.
+
+**Verification:** `node --check` clean. `npm test` 187/187 (added 6 new
+unit tests for `findRankInHighScores` and the rank-aware
+`buildShareText`, all in `js/completion.test.js`, no existing tests
+touched). Headless Chromium, three scenarios via localStorage seeding
+plus a direct `import()` of `js/game-state.js` to drive an instant full
+solve: empty leaderboard → rank #1 chip with icon and correct share
+text; 3 higher pre-seeded entries → rank #4 quiet note; 10 much-higher
+pre-seeded entries → banner stays hidden. All three matched exactly.
+Zero page errors. `MANUAL_QA.md`'s completion-dialog section updated
+with a new checklist item for a real-device pass.
+
+---
+
 ## 2026-08-07 — Phase 16b: Number-Pad "Digit Complete" Indicator
 
 **Branch:** `claude/mobile-music-playback-issues-oymb5w`
