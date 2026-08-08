@@ -45,7 +45,18 @@ function buildBoard() {
     cell.type = 'button';
     cell.className = 'cell';
     cell.dataset.index = String(index);
-    cell.setAttribute('role', 'gridcell');
+    // No role="gridcell" here, and #board (index.html) is role="group",
+    // not role="grid" — an ARIA grid requires each gridcell to sit
+    // inside a role="row" ancestor (a real WCAG failure axe-core flags
+    // as critical: "aria-required-parent"), and this board doesn't have
+    // that structure. It also doesn't implement the roving-tabindex
+    // keyboard pattern a real ARIA grid promises (every cell is
+    // independently tabbable here; Up/Down/Left/Right just move
+    // selection, not a full grid navigation model) — so claiming the
+    // grid role would promise more than this widget delivers. Each
+    // cell's rich aria-label (js/ui/cell-aria.js) already announces its
+    // row/column/box context in plain language, which is what the grid
+    // role would otherwise exist to convey.
     if (col % 3 === 0 && col !== 0) cell.classList.add('grid-line-left');
     if (row % 3 === 0 && row !== 0) cell.classList.add('grid-line-top');
 
@@ -127,7 +138,12 @@ function render(state) {
     el.classList.toggle('is-match', isMatch);
     el.classList.toggle('is-conflict', isConflict);
     el.disabled = !hasGame;
-    el.setAttribute('aria-selected', String(isSelected));
+    // No aria-selected here (it's only a supported state on roles like
+    // gridcell/option/row/tab — invalid, and axe-core flags it, on a
+    // plain button). "Selected" is already announced as plain text by
+    // getCellAriaLabel below whenever this cell is selected, which is
+    // both valid and, unlike a boolean state a screen reader would
+    // announce out of context, actually meaningful on its own.
 
     // Captured before this render overwrites them below, so the two
     // one-shot feedback effects further down can tell "just changed"

@@ -337,12 +337,26 @@ actually does with them.
       content behind it) and returns focus to whatever button opened it
       once closed (native `<dialog>` behavior — confirm at least once
       per dialog: Settings, difficulty picker, Hint, New Game
-      confirmation, Clear Data confirmation).
+      confirmation, Clear Data confirmation, the per-difficulty clear
+      confirmation, and the import-backup confirmation).
 - [ ] The difficulty-filter tabs on Statistics/High Scores respond to
       Left/Right/Home/End arrow keys, and only the currently-selected
       tab is reachable via plain Tab (roving tabindex).
 - [ ] A visible focus outline is present on every focused element, in
       every theme/mode combination.
+- [ ] Screen reader spot-check (VoiceOver/TalkBack/NVDA — whichever is
+      available): landmark navigation finds one main region; each
+      screen announces a heading when it becomes active; the board
+      reads as a labeled group of 81 buttons, each announcing its own
+      row/column/value/selected state on focus (not as a formal ARIA
+      grid — Phase 15's a11y audit deliberately moved away from
+      `role="grid"`/`gridcell`, since this board doesn't implement the
+      full ARIA grid keyboard pattern and the mismatch was flagged as a
+      critical axe-core violation; see `DEVELOPMENT_LOG.md`). An
+      automated `axe-core` pass (WCAG 2.0/2.1 A+AA + best-practice
+      rules) shows zero violations on every screen and dialog as of
+      Phase 15 — this item is for whatever only a real screen reader can
+      still catch.
 
 ## 12. 320px mobile and desktop layouts
 

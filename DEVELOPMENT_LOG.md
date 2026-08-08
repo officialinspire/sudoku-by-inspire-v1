@@ -124,6 +124,168 @@ cross-browser/cross-device check this sandbox can't itself perform.
 
 ---
 
+## 2026-08-08 — Phase 15: Final QA Against Acceptance Criteria
+
+**Branch:** `claude/mobile-music-playback-issues-oymb5w`
+
+The last item of the requested polish series (Prompt 8): walk every one
+of `PROJECT_BRIEF.md`'s 12 v1 acceptance criteria against the codebase
+as it stands after Phases 14q-16g, with fresh evidence for each rather
+than assuming prior phases' verification still holds. Most criteria
+re-confirmed cleanly; one line of investigation (criterion 12) turned up
+real, previously-unfixed accessibility bugs.
+
+**Criteria 1-11**, briefly (full command/script detail lives in this
+session's own scratch work, not reproduced here — the important part is
+what was checked and what it found):
+
+- **Boot flow / no console errors** — clean at the repo root and at a
+  simulated GitHub Pages subpath.
+- **Generation/solvability/keyboard+mouse+touch completion** — a real
+  (not simulated) keyboard-only session — arrow keys and digit keys —
+  solved a puzzle with 0 mistakes; `npm test` already covers
+  generation/uniqueness/solvability per difficulty directly.
+- **Autosave + exact Continue Game restore** — captured exact
+  `entries`/`notes`/`elapsedSeconds`/`difficulty` before a reload,
+  confirmed a byte-for-byte match after restoring via Continue Game.
+- **Settings persist + apply live** — theme/mode confirmed applied
+  *before* any reload, then confirmed to still be applied *after* one,
+  with audio settings alongside them.
+- **4 themes × 3 modes** — 24 combinations (12 pairs × 320px/1280px)
+  all loaded with zero errors, zero horizontal overflow. A quick
+  automated contrast pass across the same 12 combinations initially
+  reported several "failures" — turned out to be a bug in that pass
+  itself, not the app: Woodgrain/Paper's surfaces are `linear-gradient`
+  backgrounds, and the script's DOM-walk only checked
+  `background-color`, so it walked straight past the real (light
+  cream) gradient surface to some unrelated ancestor's color and
+  computed a nonsense ratio. Verified this directly (dumped the actual
+  computed `background-image` on the flagged elements — confirmed
+  light gradients, not the dark colors the script had used) before
+  discarding the false positives rather than either reporting a
+  regression that wasn't there or silently ignoring an unexplained
+  contradiction. The rigorous, gradient-stop-aware contrast work this
+  relies on is Phase 11's original audit plus this session's own Phase
+  16b/16d verifications — not redone from scratch here.
+- **Stats/high scores persist** — completed a real puzzle, confirmed
+  both updated immediately and matched exactly after a reload.
+- **Keyboard-only, visible focus** — same real keyboard session as
+  above; confirmed a visible focus outline at every step (menu button,
+  dialog's Start button, board cell, completion dialog's Menu button).
+- **Offline** — installed the service worker, went fully offline,
+  reloaded, generated a genuinely *new* puzzle and solved it to
+  completion — not just reloading a cached static page, actually using
+  the app's core feature with zero network.
+- **PWA installable** — re-confirmed post-Phase-16e: manifest still
+  valid JSON, icons still precache and serve correctly.
+- **GitHub Pages subpath** — static grep for absolute-root paths across
+  every file type (none found), plus an actual subpath-hosted run
+  (copied the repo under a `/sudoku-by-inspire-v1/` prefix on a second
+  local server) — manifest, favicon, service worker scope, and a full
+  new-game playthrough all resolved correctly relative to that subpath.
+- **No third-party requests** — monitored every network request during
+  the full real keyboard playthrough; zero non-same-origin requests.
+
+**Criterion 12 — a11y check, reduced-motion — is where this phase
+earned its keep.** `npm install --no-save axe-core` (network access
+confirmed available) and ran real WCAG 2.0/2.1 A+AA + best-practice
+scans across every screen and dialog via Playwright, rather than
+asserting "prior phases already covered accessibility" without
+re-checking. It found four real, previously-unnoticed issues:
+
+1. **No `<main>` landmark anywhere** (moderate, every screen) — added
+   `role="main"` to the existing `#app` div (a pure attribute addition,
+   zero risk — confirmed no tag-specific CSS/JS selector depended on it
+   being a plain `<div>`).
+2. **Several screens had no `<h1>`** (moderate) — Menu/Statistics/High
+   Scores were using `<h2 class="brand brand--compact">`; promoted to
+   `<h1>` (purely semantic, zero visual change — `.brand`/`.brand--compact`
+   are class-based styles with no tag-specific CSS). The Game and Intro
+   screens had no heading at all; added a new `.visually-hidden`
+   utility (the standard clip-based screen-reader-only pattern) rather
+   than a visible one, since Game's header is an already-tightly-tuned
+   layout with a documented "four things fighting for one line" comment
+   and no room to spare, and Intro is a brief, self-contained moment
+   that doesn't need a second visible "Sudoku" title. Start screen
+   already had a proper `<h1>`; multiple `<h1>` elements coexisting in
+   the DOM is fine here since only one screen is ever un-`hidden` at a
+   time, and the `hidden` attribute removes an element from the
+   accessibility tree entirely — confirmed empirically (re-scanning
+   each screen showed zero heading-related violations once its own
+   became visible).
+3. **The Sudoku board's `role="grid"`/`role="gridcell"` was structurally
+   invalid — critical.** An ARIA `grid` requires each `gridcell` to sit
+   inside a `role="row"` ancestor; this board has 81 flat
+   `role="gridcell"` buttons directly under `role="grid"`, no row
+   grouping at all — axe correctly flagged both `aria-required-children`
+   and `aria-required-parent` as critical. Rather than retrofitting a
+   proper row structure (a real DOM/CSS restructure of the board's
+   existing `display: grid` layout, carrying meaningful risk to a
+   heavily-tested, heavily-styled core surface for a payoff this specific
+   implementation wouldn't actually earn), stepped back and checked what
+   the board *actually* does: no roving-tabindex, no `aria-rowindex`/
+   `aria-colindex` — Tab cycles through all 81 buttons individually
+   (confirmed by grepping for `tabIndex` management on cells: none
+   exists), and Up/Down/Left/Right just move selection via plain custom
+   JS, not the full ARIA grid keyboard pattern the role promises. Every
+   cell's `aria-label` (`js/ui/cell-aria.js`) already opens with "Row N,
+   column M" — the exact context `role="grid"` would otherwise exist to
+   convey. Given the mismatch between what the ARIA role promises and
+   what this widget actually implements, changed `#board` to
+   `role="group"` and removed `role="gridcell"` from each cell (plain
+   `<button>`, which already has a full accessible name via its own
+   `aria-label`) — this is a smaller, lower-risk, and more *honest* fix
+   than building out full grid semantics this app doesn't use. Also
+   removed each cell's `aria-selected` (only a valid ARIA state on roles
+   like `gridcell`/`option`/`row`/`tab` — invalid, and itself
+   axe-flagged, on a plain button) since "selected" is already announced
+   as plain text within the same `aria-label` whenever a cell is
+   selected, making the separate boolean state genuinely redundant, not
+   just removed for convenience.
+4. **Statistics' `<dl role="tabpanel">` broke its own dt/dd
+   semantics** (serious + minor) — overriding a `<dl>`'s implicit role
+   invalidates its dt/dd containment from an accessibility-tree
+   perspective, even though the HTML itself is valid. Moved
+   `role="tabpanel"` (plus the matching `id`/`tabindex`/`aria-label`
+   that `js/ui/difficulty-filter.js`'s `aria-controls` depends on) onto
+   a new plain wrapper `<div>`, leaving the `<dl class="stats-grid">`
+   inside it undecorated. Verified the `.stats-grid` CSS grid layout
+   (2-column, 10 items) renders identically with the extra wrapper.
+
+**Re-scanned after fixing all four**: zero violations, every rule tag,
+every screen and dialog, including the Intro screen (force-shown via
+`showScreen('intro')` to reach it despite this sandbox's known
+video-codec limitation). Also confirmed board interaction is unaffected
+functionally: cell selection, the visual selection ring, and arrow-key
+navigation between cells all still work exactly as before — only the
+ARIA annotations changed, not the actual DOM structure/CSS/JS logic
+cells are built or rendered with.
+
+**Reduced-motion**, checked directly rather than assumed: with a
+Playwright context forced to `prefers-reduced-motion: reduce`, both the
+completion-dialog celebration animation and the menu's ambient
+background drift compute to `animation-name: none` — confirming
+`styles.css`'s `@media (prefers-reduced-motion: no-preference)` gates
+around both are actually working, not just present in the source.
+
+**Verification:** `node --check` clean on every touched file, `npm
+test` 205/205 (unaffected — none of Phase 15's fixes touch anything a
+unit test exercises directly). `MANUAL_QA.md` updated: a new screen-
+reader spot-check item referencing the now-zero automated-scan baseline,
+and the dialog-focus-trap checklist item extended to cover the two
+dialogs added in Phases 16f/16g that hadn't been listed yet.
+
+**Final `README.md` pass** (this phase's second deliverable): updated
+the stale "181 tests across 57 suites" to the current count, replaced
+the "PWA icons not supplied yet" Assets section with a description of
+the generated icons now shipped, corrected the cache-version example,
+and added Undo/digit-complete/high-score-rank-banner/medals/per-
+difficulty-reset/export-import to the feature highlights — none of
+these had been mentioned since they postdate the README's last real
+pass.
+
+---
+
 ## 2026-08-08 — Phase 16e: PWA App Icons
 
 **Branch:** `claude/mobile-music-playback-issues-oymb5w`

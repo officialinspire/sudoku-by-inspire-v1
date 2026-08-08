@@ -1655,12 +1655,82 @@ gameplay/audio settings, statistics, high scores, and the active game.
       `index.js` itself — a core asset — changed too). `MANUAL_QA.md`
       updated.
 
-## Phase 15 — Final QA Against Acceptance Criteria
+## Phase 15 — Final QA Against Acceptance Criteria ✅ (2026-08-08)
 
-- [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and
-      check it off with evidence (manual test note in
-      `DEVELOPMENT_LOG.md`).
-- [ ] Final `README.md` pass (install/run/deploy instructions accurate).
+Walked all 12 items in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria"
+against the codebase as it stands after Phases 14q-16g, with fresh
+evidence for each rather than relying on memory of earlier phases (full
+detail and exact commands/scripts in `DEVELOPMENT_LOG.md`'s Phase 15
+entry):
+
+- [x] **1. Boot flow, no console errors** — verified via headless
+      Chromium at the repo root and, separately, served from a
+      simulated GitHub Pages subpath. Zero console/page errors either
+      way.
+- [x] **2. Generation/solvability/keyboard+mouse+touch completion** —
+      `npm test` covers generation/uniqueness/solvability at all 4
+      difficulties directly; a real keyboard-only session (arrow keys +
+      digit keys, not simulated) solved a puzzle to completion with 0
+      mistakes. Mouse/touch completion already exercised repeatedly
+      across Phases 14q-16g's own verification passes.
+- [x] **3. Autosave + exact Continue Game restore** — played real
+      moves (an entry, a note) via direct game-state calls, captured
+      exact `entries`/`notes`/`elapsedSeconds`/`difficulty`, reloaded,
+      restored via Continue Game, and confirmed byte-for-byte match.
+- [x] **4. Settings persist + apply without a full reload** — changed
+      theme/mode live (confirmed applied before any reload) and audio
+      settings, reloaded, confirmed both persisted with no extra action
+      needed.
+- [x] **5. 4 themes × 3 modes, contrast + no breakage** — 24
+      combinations (12 theme/mode pairs × 320px/1280px) all loaded with
+      zero errors and zero horizontal overflow. Contrast itself relies
+      on the existing rigorous per-token gradient-aware audits from
+      Phase 11 and this session's own Phase 16b/16d work, re-confirmed
+      by direct computed-style inspection rather than re-deriving a
+      full new audit from scratch (a naive automated attempt at one
+      produced false positives from not accounting for gradient
+      surfaces — caught and discarded, see dev log).
+- [x] **6. Stats/high scores update + persist** — completed a real
+      puzzle, confirmed Statistics and High Scores updated immediately,
+      reloaded, confirmed both matched exactly.
+- [x] **7. Keyboard-only, visible focus throughout** — same real
+      keyboard session as #2; focus outline confirmed present at every
+      step (menu button, dialog Start button, board cell, completion
+      dialog's Menu button).
+- [x] **8. Offline reload + fully offline play** — installed the
+      service worker, went fully offline, reloaded, generated a *new*
+      puzzle and solved it to completion — all with zero network.
+- [x] **9. PWA installable** — completed in Phase 16e; re-confirmed the
+      manifest is still valid JSON and icons still precache/serve
+      correctly as part of this phase's subpath test.
+- [x] **10. GitHub Pages subpath compatibility** — static grep for any
+      absolute-root path across every file type (none found) plus an
+      actual subpath-hosted run (manifest, favicon, service worker
+      scope, and full new-game gameplay all resolved correctly relative
+      to `/sudoku-by-inspire-v1/`).
+- [x] **11. No third-party CDN requests** — monitored every network
+      request during the full real keyboard playthrough (#2/#7); zero
+      non-same-origin requests.
+- [x] **12. No critical a11y violations, reduced-motion respected** —
+      ran a real automated scan (`axe-core`, WCAG 2.0/2.1 A+AA +
+      best-practice rules) across every screen and dialog. **Found real
+      issues, not just confirmed a clean bill of health**: no `<main>`
+      landmark, several screens missing an `<h1>`, and — the significant
+      one — the Sudoku board's `role="grid"`/`gridcell` was structurally
+      invalid (critical: cells must be grouped under `role="row"`
+      ancestors, and this board doesn't implement the full ARIA grid
+      keyboard pattern the role promises anyway) plus a `<dl
+      role="tabpanel">` on Statistics breaking its own dt/dd semantics.
+      Fixed all of them (see dev log for exactly what changed) and
+      re-ran the scan: zero violations on every screen and dialog.
+      Reduced-motion confirmed separately: completion celebration and
+      menu ambient-background animations both compute to
+      `animation-name: none` under `prefers-reduced-motion: reduce`.
+- [x] Final `README.md` pass — updated feature list, test count, PWA
+      icons section (no longer "not supplied"), cache version reference,
+      and added the Phase 16 features (Undo, digit-complete indicator,
+      high-score rank banner/medals, per-difficulty reset,
+      export/import) to the feature highlights.
 
 ## Outstanding / Blocked
 

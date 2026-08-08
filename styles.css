@@ -687,6 +687,24 @@ button {
   border-radius: var(--radius-sm);
 }
 
+/* Standard screen-reader-only pattern (present in the accessibility
+   tree, removed from visual/layout flow) — used for the Intro and Game
+   screens' own <h1> (an a11y audit found every screen needs one, but
+   Game's header is already a tightly-tuned layout with no room to
+   spare, and Intro is a brief, self-contained moment neither screen
+   needs a second visible "Sudoku" title for). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .start-logo {
   /* Sized as a supporting brand mark, not a dominant graphic — the
      "Sudoku by Inspire" title (.brand) is the primary hierarchy
