@@ -22,7 +22,7 @@
  * devtools -> Application -> Service Workers -> Unregister, and/or
  * Application -> Storage -> "Clear site data."
  */
-const CACHE_NAME = 'inspire-sudoku-shell-v18';
+const CACHE_NAME = 'inspire-sudoku-shell-v19';
 
 // The minimum set of files the app cannot boot without. Listed
 // explicitly and installed with cache.addAll(), which is all-or-nothing:
@@ -52,6 +52,9 @@ const OPTIONAL_ROOT_ASSETS = [
   './logo.png',
   encodeURI('./Sudoku Zen.mp3'),
   encodeURI('./Logic Flow.mp3'),
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/icon-maskable-512.png',
 ];
 
 self.addEventListener('install', (event) => {

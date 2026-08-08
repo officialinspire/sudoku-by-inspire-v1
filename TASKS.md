@@ -1547,6 +1547,50 @@ High Scores screen even after navigating away and back through Menu.
       untouched. `npm test` 191/191 (4 new tests), `node --check` clean,
       zero page errors. `MANUAL_QA.md` updated.
 
+## Phase 16e — PWA App Icons ✅ (2026-08-08)
+
+Fifth in the requested polish series. `manifest.webmanifest` had
+declared `"icons": []` since Phase 10 — never fabricated, per
+`CLAUDE.md`'s asset policy, since no icon source art existed. Resolved
+without waiting on new artwork: generated from the user's own existing
+`logo.png`, with the user approving the design direction and two rounds
+of revision before anything was wired in.
+
+- [x] Design iterated live with the user rather than decided
+      unilaterally: first checked whether to use the full wordmark or a
+      cropped mark (the wordmark is a wide ~3.3:1 lockup, not a
+      square-friendly symbol); user asked for a Sudoku-themed mark with
+      the branding as a corner accent instead; iterated twice more on
+      polish (gradient/shadow/depth) and which part of the logo to
+      feature (isolated leaf, then the full INSPIRE wordmark instead).
+- [x] Final design: a 3×3 grid tile (two sample digits, rounded corners,
+      soft drop shadow, diagonal gradient background in the app's own
+      `theme_color` blue) with the full INSPIRE wordmark on a white pill
+      badge — sized to the wordmark's own aspect ratio rather than
+      cropped into a circle.
+- [x] Isolating just the leaf from `logo.png` (an early iteration) turned
+      out to be non-trivial — verified programmatically that the leaf
+      and the "I" letterform are one continuous fused outline in the
+      source art with no natural seam, so a circular mask centered on
+      the leaf's own round mass was used instead of a rectangular crop.
+      Moot once the design moved to the full wordmark instead, but kept
+      as a documented technique in case a future icon needs just the
+      leaf again.
+- [x] `icon-maskable-512.png`'s safe-zone compliance checked
+      programmatically (overlaying the actual 40%-radius safe-zone
+      circle and confirming every element's farthest point stays inside
+      it with real margin), not eyeballed — caught and fixed one
+      composition that poked outside it before finalizing.
+- [x] Legibility checked at actual small home-screen sizes (48px, 96px),
+      not just at the 512px master — this is what ruled out an earlier
+      full-9×9-grid-with-more-numbers direction, which looked sharp at
+      512px but turned to visual mush at 48px; the simpler 3×3 grid held
+      up at every size tested.
+- [x] Wired in: `manifest.webmanifest`'s `icons` array, `sw.js`'s
+      `OPTIONAL_ROOT_ASSETS` (+ `CACHE_NAME` bump), a `<link rel="icon">`
+      favicon in `index.html`. `icons/README.md` updated to describe the
+      generated assets in place of the old "waiting on artwork" state.
+
 ## Phase 15 — Final QA Against Acceptance Criteria
 
 - [ ] Walk every item in `PROJECT_BRIEF.md` → "v1 Acceptance Criteria" and
@@ -1558,8 +1602,10 @@ High Scores screen even after navigating away and back through Menu.
 
 - [x] `./inspiresoftwareintro.mp4` and `./logo.png` supplied by user
       (2026-07-28) and wired into the Phase 1 intro screen / menu footer.
-- [ ] Still waiting on app icon source image(s) for the PWA manifest
-      (needed for Phase 10).
+- [x] App icons resolved without a separately-supplied source image —
+      generated (Phase 16e, 2026-08-08) from the existing user-owned
+      `logo.png` rather than waiting on new artwork; approved by the
+      user before being wired into the manifest. See Phase 16e below.
 - [x] `./Sudoku Zen.mp3` (menu music) and `./Logic Flow.mp3` (gameplay
       music) supplied by the user (2026-07-28, Phase 14) via a direct
       GitHub upload merged into this branch; verified real playback with

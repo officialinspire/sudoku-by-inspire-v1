@@ -5,6 +5,80 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-08-08 — Phase 16e: PWA App Icons
+
+**Branch:** `claude/mobile-music-playback-issues-oymb5w`
+
+Fifth in the requested polish series. `manifest.webmanifest` had shipped
+`"icons": []` since Phase 10, blocking full PWA installability on
+several platforms — `icons/README.md` documented exactly what was
+needed but nothing existed to fill it, since `CLAUDE.md`'s asset policy
+forbids fabricating a substitute for a genuinely missing required asset.
+Resolved differently than that blocker implied: rather than waiting on
+new source art, generated the icons from `logo.png`, which the user
+already owns — deriving standard icon sizes from an asset they supplied
+isn't the same thing as inventing a replacement for one, but it's still
+a real design decision, so this was iterated live with the user rather
+than decided and shipped unilaterally.
+
+**Design process (three rounds):**
+
+1. Inspected `logo.png` directly (600×181, the "INSPIRE" wordmark with a
+   small leaf mark) and recognized it has no obvious square-icon
+   answer — a wide wordmark either gets heavily letterboxed or shrunk to
+   illegibility in a square. Asked the user how to handle it (leaf only
+   / full wordmark letterboxed / see both) rather than guessing.
+2. User's answer took a different direction than any of the three
+   offered: a Sudoku-themed mark as the primary icon with the branding
+   as a corner accent — there's no separate "Sudoku logo" asset, so this
+   meant designing new icon artwork (not fabricating a substitute for
+   `logo.png` itself, which stayed untouched). Built a 3×3 grid mark in
+   the app's own `theme_color` blue, with the leaf isolated from
+   `logo.png` as a corner badge, and sent renders for approval before
+   wiring anything in.
+3. Two more rounds of "make it look better" and "use the full logo
+   instead of just the leaf," landing on: a rounded 3×3 grid tile (two
+   sample digits, soft drop shadow, diagonal gradient background) with
+   the full INSPIRE wordmark on its own white pill badge sized to the
+   wordmark's actual aspect ratio, rather than cropped into a circle.
+
+**Technical notes:**
+
+- Isolating just the leaf (round 2's design) turned out to be genuinely
+  non-trivial: sampled the source art's alpha channel row-by-row and
+  confirmed the leaf's silhouette width grows monotonically straight
+  into the "I" letterform with no natural neck/seam — they're one fused
+  outline by design, not two separable shapes. A rectangular crop always
+  either clipped the leaf or dragged in a chunk of the letterform's
+  straight edge; a circular mask centered on the leaf's own round mass,
+  radius-tuned against the zoomed source, gave a clean result instead.
+  Moot once the design moved to the full wordmark, but documented in
+  `icons/README.md` in case a future icon needs just the leaf again.
+- The first full-composition attempt used a real 9×9 grid (proper
+  thick/thin Sudoku line hierarchy, several sample digits) and looked
+  sharp at 512px — but rendered as visual mush at 48px, a size phones
+  actually display home-screen icons at. Checking small sizes explicitly
+  (not just the 512px master) is what caught this; reverted to the
+  simpler, bolder 3×3 grid, which held up at every size tested.
+- `icon-maskable-512.png`'s safe-zone compliance was verified
+  programmatically each iteration — overlaying the actual 40%-radius
+  safe-zone circle (per `icons/README.md`'s spec) on the rendered
+  composition and confirming every element's farthest point stays
+  inside it with real margin, not eyeballed. Caught and fixed one
+  composition (grid corner + badge both poked outside) before finalizing.
+
+**Wired in:** `manifest.webmanifest`'s `icons` array (192, 512, and a
+separate maskable-512 render, matching `icons/README.md`'s spec exactly
+— confirmed the manifest is still valid JSON); `sw.js`'s
+`OPTIONAL_ROOT_ASSETS` (a missing/corrupt icon still can't block the
+service worker from installing, same resilience policy as
+`logo.png`/the intro video) with `CACHE_NAME` bumped so an installed PWA
+picks the new icons up; a `<link rel="icon">` favicon in `index.html`'s
+`<head>`. `icons/README.md` rewritten to describe the now-generated
+assets instead of the old "waiting on artwork" placeholder state.
+
+---
+
 ## 2026-08-07 — Phase 16d: High-Scores Screen Medal Treatment + "New!" Highlight
 
 **Branch:** `claude/mobile-music-playback-issues-oymb5w`

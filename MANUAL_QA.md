@@ -293,6 +293,33 @@ least once:
 - [ ] Go back online and reload again — everything still works, no
       stale-cache weirdness.
 
+## 10a. Installability and app icon (real device)
+
+New as of Phase 16e — `manifest.webmanifest`'s `icons` array was empty
+before this, so installability itself was previously unverifiable. This
+is the one item in this file that categorically needs a real phone/
+desktop browser; a sandboxed headless pass can confirm the manifest is
+valid and the files are reachable/precached, but not what the OS/browser
+actually does with them.
+
+- [ ] Android Chrome: visit the app, wait for (or trigger via the menu)
+      the "Install app"/"Add to Home Screen" prompt. Install it, then
+      check the resulting home-screen icon — should be the 3×3 grid
+      mark with the INSPIRE badge, not a generic globe/placeholder icon,
+      and should render with rounded/masked corners cleanly (the
+      maskable icon's safe-zone padding doing its job) rather than
+      clipping into the grid or the wordmark badge.
+- [ ] iOS Safari: "Add to Home Screen" from the share sheet — same icon
+      check. iOS has historically preferred `apple-touch-icon` link tags
+      over manifest icons in some versions; if the home-screen icon
+      looks wrong specifically on iOS while Android is fine, that's a
+      real, separate follow-up (not covered by this phase).
+- [ ] Desktop Chrome/Edge: the install icon in the address bar, or
+      Settings → "Install Sudoku by Inspire" — confirm the installed
+      window/taskbar icon matches, not a blank/default icon.
+- [ ] Browser tab favicon (any browser, no install needed) shows the
+      same grid mark, not the browser's default blank-page icon.
+
 ## 11. Keyboard-only use
 
 - [ ] Unplug the mouse (or just don't touch it) and play a complete
