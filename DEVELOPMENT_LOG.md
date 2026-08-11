@@ -5,6 +5,56 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-08-11 — Phase 16h follow-up: Real Banner Image for Social Share
+
+**Branch:** `claude/image-meta-tags-social-p7xu9d`
+
+Phase 16h (below) shipped Open Graph/Twitter Card meta tags, but with no
+purpose-built banner in the repo yet, they pointed at `icons/icon-512.png`
+(square, an interim fallback) as noted at the time.
+
+The user had already uploaded the intended banner,
+`Sudoku-Banner-Image.jpg`, to GitHub's repo Settings → Social Preview —
+but that image lives outside the git tree (GitHub serves it from
+`repository-images.githubusercontent.com`, with no API to fetch it), and
+this session's network egress policy blocks that host outright (confirmed
+via the proxy status endpoint as a policy denial, not a transient
+failure — not something to route around). Separately, the same file had
+already been pushed straight to the repo root on a different branch
+(`claude/sudoku-inspire-setup-2jpef2`, commit `3829f5d`, "Add files via
+upload") — `git show` pulled it from there into this branch instead of
+needing a re-upload.
+
+**What changed:**
+- Added `Sudoku-Banner-Image.jpg` (3168×1344 JPEG, ~155 KB) to the repo
+  root.
+- `index.html`: `og:image`/`twitter:image` now point at it (absolute
+  GitHub Pages URL, same as before), with `og:image:type` set to
+  `image/jpeg` and `og:image:width`/`height` corrected to the real
+  3168×1344 — not the 1.91:1 (1200×630) ratio Facebook/LinkedIn prefer,
+  but real dimensions so crawlers scale it correctly rather than
+  guessing.
+- `CLAUDE.md`'s asset-ownership rule extended to name
+  `Sudoku-Banner-Image.jpg` alongside `logo.png` and the intro video —
+  same "never fabricate/replace/overwrite" protection, since it's now a
+  third user-supplied root binary.
+- Not added to `sw.js`'s precache list: unlike `logo.png`, this image is
+  never fetched by the running app itself (no `<img>` reference) — it's
+  only read by off-site social-media crawlers — so there's nothing for
+  the service worker to cache.
+
+**Verification:** `npm test` still 205/205 (no app code touched). Opened
+`index.html` and confirmed the new meta tags parse correctly and the old
+`icon-512.png` references are fully replaced, not duplicated. Actually
+seeing the rendered preview card on Facebook/LinkedIn/Reddit still
+requires GitHub Pages to be live, which remains a user-reserved
+repository-settings action per `CLAUDE.md`/`README.md`.
+
+**Files changed:** `Sudoku-Banner-Image.jpg` (new), `index.html`,
+`CLAUDE.md`, `TASKS.md`, `DEVELOPMENT_LOG.md`.
+
+---
+
 ## 2026-08-08 — Phase 16h: Social Share Meta Tags (Open Graph / Twitter Card)
 
 **Branch:** `claude/image-meta-tags-social-p7xu9d`

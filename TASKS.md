@@ -1670,14 +1670,18 @@ or other social platforms that read Open Graph tags.
       since social crawlers fetch these off-site and can't resolve a
       relative path. Every other asset reference in the app is untouched
       and still relative.
-- [x] No dedicated 1200×630 banner image exists in the repo, and
+- [x] No dedicated banner image existed in the repo at first, and
       `CLAUDE.md`'s asset policy forbids fabricating new root binaries in
-      place of user-owned ones — used `icons/icon-512.png` (the existing
-      generated, opaque, branded 512×512 icon from Phase 16e) as the
-      share image instead, with correct `og:image:width`/`height` (512,
-      not the 1200×630 platforms prefer) so crawlers don't mis-render it.
-      A dedicated banner image is a reasonable future addition if the
-      user wants a less-cropped, wider preview card.
+      place of user-owned ones — `icons/icon-512.png` (the existing
+      generated, opaque, branded 512×512 icon from Phase 16e) was used
+      as an interim share image.
+- [x] **2026-08-11 update:** user supplied a real banner,
+      `./Sudoku-Banner-Image.jpg` (3168×1344, also used as this repo's
+      GitHub social preview image) — added it to the repo root and
+      repointed `og:image`/`twitter:image` (+ correct width/height/type)
+      at it, replacing the `icon-512.png` interim. `CLAUDE.md`'s
+      user-owned-binary list updated to include it alongside `logo.png`
+      and the intro video.
 
 ## Phase 15 — Final QA Against Acceptance Criteria ✅ (2026-08-08)
 

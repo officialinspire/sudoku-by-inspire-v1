@@ -24,10 +24,10 @@ to the user if a request conflicts with one:
   canvas-based rendering for the core board.**
 - Zero runtime CDN dependencies — everything the app needs at runtime must
   ship in the repo so it works fully offline.
-- Root binary assets `./inspiresoftwareintro.mp4` and `./logo.png` are
-  owned by the user. **Never fabricate, replace, or overwrite these
-  binaries.** If they're missing, say so and stop — don't invent
-  placeholder video/image binaries in their place.
+- Root binary assets `./inspiresoftwareintro.mp4`, `./logo.png`, and
+  `./Sudoku-Banner-Image.jpg` are owned by the user. **Never fabricate,
+  replace, or overwrite these binaries.** If they're missing, say so and
+  stop — don't invent placeholder video/image binaries in their place.
 - Flow: Touch/Click-to-Start screen → intro video (with Skip) → main menu.
 - Main menu footer displays `logo.png`.
 - Theme packs: Cyber, Woodgrain, Paper, Light.
