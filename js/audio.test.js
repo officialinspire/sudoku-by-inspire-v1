@@ -65,7 +65,7 @@ function dispatch(target, type) {
 
 let frameTime = 0;
 const screens = Object.fromEntries(
-  ['start', 'intro', 'menu', 'game', 'statistics', 'highscores'].map((id) => [`screen-${id}`, new FakeScreen()])
+  ['start', 'intro', 'menu', 'game', 'statistics', 'highscores', 'achievements'].map((id) => [`screen-${id}`, new FakeScreen()])
 );
 const fakeDocument = Object.assign(new EventTarget(), {
   visibilityState: 'visible',
@@ -146,6 +146,18 @@ describe('audio engine wiring (one simulated session)', () => {
     screensModule.showScreen('menu');
     await advance(3000);
     assert.equal(elementFor('Sudoku').paused, false);
+    assert.equal(elementFor('Logic').paused, true);
+  });
+
+  test('the Achievements screen and back keep Sudoku Zen playing, without restarting it', async () => {
+    const menuTrack = elementFor('Sudoku');
+    const plays = menuTrack.playCalls.length;
+    screensModule.showScreen('achievements');
+    await advance(3000);
+    screensModule.showScreen('menu');
+    await advance(3000);
+    assert.equal(menuTrack.paused, false);
+    assert.equal(menuTrack.playCalls.length, plays, 'no new play() — same track, no crossfade');
     assert.equal(elementFor('Logic').paused, true);
   });
 

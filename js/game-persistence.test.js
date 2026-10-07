@@ -6,12 +6,12 @@
  */
 import { describe, test, before, beforeEach, after, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { startGame, restoreGame, resumeGame, selectCell, applyNumberInput, toggleNote, useHint, undo, getState, resetToIdle } from './game-state.js';
+import { startGame, restoreGame, resumeGame, selectCell, applyNumberInput, toggleNote, useHint, undo, getState, resetToIdle, onStateChange } from './game-state.js';
 import { initGamePersistence } from './game-persistence.js';
 import { loadActiveGame } from './active-game-store.js';
 import { getStatistics } from './statistics-store.js';
 import { getHighScores } from './high-scores-store.js';
-import { getAchievementProgress, clearAchievementProgress } from './achievement-store.js';
+import { getAchievementProgress, clearAchievementProgress, onAchievementsUnlocked } from './achievement-store.js';
 import { calculateScore } from './scoring.js';
 import { DIFFICULTIES } from './sudoku-generator.js';
 import { HEAVY_NOTES_MIN_TOGGLES } from './run-tracking.js';
@@ -151,6 +151,38 @@ describe('scoring and display are unchanged; achievements see the truth', () => 
     assert.equal(progress.perfectWins, 0);
     assert.equal(progress.noHintWins, 0);
     assert.equal(getStatistics('easy').gamesCompleted, 1);
+  });
+});
+
+describe('the unlock announcement (for the Puzzle Solved dialog)', () => {
+  test('arrives during the completion, for this run, before later listeners see "complete"', () => {
+    const heard = [];
+    const stopHearing = onAchievementsUnlocked((ids, { runId }) => heard.push({ ids, runId }));
+    let heardBeforeLaterListener = null;
+    const stopWatching = onStateChange((state) => {
+      if (state.status === 'complete') heardBeforeLaterListener = heard.length;
+    });
+    newGame();
+    const runId = getState().runId;
+    OPEN_CELLS.forEach(fill);
+    stopHearing();
+    stopWatching();
+    assert.equal(heard.length, 1);
+    assert.equal(heard[0].runId, runId);
+    assert.ok(heard[0].ids.includes('wins-1') && heard[0].ids.includes('perfect-1'));
+    assert.equal(heardBeforeLaterListener, 1, 'what js/ui/completion-dialog.js relies on');
+  });
+
+  test('a UI listener that throws can\'t stop Statistics and High Scores from recording the win', () => {
+    const consoleError = mock.method(console, 'error', () => {});
+    const stop = onAchievementsUnlocked(() => { throw new Error('UI bug'); });
+    newGame();
+    OPEN_CELLS.forEach(fill);
+    stop();
+    consoleError.mock.restore();
+    assert.equal(getStatistics('easy').gamesCompleted, 1);
+    assert.equal(getHighScores('easy').length, 1);
+    assert.equal(storage.getItem(SAVE_KEY), null, 'and the save is still cleared');
   });
 });
 

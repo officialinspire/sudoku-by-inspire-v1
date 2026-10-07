@@ -218,18 +218,20 @@ function createSfxEngine() {
 // ================================================================
 
 /**
- * The menu "family" of screens (main menu, Statistics, High Scores) all
- * share the menu track — they're all reached from, and lead back to,
- * the same context, and switching tracks every time you tap into
- * Statistics and back would be more distracting than helpful. Start and
- * Intro get no music of their own (Start is silent until the very first
- * gesture; Intro is a brief, self-contained moment). Game gets the
- * gameplay track — matches "fade in once a new level is started."
+ * The menu "family" of screens (main menu, Statistics, High Scores,
+ * Achievements) all share the menu track — they're all reached from,
+ * and lead back to, the same context, and switching tracks every time
+ * you tap into Statistics and back would be more distracting than
+ * helpful. Start and Intro get no music of their own (Start is silent
+ * until the very first gesture; Intro is a brief, self-contained
+ * moment). Game gets the gameplay track — matches "fade in once a new
+ * level is started."
  */
 const SCREEN_MUSIC_TRACK = {
   menu: 'menu',
   statistics: 'menu',
   highscores: 'menu',
+  achievements: 'menu',
   game: 'gameplay',
 };
 

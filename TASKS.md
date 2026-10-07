@@ -2048,10 +2048,75 @@ for this date.
       5 s of live timer, 1 at completion), all 100 listed, the catalog
       precached by the service worker.
 - [x] Docs: MANUAL_QA §16 (unlock checks), README test count.
-- [ ] **Later:** the achievements UI (list, progress, unlock toast,
-      possibly a sound), reading `getAchievements()` and the
-      `newlyUnlocked` IDs `recordCompletedRun` returns
-      (`js/game-persistence.js` doesn't pass them on yet).
+- [x] **Later:** the achievements UI — done in Hardening Phase 6 below.
+
+## Hardening Phase 6 — Achievements UI + Final Focused QA ✅ (2026-10-07)
+
+The Achievements screen, a won game's unlocks in the Puzzle Solved
+dialog, and queued toasts — then a focused QA pass across the hardening
+phases. Full reasoning and every measurement are in
+`DEVELOPMENT_LOG.md`'s entry for this date.
+
+- [x] **Screen** (`js/ui/achievements-screen.js`, menu → Achievements,
+      wired through `screens.js`, `index.js`, `menu.js`):
+      - "N of 100 unlocked" and a progress bar;
+      - All + 9 category tabs (the shared accessible tab control,
+        `difficulty-filter.js`, now keyed by any data attribute);
+      - per card: an inline-SVG badge, name, exact requirement, then
+        "✓ Unlocked <date>" (noting "from earlier games") or "Locked"
+        with progress in words;
+      - a "tracked since" note explaining what was backfilled.
+- [x] **Badges** (`js/ui/achievement-badges.js`): one glyph per category,
+      no files, every color from theme tokens; locked = dashed ring +
+      padlock + the word "Locked", never color alone.
+- [x] **Puzzle Solved dialog:** one batched summary of what the win
+      unlocked (5 by name, then "…and N more"), View Achievements, and
+      the summary as the dialog's accessible description. Focus still
+      starts where it did.
+- [x] **Toasts** (`js/toast-queue.js`, `js/ui/achievement-toasts.js`):
+      one at a time, batched, a polite live region, never focusable,
+      click-through. They only show on the main menu with no dialog
+      open, so a toast is never over a puzzle, a dialog or a control.
+      In practice that means unlocks credited at startup.
+- [x] **Store:** `onAchievementsUnlocked` (announced only once saved,
+      and a throwing listener can't break the win); startup reports
+      nothing it couldn't save.
+- [x] **Music:** Achievements shares the menu track (`audio.js`).
+- [x] **Reduced motion:** the toast entrance and badge pop only run
+      under `prefers-reduced-motion: no-preference`.
+- [x] `sw.js` precaches the 5 new modules; `CACHE_VERSION` → `v26`.
+- [x] **Fixed, found by this phase's QA:**
+      - **the landscape menu's title (and, with a 6th button, the top
+        of New Game) was unreachable.** Center-justified overflow can't
+        be scrolled to; it now uses auto margins;
+      - **the category tab strip collapsed to a sliver on phones.** A
+        scroll container has no minimum height in a flex column;
+      - **locked badges would paint black in Woodgrain and Paper.** I
+        had used gradient tokens as SVG paint.
+- [x] Tests: 38 new (view 16, toast queue 9, badges 6, store +4,
+      game-persistence +2, audio +1) — `npm test`
+      417/417 (also under UTC, UTC+14, New York); 17 of 17 deliberate
+      regressions fail the suite, and 3 of 3 DOM-level ones fail the
+      browser checks.
+- [x] Browser QA (headless Chromium), all passing:
+      - clean install;
+      - undo-proof perfect;
+      - no timer-driven progress access;
+      - no duplicate award;
+      - old-save migration;
+      - dialog focus and keyboard order;
+      - toasts clear of every control at 10 viewport sizes;
+      - contrast in all 8 theme/mode combinations;
+      - reduced motion;
+      - export/clear/import, and a Phase-4 backup;
+      - first install → offline;
+      - upgrade with an active save from v24 and v25;
+      - the music lifecycle.
+- [x] Docs: MANUAL_QA §1/§9/§9a/§10/§14 expanded, §16 retitled, new
+      §17; README features and test count.
+- [ ] **Not verified on real devices** — see MANUAL_QA §9a, §10
+      (installed PWA offline), §14 (upgrade on a phone) and §17
+      (touch, screen reader).
 
 ## Outstanding / Blocked
 

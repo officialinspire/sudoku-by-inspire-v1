@@ -225,6 +225,11 @@ button {
 
   --touch-target-min: 44px;
 
+  /* The main menu's button column width — a token because the
+     achievement toast's short-landscape placement (below) sits in the
+     gutter beside that column and has to know exactly how wide it is. */
+  --menu-nav-max-width: clamp(18rem, 60vw, 22rem);
+
   /* Shared "pressed" affordance for every clickable control app-wide —
      a small, calm scale-down plus a 1px downward nudge, reused by every
      button/tile/tab (see "Shared interactive control states" below)
@@ -773,7 +778,7 @@ button {
   /* Fluid width instead of a hard mobile/desktop breakpoint jump — keeps
      controls from ever growing button-bar-wide on desktop while still
      using the available width on narrow phones. */
-  max-width: clamp(18rem, 60vw, 22rem);
+  max-width: var(--menu-nav-max-width);
 }
 
 .menu-nav button {
@@ -844,6 +849,22 @@ button {
      in isolation before adding this fix). */
   position: relative;
   z-index: 0;
+  /* Centered by the auto margins below instead of .screen's
+     justify-content: center. When the menu is taller than the screen
+     (any phone on its side), center-justifying pushes the overflow above
+     the scroll origin, where it can't be scrolled to: the title, and
+     with six buttons the top of New Game, were cut off for good. Auto
+     margins center exactly the same when there's room and shrink to
+     zero when there isn't. */
+  justify-content: flex-start;
+}
+
+#screen-menu > .brand {
+  margin-top: auto;
+}
+
+#screen-menu > .menu-footer {
+  margin-bottom: auto;
 }
 
 /* ---------- Main menu decorative background ----------
@@ -1989,6 +2010,451 @@ button {
   margin-left: auto;
   font-size: var(--font-size-3);
   color: var(--color-text-secondary);
+}
+
+/* ---------- Achievements screen ----------
+   Same frame as Statistics/High Scores (.screen-game, .game-header),
+   and only tokens/pairings this file already uses and has audited:
+   --color-entry-player for accent-flavored text, the accent fill behind
+   --color-accent-contrast, --color-success for "unlocked" text on
+   --color-surface. Locked vs unlocked is never color alone: each card
+   also says "Locked"/"✓ Unlocked", a locked card has a dashed border,
+   and its badge an outlined disc with a padlock. */
+.achievements-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(100%, 32rem);
+  margin: 0 auto;
+}
+
+.achievements-count {
+  margin: 0;
+  font-size: var(--font-size-8);
+}
+
+.achievements-count-value {
+  font-size: var(--font-size-12);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-entry-player);
+}
+
+/* The shared shape of the overall meter and each card's progress bar.
+   Both are decorative (aria-hidden): the numbers beside them carry the
+   information. The fill scales from the left by --fraction (0-1, set
+   from JS) — a transform, so updating it never triggers layout. */
+.achievements-meter,
+.achievement-progress {
+  height: 0.5rem;
+  overflow: hidden;
+  background: var(--color-bg);
+  border: var(--border-width-thin) solid var(--color-border);
+  border-radius: var(--radius-pill);
+}
+
+.achievements-meter-fill,
+.achievement-progress-fill {
+  height: 100%;
+  background: var(--color-accent);
+  transform-origin: left center;
+  transform: scaleX(var(--fraction, 0));
+}
+
+/* Ten tabs (All + 9 categories) don't fit one phone-width row, and
+   wrapping them would stack ~4 rows of 44px buttons above the list. So
+   on phones they scroll sideways in one row (arrow keys move focus,
+   which scrolls the selected tab into view); from 768px they wrap. */
+.achievement-filter {
+  display: flex;
+  /* A sideways scroller is a scroll container, and those have no
+     minimum height in a flex column: once the screen's content outgrew
+     the viewport, the strip shrank to a sliver and hid every tab. */
+  flex-shrink: 0;
+  gap: var(--space-2);
+  width: min(100%, 40rem);
+  margin: 0 auto;
+  padding: var(--space-1) 2px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.achievement-tab {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.achievement-tab-count {
+  font-size: var(--font-size-3);
+  font-weight: var(--font-weight-semibold);
+}
+
+@media (min-width: 768px) {
+  .achievement-filter {
+    flex-wrap: wrap;
+    justify-content: center;
+    overflow-x: visible;
+  }
+}
+
+#achievements-panel {
+  width: min(100%, 40rem);
+  margin: 0 auto;
+  border-radius: var(--radius-md);
+}
+
+.achievements-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+@media (min-width: 768px) {
+  .achievements-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.achievement-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border: var(--border-width-thin) solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.achievement-card.is-locked {
+  border-style: dashed;
+}
+
+/* Same inset-ring idea as .highscore-row--new: --color-accent as a
+   non-text (3:1) edge, never as text. */
+.achievement-card.is-unlocked {
+  box-shadow: inset 0.25rem 0 0 var(--color-accent);
+}
+
+.achievement-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  flex: 1;
+}
+
+.achievement-name {
+  margin: 0;
+  font-size: var(--font-size-7);
+  font-weight: var(--font-weight-bold);
+}
+
+.achievement-requirement {
+  margin: 0;
+  font-size: var(--font-size-4);
+  color: var(--color-text-secondary);
+}
+
+.achievement-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  font-size: var(--font-size-3);
+  color: var(--color-text-secondary);
+}
+
+.achievement-state {
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+.achievement-state--unlocked {
+  color: var(--color-success);
+}
+
+/* ---------- Achievement badges (js/ui/achievement-badges.js) ---------- */
+
+.achievement-badge {
+  flex-shrink: 0;
+  width: 3rem;
+  height: 3rem;
+}
+
+/* Unlocked: the .btn-primary pairing — glyph in --color-accent-contrast
+   on an --color-accent disc. */
+.achievement-badge-disc {
+  fill: var(--color-accent);
+}
+
+.achievement-badge-glyph {
+  color: var(--color-accent-contrast);
+}
+
+/* The no-hint glyph's strike-through cuts a gap in the bulb by drawing
+   the disc's own color under it first — so it has to follow the disc. */
+.achievement-badge-cut {
+  stroke: var(--color-accent);
+}
+
+/* Locked: an empty, dashed ring with the glyph in secondary text color
+   on the card itself, plus a padlock — readable as "locked" without
+   color. Every SVG paint here is a solid token on purpose: Woodgrain and
+   Paper define --color-bg/--color-panel/--color-surface as gradients,
+   which are fine as a CSS `background` but invalid as an SVG fill or
+   stroke (the badge would silently paint black). So the ring is left
+   unfilled — the card's own surface shows through — and the bulb's
+   cut-out, which needs the color *behind* the badge, is dropped. */
+.achievement-badge.is-locked .achievement-badge-disc {
+  fill: none;
+  stroke: var(--color-border);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+
+.achievement-badge.is-locked .achievement-badge-glyph {
+  color: var(--color-text-secondary);
+}
+
+.achievement-badge.is-locked .achievement-badge-cut {
+  display: none;
+}
+
+/* The padlock: --color-accent-contrast on a --color-text-secondary
+   disc — both solid in every theme, and measured at 3:1 or better
+   (a graphic, not text) in all 8 theme/mode combinations. */
+.achievement-badge-lock circle {
+  fill: var(--color-text-secondary);
+}
+
+.achievement-badge-lock-body {
+  fill: var(--color-accent-contrast);
+}
+
+.achievement-badge-lock-shackle {
+  stroke: var(--color-accent-contrast);
+}
+
+/* ---------- Completion dialog: what this win unlocked ---------- */
+
+.completion-achievements {
+  margin: var(--space-3) 0;
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  background: var(--color-surface);
+  border: var(--border-width-thin) solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: inset 0.25rem 0 0 var(--color-accent);
+}
+
+.completion-achievements-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-7);
+}
+
+.completion-achievements-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.completion-achievements-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: var(--font-weight-semibold);
+}
+
+.completion-achievements-list .achievement-badge {
+  width: 2rem;
+  height: 2rem;
+}
+
+.completion-achievements .settings-hint {
+  margin: var(--space-2) 0 0;
+}
+
+/* One small pop per badge, staggered down the list; like the title's
+   celebration, only computed at all when motion is welcome. */
+@media (prefers-reduced-motion: no-preference) {
+  .completion-achievements-list .achievement-badge {
+    animation: achievement-badge-pop var(--duration-moderate) var(--ease-out) both;
+    animation-delay: calc(var(--unlock-index, 0) * 90ms);
+  }
+}
+
+@keyframes achievement-badge-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ---------- Achievement toasts (js/ui/achievement-toasts.js) ----------
+   Toasts only show on the main menu, so placement only has to keep
+   clear of the menu's controls: bottom-center like the update banner
+   (the menu's bottom is its logo), or — on short landscape phones,
+   where the menu scrolls and its button column eventually passes
+   everywhere along the middle — in the empty gutter beside that column
+   (below). pointer-events: none on the whole region as a backstop: a
+   toast can never take a tap meant for something under it. */
+.toast-region {
+  position: fixed;
+  left: 50%;
+  bottom: max(var(--space-3), env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 30;
+  width: max-content;
+  max-width: min(92vw, 24rem);
+  pointer-events: none;
+}
+
+/* Never on top of the update banner: sit just above it while it shows. */
+body:has(#update-banner:not([hidden])) .toast-region {
+  bottom: calc(max(var(--space-3), env(safe-area-inset-bottom)) + 4.5rem);
+}
+
+.achievement-toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  background: var(--color-panel);
+  color: var(--color-text);
+  border: var(--border-width-thin) solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md), inset 0.25rem 0 0 var(--color-accent);
+}
+
+.achievement-toast .achievement-badge {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+.achievement-toast-text {
+  margin: 0;
+}
+
+.achievement-toast-title,
+.achievement-toast-names,
+.achievement-toast-note {
+  display: block;
+}
+
+.achievement-toast-title {
+  font-weight: var(--font-weight-bold);
+}
+
+.achievement-toast-names {
+  font-size: var(--font-size-4);
+}
+
+.achievement-toast-note {
+  font-size: var(--font-size-3);
+  color: var(--color-text-secondary);
+}
+
+.achievement-toast.is-leaving {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .achievement-toast {
+    animation: achievement-toast-in var(--duration-dialog) var(--ease-out);
+    transition: opacity var(--duration-dialog) var(--ease-standard);
+  }
+}
+
+/* The count bubble only appears in the badge-only variant below. */
+.achievement-toast-count {
+  display: none;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .toast-region {
+    left: auto;
+    right: max(var(--space-3), env(safe-area-inset-right));
+    transform: none;
+    width: calc((100vw - var(--menu-nav-max-width)) / 2 - max(var(--space-3), env(safe-area-inset-right)) - var(--space-3));
+    max-width: none;
+  }
+
+  .achievement-toast {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+    font-size: var(--font-size-4);
+  }
+
+  .achievement-toast .achievement-badge {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  /* Still read out (the live region reads it), just not drawn. */
+  .achievement-toast-note {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+}
+
+/* Too narrow a gutter for words (roughly a 4-inch phone on its side):
+   the badge and a "+N" count only. The text stays in the page, out of
+   sight, so a screen reader still hears all of it. */
+@media (orientation: landscape) and (max-height: 500px) and (max-width: 639px) {
+  .achievement-toast {
+    flex-direction: row;
+    align-items: center;
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .achievement-toast-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .achievement-toast-count {
+    display: block;
+    font-weight: var(--font-weight-bold);
+  }
+
+  .toast-region {
+    width: max-content;
+  }
+}
+
+@keyframes achievement-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ---------- Intro-to-menu fade ---------- */

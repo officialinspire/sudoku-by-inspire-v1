@@ -34,8 +34,14 @@ keeps working with the network off.
   the completion dialog surfaces a "New High Score" banner when a run
   places, the leaderboard gives its top 3 a medal treatment, and either
   can be reset per-difficulty independently of the global data reset.
+- 100 achievements — wins, each difficulty, perfect and hint-free
+  games, speed, score, winning and daily streaks, and playstyle — on
+  their own screen with category filters, progress, and unlock dates.
+  A win's unlocks are listed in the completion dialog; anything credited
+  from earlier play shows as one toast on the menu. Undo can't fake a
+  perfect game, and the same game never counts twice.
 - Export/import a local backup file covering every setting, statistic,
-  high score, and saved game — no account, no cloud, just a JSON file
+  high score, achievement, and saved game — no account, no cloud, just a JSON file
   you keep (see [Local-Data Behavior](#local-data-behavior)).
 - Background music and short synthesized UI sound effects, each
   independently mutable, plus an optional vibration toggle.
@@ -147,13 +153,14 @@ dependency to install:
 npm test
 ```
 
-This runs every `*.test.js` file in the repo (379 tests across 114
+This runs every `*.test.js` file in the repo (417 tests across 124
 suites as of this writing, covering the Sudoku engine, puzzle generator,
 game state, scoring, every persisted store, achievement tracking
 (run IDs, undo-proof run counters, progress, dates and streaks, and
 exactly-once completion through autosave/Continue), the 100-achievement
 catalog (every threshold, reachability, unlock-once, honest backfill
-of existing history), the board's render
+of existing history), the achievement screen's wording, toast
+queueing and badge artwork, the board's render
 decisions, background music's lifecycle (`js/music-player.test.js`,
 with fake audio elements and a fake clock), the service worker and its
 update flow, and the asset validator below) in a few seconds. `sw.test.js` runs the real `sw.js`

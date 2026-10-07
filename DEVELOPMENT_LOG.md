@@ -5,6 +5,310 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-10-07 — Hardening Phase 6: Achievements UI + Final Focused QA
+
+**Branch:** `claude/nifty-lovelace-9zf07w` (PR
+officialinspire/sudoku-by-inspire-v1#4, on top of Hardening Phases 1–5)
+
+**Goal:** put Phase 5's 100 achievements in front of the player:
+- an Achievements screen;
+- a won game's unlocks in the Puzzle Solved dialog;
+- queued toasts that never get in the way;
+
+then a focused QA pass over what the hardening phases touched.
+
+### What changed, and why
+
+**Achievements screen** (`js/ui/achievements-screen.js`; Menu →
+Achievements; wired through `js/screens.js`, `index.js`,
+`js/ui/menu.js`). It has:
+- "N of 100 unlocked" and a progress bar;
+- a "tracked since" note saying what counted from before then;
+- category tabs: All plus the catalog's 9 categories, each with its own
+  "n/total";
+- one card per achievement: badge, name, exact requirement, then either
+  "✓ Unlocked Oct 7, 2026" (plus "· from earlier games" when it was
+  backfilled) or "Locked" with progress in words.
+
+Progress words come from `describeProgress` in `js/achievement-view.js`
+(pure, Node-tested): "3 of 10", "Best 4:10 — goal 2:30", "No win yet",
+"Best score 1,410 of 3,500"…
+
+Choices made along the way:
+- **Tabs, not a new control.** The Statistics/High Scores tab control
+  (`js/ui/difficulty-filter.js`: roving tabindex, arrow keys,
+  Home/End) gained one optional argument, the data attribute to key
+  on. Copying it would have meant two keyboard implementations to
+  keep in sync.
+- **Tabs are built from `ACHIEVEMENT_CATEGORIES`,** not written into
+  `index.html`, so the markup can't drift from the catalog.
+- **Each tab gets an `aria-label`** ("Speed, 3 of 10 unlocked"). The
+  visible "3/10" would otherwise run into the label ("Speed3/10").
+- **On phones the tabs scroll sideways in one row.** Ten wrapped tabs
+  would stack about four rows of 44 px buttons above the list. From
+  768 px they wrap.
+- **Read once per visit.** `getAchievements()` runs when the screen
+  is opened, never on a timer or tab switch: nothing can unlock while
+  you're looking at it.
+
+**Badges** (`js/ui/achievement-badges.js`):
+- One inline-SVG glyph per category: trophy, chevrons, star, crossed
+  bulb, stopwatch, medal, flame, calendar, pencil.
+- No image files, so nothing new to ship, cache or theme.
+- Every color comes from a CSS class or `currentColor`; a test rejects
+  any hard-coded color.
+- **Unlocked:** an accent disc with the glyph in
+  `--color-accent-contrast` (the `.btn-primary` pairing).
+- **Locked:** an unfilled dashed ring, the glyph in secondary text, a
+  padlock, and the word "Locked" on the card. Locked is never shown by
+  color alone.
+
+**Where unlocks are announced — and why toasts aren't over the
+dialog.** At the moment of a win, the Puzzle Solved dialog opens. It's
+a *modal* `<dialog>`, and while a modal dialog is open everything
+outside it is inert: a toast there would be skipped by screen readers
+while being drawn on top of the dialog. So:
+- **A win's unlocks are listed inside the dialog** as one batch: "8
+  achievements unlocked", five by name, "…and 3 more — see
+  Achievements".
+  - It also gets a View Achievements button, shown only when something
+    unlocked.
+  - The summary is the dialog's `aria-describedby`, so it's read out
+    with the title. Focus still starts on the share text, as before
+    (verified), so a screen reader user would otherwise never reach it.
+- **Toasts** (`js/toast-queue.js` + `js/ui/achievement-toasts.js`) are
+  for unlocks that happen outside a dialog: the ones credited at
+  startup. Examples: the first start after an update backfills from
+  Statistics/High Scores; an older backup is imported; a newer catalog
+  adds achievements the player already meets.
+  - **One at a time.** Everything that arrives while one is waiting
+    merges into it, as one batch.
+  - **A polite `role="status"` region that's always in the page.** A
+    live region created at the moment of an announcement often isn't
+    read.
+  - **Never focusable, and `pointer-events: none`,** so it can't take
+    focus or a tap.
+  - **Shown only on the main menu,** with no dialog open and the page
+    visible; otherwise it waits.
+  - **A dialog opening puts it back in line,** so it shows again after.
+    It watches the dialogs' `open` attribute with a MutationObserver.
+  - **Leaving the menu dismisses it.** That includes going to
+    Achievements, which lists the same unlocks.
+- **Considered and rejected:** a `popover` toast in the top layer
+  above the dialog. It would be inert for screen readers and drawn over
+  the dialog's own content.
+
+**Unlock event** (`js/achievement-store.js`):
+- **`onAchievementsUnlocked(listener)`** fires with `(ids, { runId })`
+  once a won game's unlocks are **saved**. An unlock that couldn't be
+  stored would be gone on the next load, so it's never announced.
+- **`initAchievementProgress()`** now returns nothing if its write
+  failed, for the same reason.
+- **A listener that throws is caught and logged.** The event fires in
+  the middle of `game-persistence.js`'s completion handling, and
+  Statistics and High Scores are recorded right after it.
+- **Ordering the dialog relies on:** `game-persistence.js`'s state
+  listener is registered before the completion dialog's (`index.js`),
+  so the announcement for a run always arrives before the dialog opens.
+  The dialog only shows a batch whose `runId` matches the run it's
+  showing.
+- A test pins both guarantees: the order, and a throwing listener not
+  stopping Statistics or High Scores.
+
+**Music:** Achievements joins the menu family in `audio.js`
+(`achievements: 'menu'`).
+
+**Reduced motion:** the toast's entrance and the dialog's staggered
+badge pop are defined only inside
+`@media (prefers-reduced-motion: no-preference)`. Verified computed
+`animation-name: none` under `reduce`.
+
+**`sw.js`:** the 5 new modules are precached; `CACHE_VERSION` → `v26`.
+
+### Found and fixed by this phase's QA
+
+1. **Toasts covered controls on landscape phones.** I measured every
+   visible control's box against the toast at 10 viewport sizes. At
+   740×360 the bottom-center toast sat on the Achievements and
+   Settings buttons, and on the category tabs. In landscape the menu
+   scrolls, so its button column eventually passes everywhere along the
+   middle.
+   - **Fix:**
+     - toasts show on the menu only;
+     - on short landscape screens the toast moves into the empty gutter
+       beside the button column;
+     - on gutters too narrow for words (a 4-inch phone on its side) it
+       shows only the badge and "+N", with the text kept for screen
+       readers.
+   - **The gutter's width is computed from the column's own width,**
+     now a shared token (`--menu-nav-max-width`), so the two can't
+     drift apart.
+   - **Re-measured:** no overlap at any of the 10 sizes, at four scroll
+     positions of each landscape menu.
+2. **The landscape menu's top was unreachable.** At scroll position 0
+   the title sat at −54 px (740×360) and couldn't be scrolled to:
+   `justify-content: center` pushes overflow above the scroll origin.
+   - **That was already true before this phase,** but my sixth button
+     made it worse: the top of New Game was cut off too (−8 px; −28 px
+     at 568×320).
+   - **Fix:** auto margins on the first and last menu items. They
+     center exactly the same when there's room and collapse when there
+     isn't.
+   - **Now:** the title is at 24 px at every landscape size, and portrait
+     phones are unchanged.
+3. **The category tabs collapsed to a sliver on phones.** Spotted in a
+   screenshot after a layout check had passed (it measured width only).
+   A sideways-scrolling strip is a scroll container, and scroll
+   containers have no minimum height in a flex column, so it shrank once
+   the screen overflowed.
+   - **Fix:** `flex-shrink: 0`.
+   - The check now also asserts every tab is full height inside the
+     strip.
+4. **Locked badges would paint black in Woodgrain and Paper.** Those
+   packs define `--color-bg`, `--color-panel` and `--color-surface` as
+   gradients. That's fine for a CSS `background`, but invalid as an SVG
+   `fill`/`stroke`, which then silently falls back.
+   - **Fix:** only solid tokens paint SVG. The locked ring is left
+     unfilled (the card shows through), and the bulb's cut-out stroke
+     is dropped when locked.
+
+**Measurement pitfalls, for next time:**
+- **Theme changes animate.** `body` has a 0.2 s color transition, so
+  measuring right after a theme switch reads half-faded colors.
+- **Gradient backgrounds** need every stop checked; the worst one
+  counts.
+- **The live clock re-arms the 500 ms autosave debounce every second.**
+  A snapshot taken 700 ms after a move can predate it.
+
+### Tests
+
+38 new (417/417, 124 suites):
+- **view (16):** counts, the category partition, progress text for
+  every metric kind (and every catalog entry), unlock dates, batches of
+  0, 1, 2, 3 and 5+ unlocks, duplicate and retired IDs;
+- **toast queue (9):** immediate show and timeout, waiting for the
+  gate, batching, one-at-a-time with a gap, show/hide strictly
+  alternating, interrupt vs. dismiss;
+- **badges (6):**
+  - a glyph per category;
+  - `aria-hidden` and not focusable;
+  - a padlock when locked;
+  - no hard-coded colors;
+  - balanced tags and no duplicated attributes (an early draft had one;
+    HTML silently keeps the first);
+- **store (+4):** announcements once per saved win; none when the
+  write fails; a throwing listener; unlocks and their dates surviving a
+  backup round trip;
+- **game-persistence (+2):** the announcement precedes later listeners
+  for the same run; a throwing UI listener can't stop Statistics or
+  High Scores;
+- **audio (+1):** Achievements and back keeps Sudoku Zen playing with
+  no new `play()`.
+
+**Time zones:** the suite passes under UTC, UTC+14 and New York.
+
+**Mutation check:** 17 of 17 deliberate regressions fail the Node
+suite:
+- unsaved unlocks announced;
+- a listener breaking the win;
+- the queue not batching, showing two at once, ignoring its gate, or
+  dropping interrupted toasts;
+- miscounted "more";
+- a category filter leaking other categories;
+- no menu music on the new screen;
+- a badge without a padlock, with a hard-coded color, or with a
+  duplicated attribute;
+- …and five more.
+
+**3 of 3 DOM-level regressions fail the browser checks:** toasts
+ignoring open dialogs, toasts allowed on the Achievements screen, and
+the tab strip allowed to shrink.
+
+### Real browser (headless Chromium) — verified
+
+- **Clean install:**
+  - six menu buttons, fitting a 360×640 phone without scrolling;
+  - no toast;
+  - "0 of 100 unlocked", 100 locked cards, ten tabs;
+  - Tab order ← Menu → selected tab → list;
+  - ArrowRight/End/Home switch categories (15/5/100 cards) and focus
+    follows.
+- **Undo-proof perfect:** a wrong digit, then Undo, then the solve.
+  - The dialog lists 8 unlocks, including On My Own but not Flawless.
+  - `perfectWins` stays 0; displayed mistakes stay 0.
+  - View Achievements lands on the screen with focus on it.
+- **No timer-driven work:** 0 reads and 0 writes of the progress key
+  during 4 s of live clock.
+- **No duplicate award:** a finished game's stale copy, restored and
+  finished again, shows no summary. Wins, unlocks and Statistics are
+  unchanged.
+- **Old save (schema 1):** finishes with 7 unlocks and no perfect or
+  no-hint credit.
+- **Toasts at 10 sizes** (phones 360–390 wide, five landscape phones,
+  two tablets, desktop):
+  - 0 overlaps with any control;
+  - focus unchanged;
+  - a tap at the toast's center hits the page beneath;
+  - hidden while Settings is open, back after;
+  - dismissed by Achievements/Statistics;
+  - none on the next start.
+- **Reduced motion:** no toast or badge animation.
+- **Backup:**
+  - Export (the real download) contains the unlock map;
+  - Clear Data → 0;
+  - Import → the same 9 unlocks with the same dates, and no toast;
+  - a Phase-4 backup → upgraded to schema 2, one toast, 17 unlocks all
+    "from earlier games", and the tracking note shows Sep 1.
+- **Contrast, all 8 theme/mode combinations, gradients included:**
+  - text ≥ 4.75:1 (worst: Woodgrain/light at a gradient stop);
+  - badge glyphs ≥ 5.04:1;
+  - the padlock ≥ 5.70:1.
+  - The dashed ring is the app's standard `--color-border` (1.2–2.3:1),
+    as on every card; it's decorative, and the padlock and "Locked"
+    carry the state.
+- **First install → real outage** (server stopped):
+  - cache v26 has all 50 modules and 0 test files;
+  - Achievements works offline;
+  - an offline win lists its unlocks.
+- **Upgrade with an active save, v25 → v26 and v24 → v26:**
+  - the old page stays consistently old until Refresh;
+  - only the v26 cache remains;
+  - the save is byte-identical apart from `elapsedSeconds` (+1 s, from
+    the old page's unload flush);
+  - Continue restores the 3 placed digits;
+  - from v24, one startup toast credits Phase 4's tracked history;
+  - from v25, no toast and existing dates are kept;
+  - the continued game counts once and unlocks only Back to Back.
+- **Music:** menu → Achievements → menu → Statistics → menu makes zero
+  `play()`/`pause()` calls; game and back still crossfade.
+- No page errors in any scenario.
+
+### Not verified (needs real devices)
+
+- Touch on real phones and tablets.
+- iOS Safari and Android Chrome rendering.
+- The installed PWA offline.
+- Rotating mid-session.
+- Hearing the music.
+- A real screen reader announcing the toast and the dialog's
+  description. The `role="status"` and `aria-describedby` wiring is
+  verified, not the speech.
+- The intro video's actual playback (this environment's Chromium can't
+  decode it).
+
+See MANUAL_QA §9a, §10, §14 and §17.
+
+### Not done / for later
+
+- A won game's unlocks aren't *also* toasted after the dialog closes;
+  the dialog presents them. Easy to add if wanted: the queue already
+  waits for dialogs.
+- The Achievements header's wide "← Menu" button matches Statistics
+  and High Scores (same markup and grid); I left all three consistent
+  rather than restyling them here.
+
+---
+
 ## 2026-10-07 — Hardening Phase 5: 100 Achievements
 
 **Branch:** `claude/nifty-lovelace-9zf07w` (PR

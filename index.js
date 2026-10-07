@@ -21,6 +21,8 @@ import { initHintDialog } from './js/ui/hint-dialog.js';
 import { initCompletionDialog } from './js/ui/completion-dialog.js';
 import { initStatisticsScreen } from './js/ui/statistics-screen.js';
 import { initHighScoresScreen } from './js/ui/high-scores-screen.js';
+import { initAchievementsScreen } from './js/ui/achievements-screen.js';
+import { initAchievementToasts } from './js/ui/achievement-toasts.js';
 import { initAudioBindings } from './js/ui/audio-bindings.js';
 import { initConnectionStatus } from './js/ui/connection-status.js';
 import { initServiceWorker } from './js/sw-register.js';
@@ -28,7 +30,9 @@ import { initServiceWorker } from './js/sw-register.js';
 initTheme();
 initGameSettings();
 initAudioSettings();
-initAchievementProgress();
+// Whatever startup credits (history after an update or import, or a
+// newer catalog) is announced by a toast once the menu is showing.
+const startupUnlocks = initAchievementProgress();
 initGamePersistence();
 initIntroScreen();
 initMenuScreen();
@@ -45,6 +49,8 @@ initHintDialog();
 initCompletionDialog();
 initStatisticsScreen();
 initHighScoresScreen();
+initAchievementsScreen();
+initAchievementToasts(startupUnlocks);
 initAudioBindings();
 initConnectionStatus();
 initServiceWorker();

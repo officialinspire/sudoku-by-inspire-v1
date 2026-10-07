@@ -40,6 +40,7 @@ import { ACHIEVEMENTS } from './achievement-catalog.js';
 const STORAGE_KEY = 'inspireSudoku:v1:achievementProgress';
 
 const sessionRecordedRunIds = new Set();
+const unlockListeners = new Set();
 
 const todayKeyAt = (now) => localDateKey(new Date(now));
 const readHistory = () => ({ statistics: getAllStatistics(), highScores: getAllHighScores() });
@@ -64,15 +65,41 @@ function load(now) {
 }
 
 /**
+ * Subscribes to achievements unlocked by a won game:
+ * `listener(ids, { runId })`, called once the unlock is saved — never
+ * for an unlock that couldn't be stored (it would be gone on the next
+ * load, so announcing it would be a promise the Achievements screen
+ * can't keep). Returns an unsubscribe function.
+ */
+export function onAchievementsUnlocked(listener) {
+  unlockListeners.add(listener);
+  return () => unlockListeners.delete(listener);
+}
+
+function announce(ids, detail) {
+  if (ids.length === 0) return;
+  for (const listener of unlockListeners) {
+    // A display bug must never break the completion flow that called
+    // this: Statistics and High Scores are recorded right after.
+    try {
+      listener(ids, detail);
+    } catch (error) {
+      console.error('Achievement unlock listener failed:', error);
+    }
+  }
+}
+
+/**
  * Called once at startup: writes the seed/upgrade the first time, and
  * unlocks anything already met but not yet recorded (say, an achievement
- * a newer catalog added). Returns the IDs it unlocked.
+ * a newer catalog added). Returns the IDs it unlocked — none if they
+ * couldn't be saved.
  */
 export function initAchievementProgress(now = Date.now()) {
   const loaded = load(now);
   const { progress, newlyUnlocked } = unlockMet(loaded.progress, now, true);
-  if (loaded.needsSave || newlyUnlocked.length > 0) saveJSON(STORAGE_KEY, progress);
-  return [...loaded.newlyUnlocked, ...newlyUnlocked];
+  if (!loaded.needsSave && newlyUnlocked.length === 0) return [];
+  return saveJSON(STORAGE_KEY, progress) ? [...loaded.newlyUnlocked, ...newlyUnlocked] : [];
 }
 
 /**
@@ -95,7 +122,9 @@ export function recordCompletedRun(run, now = Date.now()) {
   sessionRecordedRunIds.add(run.runId);
   if (applied.duplicate) return { duplicate: true, newlyUnlocked: [] };
   const { progress, newlyUnlocked } = unlockMet(applied.progress, now, false);
-  return { duplicate: false, persisted: saveJSON(STORAGE_KEY, progress), newlyUnlocked };
+  const persisted = saveJSON(STORAGE_KEY, progress);
+  if (persisted) announce(newlyUnlocked, { runId: run.runId });
+  return { duplicate: false, persisted, newlyUnlocked };
 }
 
 /**

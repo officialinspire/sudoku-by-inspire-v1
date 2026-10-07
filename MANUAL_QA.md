@@ -29,6 +29,16 @@ to record dated results of an actual QA pass if you want that history.
 - [ ] No flash of unstyled content or wrong theme on load (the inline
       anti-FOUC script in `index.html`'s `<head>` should apply the
       saved — or default Light — theme before first paint).
+- [ ] **Clean install, achievements** (Hardening Phase 6): after Start →
+      intro → menu, the menu shows six buttons (New Game, Continue Game,
+      Statistics, High Scores, Achievements, Settings) and **no**
+      achievement toast — a brand-new player has nothing to credit.
+      Achievements shows "0 of 100 unlocked", every card locked, and a
+      "Tracked on this device since <today>" note.
+- [ ] Win the first game: the Puzzle Solved dialog lists what it
+      unlocked ("N achievements unlocked", First Victory first) with a
+      View Achievements button; the screen then shows those as unlocked,
+      dated today.
 
 ## 2. Touch/Click to Start
 
@@ -311,6 +321,13 @@ least once:
       worker precache may still fetch them in the background). Turn Music
       on in Settings: the current screen's track starts right away.
 
+- [ ] **Achievements is part of the menu family** (Hardening Phase 6):
+      with "Sudoku Zen" playing on the menu, open Achievements, switch
+      a few category tabs, go back, open Statistics, go back — the music
+      never stops, restarts from the beginning, or crossfades. (Verified
+      2026-10-07 in headless Chromium by logging every `play()`/`pause()`:
+      zero calls across those moves. Not yet heard on a real device.)
+
 ## 9a. Mobile & standalone audio (real devices)
 
 Run each check in **four** setups per platform: in the browser and as
@@ -339,13 +356,18 @@ lifecycle tests.
       (start a podcast, then return) — music resumes afterwards or on the
       next tap; it never plays over the other app while the game is in
       the background.
-- [ ] **Rapid switching**: menu ↔ Statistics ↔ High Scores ↔ game
-      several times quickly, and mute/unmute during a crossfade — it
+- [ ] **Rapid switching**: menu ↔ Statistics ↔ High Scores ↔
+      Achievements ↔ game several times quickly, and mute/unmute during a crossfade — it
       always ends on the right track (or silence when muted), never two
       tracks at once for more than the fade.
 - [ ] **Offline** (airplane mode, second launch): both tracks play and
       loop from the cache; seeking/looping doesn't stall (Hardening Phase
       2 serves them as proper byte ranges).
+- [ ] **Lifecycle around the new UI**: win a game (silence under the
+      dialog) → View Achievements → "Sudoku Zen" fades in; lock the
+      screen on the Achievements screen and unlock — same rules as
+      above (silent while locked, resumes after). An achievement toast
+      on the menu never changes what's playing.
 
 **Volume limitations to expect (not bugs):**
 
@@ -405,6 +427,18 @@ offline setup look fine.
       errored) and nothing half-installed is left serving. With an
       older version already installed, that older version keeps
       working untouched. Restore the file.
+- [ ] **Achievements offline** (Hardening Phase 6): with the app
+      installed as above and the network really off, open Achievements
+      (100 cards, filters work) and win a game — the Puzzle Solved
+      dialog still lists its unlocks, and they're on the screen after.
+      Cache Storage includes `js/achievement-view.js`,
+      `js/toast-queue.js`, `js/ui/achievement-badges.js`,
+      `js/ui/achievement-toasts.js` and `js/ui/achievements-screen.js`.
+      (Verified 2026-10-07 in headless Chromium with the server stopped.)
+- [ ] **Installed app (PWA), offline**: repeat the item above in the
+      installed app (Android "Install app", iOS "Add to Home Screen",
+      desktop Chrome/Edge install), launched from its icon with the
+      device offline. Untested on real devices.
 - [ ] Go back online and reload — everything still works, no
       stale-cache weirdness.
 
@@ -538,6 +572,20 @@ it's easy to only half-check.)
 - [ ] Without a version bump, a plain reload does *not* show the update
       banner (nothing actually changed from the service worker's point
       of view).
+- [ ] **Upgrade with an active save, across the achievement releases**
+      (v24 Hardening Phase 4 → v26, and v25 Phase 5 → v26): on the old
+      release, win one game, then start another and place a few digits.
+      Publish v26, reload, tap Refresh. Then:
+  - Continue Game restores the same board (same digits, same run);
+  - from v25: no toast (its unlocks were already recorded) and the
+    Achievements screen shows them with their original dates;
+  - from v24: one toast on the menu credits what Phase 4 had tracked
+    (e.g. First Victory, Flawless), marked "from earlier games";
+  - finishing the continued game counts once, and its dialog lists
+    only what that win newly unlocked (e.g. Back to Back).
+
+  (Both verified 2026-10-07 in headless Chromium with real builds of
+  each release; repeat on a real phone, online, before calling it done.)
 
 ## 15. Data reset
 
@@ -612,11 +660,11 @@ New as of Phase 16g — Settings → "Your data" → Export/Import.
 
 ---
 
-## 16. Achievement progress and unlocks (no UI yet — devtools checks)
+## 16. Achievement progress and unlocks (devtools checks)
 
 Hardening Phases 4–5 track progress and unlock the 100 achievements
-(`js/achievement-catalog.js`) but show nothing yet; check it in
-devtools → Application → Local Storage →
+(`js/achievement-catalog.js`); §17 covers what the player sees. For the
+stored data underneath, check devtools → Application → Local Storage →
 `inspireSudoku:v1:achievementProgress` (a JSON value, `version: 2`).
 Unlocks are in its `unlocked` map: `id → { at, backfilled }`.
 
@@ -661,6 +709,69 @@ Unlocks are in its `unlocked` map: `id → { at, backfilled }`.
       appears under Continue and finishes as a win, but never as perfect
       or no-hint.
 - [ ] Clear Data removes the key; Export includes it; Import restores it.
+
+## 17. Achievements screen, unlock summary, and toasts
+
+Hardening Phase 6. Each item below was checked in headless Chromium on
+2026-10-07 unless it says otherwise (see `DEVELOPMENT_LOG.md`); repeat on
+real devices — especially the touch, screen-reader, and installed-app
+items, which weren't.
+
+- [ ] **Screen**: Menu → Achievements shows "N of 100 unlocked", a
+      progress bar, the tracking note, ten category tabs (All +
+      9 categories, each with its own "n/total"), and one card per
+      achievement: badge, name, exact requirement, then either
+      "✓ Unlocked <date>" (plus "· from earlier games" if it was
+      credited from history) or "Locked" with progress in words
+      ("3 of 10", "Best 4:10 — goal 2:30", "No win yet").
+- [ ] Locked and unlocked never differ by color alone: locked cards have
+      a dashed border, an empty badge ring with a padlock, and the word
+      "Locked".
+- [ ] **All 8 theme/mode combinations** (Settings → Theme pack × Dark/
+      Light): text readable, unlocked badges a solid accent disc, locked
+      ones an outlined ring with a padlock — never a black disc (that
+      would mean a gradient token used as an SVG fill; Woodgrain and
+      Paper are the ones to look at).
+- [ ] **Keyboard**: Tab order is ← Menu → the selected tab → the list;
+      Left/Right/Home/End switch categories and keep the selected tab
+      scrolled into view.
+- [ ] **Phone widths (320–390px) and landscape**: no sideways page
+      scroll; the tab row scrolls sideways on its own and every tab is
+      full height; cards fit the width.
+- [ ] **Landscape menu**: on a phone on its side the menu scrolls, and
+      scrolling all the way up shows the title and the whole New Game
+      button (before this phase both were cut off and unreachable).
+- [ ] **Puzzle Solved summary**: a win that unlocks something lists it
+      (up to five by name, then "…and N more"), with View Achievements;
+      a win that unlocks nothing shows neither. Focus still starts on
+      the share text when the dialog opens; a screen reader announces
+      the unlocks with the dialog's title (they're its description).
+- [ ] **No double award**: finish a game, restore an older copy of it
+      (a backup made mid-game), Continue and finish again — no summary
+      the second time, and the count doesn't move.
+- [ ] **Undo-proof perfect**: enter a wrong digit, Undo it, finish —
+      the dialog lists On My Own (no hints) but not Flawless.
+- [ ] **Toasts** — only for unlocks credited at startup (an update that
+      backfills from Statistics/High Scores, an imported older backup,
+      or achievements added by a newer version). Seed a profile with
+      past wins (e.g. import a backup from before achievements), reload:
+  - one toast ("N achievements unlocked", the first few names, "From
+    games you'd already played") appears on the menu, bottom-center —
+    on a phone on its side, in the empty side gutter instead (a "+N"
+    badge on very small phones);
+  - it never covers a menu button at any scroll position, never takes
+    focus, and taps go through it;
+  - opening Settings hides it and closing Settings brings it back;
+    opening Achievements, Statistics, or a game dismisses it;
+  - reloading again shows no toast (nothing new);
+  - with a screen reader on, it's announced once, politely, without
+    moving focus. (Untested with a real screen reader.)
+- [ ] **Reduced motion** (OS setting, or devtools → Rendering → emulate
+      `prefers-reduced-motion: reduce`): the toast and the dialog's
+      badges appear without sliding or popping.
+- [ ] **Backup/reset**: Export → the file contains the unlocks; Clear
+      Data → Achievements shows 0; Import that file → the same unlocks
+      with the same dates and no toast.
 
 ## Known environment limitations (not bugs)
 

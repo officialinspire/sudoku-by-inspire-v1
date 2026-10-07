@@ -39,7 +39,7 @@
  * Workers -> Unregister, and/or Application -> Storage -> "Clear site
  * data."
  */
-const CACHE_VERSION = 'v25';
+const CACHE_VERSION = 'v26';
 
 // A cache name is shared by everything on an origin — and every GitHub
 // Pages project under one account is the *same* origin — so this app's
@@ -64,6 +64,7 @@ const MODULE_ASSETS = [
   './js/achievement-evaluation.js',
   './js/achievement-progress.js',
   './js/achievement-store.js',
+  './js/achievement-view.js',
   './js/active-game-store.js',
   './js/audio-settings.js',
   './js/audio.js',
@@ -83,6 +84,10 @@ const MODULE_ASSETS = [
   './js/sudoku-generator.js',
   './js/sw-register.js',
   './js/theme.js',
+  './js/toast-queue.js',
+  './js/ui/achievement-badges.js',
+  './js/ui/achievement-toasts.js',
+  './js/ui/achievements-screen.js',
   './js/ui/audio-bindings.js',
   './js/ui/board-render-plan.js',
   './js/ui/board-view.js',

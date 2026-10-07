@@ -1,4 +1,4 @@
-import { describe, test, beforeEach, afterEach } from 'node:test';
+import { describe, test, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   initAchievementProgress,
@@ -7,6 +7,7 @@ import {
   getAchievementProgress,
   getAchievementMetrics,
   clearAchievementProgress,
+  onAchievementsUnlocked,
 } from './achievement-store.js';
 import { recordGameCompleted } from './statistics-store.js';
 import { buildBackup, applyBackup } from './data-backup.js';
@@ -120,6 +121,46 @@ describe('recording completions', () => {
   });
 });
 
+describe('unlock announcements (for the UI)', () => {
+  test('each saved win announces what it unlocked, with its run ID — once', () => {
+    const heard = [];
+    const stop = onAchievementsUnlocked((ids, detail) => heard.push([ids, detail]));
+    const wins = [run({ perfect: true }), run(), run(), run()];
+    const results = wins.map((won) => recordCompletedRun(won, OCT_7_NOON));
+    recordCompletedRun(wins[0], OCT_7_NOON); // a duplicate
+    stop();
+    recordCompletedRun(run(), OCT_7_NOON); // after unsubscribing
+
+    assert.deepEqual(results[1].newlyUnlocked, ['win-streak-2']);
+    assert.deepEqual(results[3].newlyUnlocked, [], 'the 4th win crosses no threshold');
+    assert.deepEqual(heard, [0, 1, 2].map((i) => [results[i].newlyUnlocked, { runId: wins[i].runId }]));
+  });
+
+  test('an unlock that couldn\'t be saved is never announced, and startup reports none', () => {
+    recordGameCompleted('easy', { elapsedSeconds: 100, mistakes: 0, hintsUsed: 0 }); // history to credit
+    const heard = [];
+    const stop = onAchievementsUnlocked((ids) => heard.push(ids));
+    localStorage.setItem = () => { throw new DOMException('full', 'QuotaExceededError'); };
+    assert.deepEqual(initAchievementProgress(OCT_7_NOON), [], 'wins-1 would be credited, but nothing could be stored');
+    const result = recordCompletedRun(run(), OCT_7_NOON);
+    stop();
+    assert.equal(result.persisted, false);
+    assert.deepEqual(heard, []);
+  });
+
+  test('a listener that throws can\'t break recording the win', () => {
+    const consoleError = mock.method(console, 'error', () => {});
+    const stop = onAchievementsUnlocked(() => { throw new Error('UI bug'); });
+    let result;
+    assert.doesNotThrow(() => { result = recordCompletedRun(run(), OCT_7_NOON); });
+    stop();
+    consoleError.mock.restore();
+    assert.equal(result.persisted, true);
+    assert.equal(getAchievementProgress().wins, 1);
+    assert.equal(consoleError.mock.callCount(), 1, 'reported, not swallowed silently');
+  });
+});
+
 describe('backup, import, and Clear Data', () => {
   test('progress is part of a backup and comes back on import', () => {
     recordCompletedRun(run({ score: 777 }), OCT_7_NOON);
@@ -129,6 +170,17 @@ describe('backup, import, and Clear Data', () => {
     assert.equal(getAchievementProgress().earnedScore, 0);
     assert.ok(applyBackup(backup).ok);
     assert.equal(getAchievementProgress().earnedScore, 777);
+  });
+
+  test('unlocks and their dates survive a backup round trip, and the next start re-credits nothing', () => {
+    recordCompletedRun(run({ perfect: true }), OCT_7_NOON);
+    const unlocked = getAchievementProgress().unlocked;
+    const backup = JSON.parse(JSON.stringify(buildBackup())); // as written to and read from a file
+    clearAchievementProgress();
+    assert.deepEqual(getAchievementProgress().unlocked, {});
+    assert.ok(applyBackup(backup).ok);
+    assert.deepEqual(initAchievementProgress(OCT_7_NOON + DAY), [], 'the reload after Import');
+    assert.deepEqual(getAchievementProgress().unlocked, unlocked);
   });
 
   test('Clear Data removes progress (and the next start rebuilds from the cleared statistics)', () => {
