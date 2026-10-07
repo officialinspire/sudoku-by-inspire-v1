@@ -34,8 +34,14 @@ keeps working with the network off.
   the completion dialog surfaces a "New High Score" banner when a run
   places, the leaderboard gives its top 3 a medal treatment, and either
   can be reset per-difficulty independently of the global data reset.
+- 100 achievements — wins, each difficulty, perfect and hint-free
+  games, speed, score, winning and daily streaks, and playstyle — on
+  their own screen with category filters, progress, and unlock dates.
+  A win's unlocks are listed in the completion dialog; anything credited
+  from earlier play shows as one toast on the menu. Undo can't fake a
+  perfect game, and the same game never counts twice.
 - Export/import a local backup file covering every setting, statistic,
-  high score, and saved game — no account, no cloud, just a JSON file
+  high score, achievement, and saved game — no account, no cloud, just a JSON file
   you keep (see [Local-Data Behavior](#local-data-behavior)).
 - Background music and short synthesized UI sound effects, each
   independently mutable, plus an optional vibration toggle.
@@ -102,7 +108,9 @@ in this repo, and must never be fabricated or overwritten by anyone
 editing this codebase (see `CLAUDE.md`'s asset policy):
 
 - `./inspiresoftwareintro.mp4` — the intro video played after the start
-  screen (currently silent — no audio track).
+  screen (1080×720 H.264 with its own AAC soundtrack; plays unmuted
+  because it starts inside the Start tap's user gesture). It's
+  `preload="none"`, so none of it downloads until that tap.
 - `./logo.png` — displayed on the Start screen and in the main-menu
   footer.
 - `./Sudoku Zen.mp3` — background music that fades in on the main menu
@@ -120,6 +128,15 @@ Either music file's absence never causes an error, a broken install, or
 blocked service worker installation (see `sw.js`'s optional-asset
 precaching).
 
+Music on phones has platform limits worth knowing (details and
+real-device checks in `MANUAL_QA.md` §9a): **iOS/iPadOS ignore a web
+page's volume setting**, so there the Music slider is effectively
+off/on and tracks switch with a hard cut instead of a crossfade; iOS's
+silent switch mutes sound effects but not necessarily music; and on
+every platform music pauses whenever the app is hidden (tab switch,
+screen lock, home screen) and resumes when it's visible again — or on
+the next tap if the browser insists on one.
+
 PWA icons (192×192, 512×512, and a maskable 512×512) live in `icons/` —
 generated from `logo.png` rather than a separately-supplied source image
 (a 3×3 Sudoku-grid mark in the app's own `theme_color` blue, with the
@@ -136,11 +153,41 @@ dependency to install:
 npm test
 ```
 
-This runs every `*.test.js` file under `js/` (205 tests across 63
+This runs every `*.test.js` file in the repo (417 tests across 124
 suites as of this writing, covering the Sudoku engine, puzzle generator,
-game state, scoring, and every persisted store) in a few seconds. See
+game state, scoring, every persisted store, achievement tracking
+(run IDs, undo-proof run counters, progress, dates and streaks, and
+exactly-once completion through autosave/Continue), the 100-achievement
+catalog (every threshold, reachability, unlock-once, honest backfill
+of existing history), the achievement screen's wording, toast
+queueing and badge artwork, the board's render
+decisions, background music's lifecycle (`js/music-player.test.js`,
+with fake audio elements and a fake clock), the service worker and its
+update flow, and the asset validator below) in a few seconds. `sw.test.js` runs the real `sw.js`
+against a fake Cache Storage and network, so install, update, offline,
+and byte-range behavior are all checked without a browser. See
 `DEVELOPMENT_LOG.md`'s Phase 12 entry for what's covered here versus
 what belongs in manual browser QA instead.
+
+### Asset and import validation
+
+```bash
+npm run validate:assets
+```
+
+A dependency-free static check (`scripts/validate-assets.js`) that
+starts from `index.html` and follows every reference the app makes —
+HTML `src`/`href`, CSS `url()`, the whole ES-module import graph, asset
+paths in JS (`'./Sudoku Zen.mp3'`), the service worker's precache lists,
+the manifest, and the social-share image. It fails (exit code 1) on a
+missing file, a **case mismatch** (works on macOS/Windows, 404s on
+GitHub Pages), a root-absolute `/path`, a bare or remote import, a file
+whose bytes don't match its extension's MIME type, or declared
+dimensions/types (`width`/`height`, manifest icon `sizes`,
+`og:image:*`) that don't match the real file. It also prints what
+downloads before the Start tap versus what the service worker
+precaches afterward. `npm test` runs it against the repo too, so a
+broken reference fails the test suite.
 
 For everything a unit test can't reach — real video/audio playback, the
 real service-worker lifecycle, real viewport rendering, real
@@ -151,23 +198,27 @@ checklist covering fresh install through data reset.
 
 Quick check that offline support is actually working:
 
-1. Load the app once with the network on (so the service worker
-   installs — confirm in devtools → Application → Service Workers that
-   it shows "activated and is running").
-2. Click through to the main menu at least once, so the rest of the JS
-   module graph gets runtime-cached (see `sw.js`'s comment on why only a
-   minimal shell is precached at install time).
-3. Set devtools → Network → "Offline" (or actually disconnect), then
-   reload. The app should load and be fully playable.
-4. To confirm installability: look for the browser's install/"Add to
+1. Load the app once with the network on, and wait for devtools →
+   Application → Service Workers to show "activated and is running".
+   No clicking around is needed: the install precaches the shell *and
+   every JS module the app imports*, so nothing depends on screens
+   having been visited first.
+2. Disconnect for real (turn off Wi-Fi, or stop your local server),
+   then reload. The app should load and be fully playable, music and
+   intro included. Devtools' Network → "Offline" checkbox is fine for
+   a quick look, but it isn't a true outage for the service worker
+   itself, so confirm at least once with a real disconnect.
+3. To confirm installability: look for the browser's install/"Add to
    Home Screen" prompt, or check devtools → Application → Manifest
    shows no errors.
 
-See `MANUAL_QA.md` §10 for the full offline-reload checklist.
+See `MANUAL_QA.md` §10 (offline, media seeking, missing media) and §14
+(updates) for the full checklists.
 
 ## Local-Data Behavior
 
-Everything — saved games, statistics, high scores, and every setting —
+Everything — saved games, statistics, high scores, achievement
+progress, and every setting —
 is stored **only** in this browser's `localStorage`, under versioned
 keys prefixed `inspireSudoku:v1:`. There is no account, no server, and
 no data ever leaves the device. Clearing the browser's site data for
@@ -185,22 +236,32 @@ an account or a server to do it.
 
 ## Cache Reset and Update Instructions
 
-The service worker (`sw.js`) uses one explicitly-versioned cache name
-(see the `CACHE_NAME` constant near the top of that file for the current
-version — deliberately not restated here as a specific number, since
-that would just go stale the next time it's bumped). Nothing about cache
-invalidation is automatic — this is deliberate, documented in `sw.js`'s
-own header comment:
+The service worker (`sw.js`) stores each release in one versioned
+cache, named after this app's own URL path (for example
+`inspire-sudoku:/sudoku-by-inspire-v1/:v22`). Every GitHub Pages project
+under one account shares a single origin, and with it one set of
+caches, so the path in the name keeps this app from touching anyone
+else's. The current version is the `CACHE_VERSION` constant near the
+top of `sw.js` (not restated here, since that would go stale). Nothing
+about cache invalidation is automatic, by design; `sw.js`'s header
+comment documents it:
 
 - **To ship an update that existing visitors actually pick up**: bump
-  the `CACHE_NAME` version suffix in `sw.js` (`...-v1` → `...-v2`) any
-  time a core app-shell file changes. On their next visit, the browser
-  detects the byte-different `sw.js`, installs the new version
-  alongside the old one, and once it activates, an in-page "An updated
-  version is available" banner appears with a Refresh button. The
-  `activate` handler deletes every cache that isn't the current
-  `CACHE_NAME` automatically — bumping the version is the entire update
-  mechanism, no separate cleanup step needed.
+  `CACHE_VERSION` in `sw.js` (`v22` → `v23`) whenever any file it
+  precaches changes. On their next visit the browser notices the
+  changed `sw.js` and installs the new release in the background,
+  while the page keeps running the old one, consistently: HTML and
+  modules always come from the same release. The new version then
+  *waits*, and the "An updated version is available" banner appears.
+  Tapping Refresh activates it and reloads once. Any in-progress game
+  is autosaved on that reload and comes back through Continue Game. If
+  the player ignores the banner, the new release takes over the next
+  time every tab of the app has been closed. Activation deletes this
+  app's older caches, and only this app's.
+- **Adding a JS module**: also add it to `MODULE_ASSETS` in `sw.js`.
+  `npm run validate:assets` and `npm test` both fail until you do,
+  because a missing entry would only break an offline launch right
+  after a first install.
 - **To force a hard reset during development** (stale cache fighting
   your changes): devtools → Application → Service Workers →
   Unregister, and/or Application → Storage → "Clear site data." Chrome's
@@ -373,7 +434,8 @@ For discoverability on GitHub (Settings → General → Topics):
 - **I changed a file and the browser won't show my update**: the
   service worker is serving its cached copy. See [Cache reset and
   update instructions](#cache-reset-and-update-instructions) — either
-  bump `CACHE_NAME` or hard-reset via devtools during development.
+  bump `CACHE_VERSION` (then tap the update banner's Refresh) or
+  hard-reset via devtools during development.
 - **The app looks broken at `inspireclothing.art/sudoku-by-inspire-v1`
   or any subpath**: every asset reference in this repo is a relative
   path specifically so this doesn't happen (see `TASKS.md`'s Phase 13

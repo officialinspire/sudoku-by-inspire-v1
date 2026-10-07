@@ -1,6 +1,7 @@
 import { getState, onStateChange, selectCell, getPeerIndices } from '../game-state.js';
 import { getGameSettings, onGameSettingsChange } from '../game-settings.js';
 import { getCellAriaLabel } from './cell-aria.js';
+import { isTimerOnlyChange, shouldFocusSelectedCell } from './board-render-plan.js';
 
 const boardEl = document.getElementById('board');
 const timerEl = document.getElementById('game-timer');
@@ -25,6 +26,18 @@ const cells = [];
 // read as a broken flash rather than the intended one-cell feedback.
 let lastPuzzleRef = null;
 let suppressEntryFeedback = true;
+
+// The snapshot the board was last fully painted from — what the next
+// render diffs against to tell a once-a-second timer tick (repaint the
+// clock only) from a real change (repaint the board).
+let lastRenderedState = null;
+
+// Assigning textContent replaces the element's text node even when the
+// new string is identical, so unguarded writes would churn every one of
+// the 729 note spans on every full render (e.g. each selection move).
+function setTextIfChanged(el, text) {
+  if (el.textContent !== text) el.textContent = text;
+}
 
 // Restarts a CSS animation from its beginning even if the element
 // already has the class (and therefore may already be mid-animation) —
@@ -95,7 +108,20 @@ function formatTime(totalSeconds) {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-function render(state) {
+function renderTimer(state) {
+  if (timerEl) timerEl.textContent = formatTime(state.elapsedSeconds);
+}
+
+// `force` is for inputs that live outside the game-state snapshot (the
+// immediate-error-checking setting), which isTimerOnlyChange can't see.
+function render(state, { force = false } = {}) {
+  if (!force && isTimerOnlyChange(lastRenderedState, state)) {
+    renderTimer(state);
+    return;
+  }
+  const previousState = lastRenderedState;
+  lastRenderedState = state;
+
   const hasGame = state.puzzle !== null;
   const { immediateErrorChecking } = getGameSettings();
   boardEl.classList.toggle('is-empty', !hasGame);
@@ -162,11 +188,11 @@ function render(state) {
     // is exactly what "derive from state" is meant to rule out).
     const notesBitmask = hasGame ? state.notes[index] : 0;
     for (let d = 1; d <= 9; d++) {
-      noteDigits[d - 1].textContent = notesBitmask & (1 << (d - 1)) ? String(d) : '';
+      setTextIfChanged(noteDigits[d - 1], notesBitmask & (1 << (d - 1)) ? String(d) : '');
     }
 
     if (value !== 0) {
-      valueEl.textContent = String(value);
+      setTextIfChanged(valueEl, String(value));
       valueEl.classList.toggle('is-error', isError);
       valueEl.hidden = false;
       notesEl.hidden = true;
@@ -175,7 +201,7 @@ function render(state) {
         retriggerAnimation(valueEl, 'is-value-enter');
       }
     } else {
-      valueEl.textContent = '';
+      setTextIfChanged(valueEl, '');
       valueEl.hidden = true;
       notesEl.hidden = notesBitmask === 0;
     }
@@ -184,7 +210,10 @@ function render(state) {
       retriggerAnimation(el, 'is-shake');
     }
 
-    el.setAttribute('aria-label', getCellAriaLabel(index, ariaState));
+    // Same reasoning as setTextIfChanged: setAttribute always counts as
+    // a change, even to an identical value.
+    const ariaLabel = getCellAriaLabel(index, ariaState);
+    if (el.getAttribute('aria-label') !== ariaLabel) el.setAttribute('aria-label', ariaLabel);
   }
 
   suppressEntryFeedback = false;
@@ -208,22 +237,12 @@ function render(state) {
     btn.disabled = isComplete;
   }
 
-  // Keep DOM focus following the selected cell (arrow-key navigation
-  // moves selection; this is what makes the browser's focus ring move
-  // with it). A no-op when the selected cell already has focus, which
-  // covers the common case of a render triggered by something other
-  // than a selection change (e.g. placing a digit).
-  if (hasGame && state.selectedIndex !== null) {
-    const selectedEl = cells[state.selectedIndex].el;
-    if (document.activeElement !== selectedEl) selectedEl.focus();
-  }
-
   if (difficultyEl) {
     difficultyEl.textContent = state.difficulty
       ? state.difficulty.charAt(0).toUpperCase() + state.difficulty.slice(1)
       : '—';
   }
-  if (timerEl) timerEl.textContent = formatTime(state.elapsedSeconds);
+  renderTimer(state);
   if (mistakesEl) mistakesEl.textContent = String(state.mistakes);
   if (hintsEl) hintsEl.textContent = String(state.hintsUsed);
 
@@ -253,6 +272,22 @@ function render(state) {
     hintBtn.disabled = !canHint;
   }
 
+  // Keep DOM focus following the selected cell (arrow-key navigation
+  // moves selection; this is what makes the browser's focus ring move
+  // with it) — but only when the selection actually moved, play just
+  // resumed, or focus was stranded. This used to run on every render,
+  // so each timer tick yanked focus off whatever the player had tabbed
+  // to (a toolbar button, the Settings gear after its dialog closed)
+  // within a second. Placed after the number-pad/Undo/Hint `disabled`
+  // updates above so "stranded" sees a control this render just
+  // disabled — focus can't usefully stay on one.
+  const activeEl = document.activeElement;
+  const focusIsStranded = !activeEl || activeEl === document.body || activeEl.disabled === true;
+  if (shouldFocusSelectedCell(previousState, state, focusIsStranded)) {
+    const selectedEl = cells[state.selectedIndex].el;
+    if (activeEl !== selectedEl) selectedEl.focus();
+  }
+
   if (pauseOverlay) {
     const shouldShow = state.status === 'paused';
     const wasHidden = pauseOverlay.hidden;
@@ -270,6 +305,6 @@ function render(state) {
 export function initBoardView() {
   buildBoard();
   onStateChange(render);
-  onGameSettingsChange(() => render(getState()));
+  onGameSettingsChange(() => render(getState(), { force: true }));
   render(getState());
 }

@@ -4,6 +4,7 @@
   "type": "module",
   "description": "A polished, offline-first Sudoku web app by INSPIRE.",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "validate:assets": "node scripts/validate-assets.js"
   }
 }

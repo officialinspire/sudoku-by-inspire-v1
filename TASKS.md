@@ -1760,6 +1760,364 @@ entry):
       high-score rank banner/medals, per-difficulty reset,
       export/import) to the feature highlights.
 
+## Hardening Phase 1 — Asset/Loading Hardening ✅ (2026-10-07)
+
+First phase of a post-v1 hardening pass. Named "Hardening Phase 1"
+rather than "Phase 1" so it can't be confused with the original App
+Shell phase above. Full reasoning, alternatives, and verification
+numbers are in `DEVELOPMENT_LOG.md`'s entry for this date.
+
+- [x] **Audit** of every HTML/CSS/module/media/manifest reference for
+      missing files, case mismatches, MIME mismatches, and startup
+      downloads. No missing or case-mismatched files, and every binary's
+      bytes match its extension. Real findings: (1) the intro video was
+      fetched at page load, before the Start tap; (2) no `<img>`/`<video>`
+      had intrinsic dimensions; (3) a stalled intro download stranded the
+      player on a black screen; (4) the service worker broke uncached
+      media range requests; (5) stale docs claimed the intro video is
+      silent/muted.
+- [x] **`npm run validate:assets`** (`scripts/validate-assets.js`) —
+      dependency-free; exact-case path resolution, root-absolute/bare/
+      remote import detection, magic-byte MIME check, PNG/JPEG/MP4
+      dimension check against `width`/`height`/manifest `sizes`/
+      `og:image:*`, plus a startup-vs-precache download summary.
+      `scripts/validate-assets.test.js` runs it against the repo and
+      against a deliberately broken fixture (10 tests).
+- [x] **Image/video dimensions:** `width="600" height="181"` on both
+      `logo.png` images and `width="1080" height="720"` on the intro
+      video, with `height: auto` (and a ratio-aware `max-width` on the
+      video) so they act as aspect ratios. Measured pixel-identical to
+      the old layout at 5 viewports, now reserved before the file loads.
+- [x] **`preload="none"` on the intro video** — zero video bytes before
+      the Start tap (was 1 request at page load).
+- [x] **Intro stall watchdog** (`js/ui/intro-video.js`): if the intro
+      hasn't started, or freezes waiting on data, for 4 s, it moves on to
+      the menu itself. `finishIntro()` is now once-only, so racing
+      exits (error + rejected play()) can't double-transition.
+- [x] **Service worker:** only cache complete `200` responses, and never
+      let a failed cache write fail the response — a `206 Partial
+      Content` media response used to make `cache.put()` throw and the
+      request fail. `CACHE_NAME` → `v21`.
+- [x] **Board render (`js/ui/board-view.js` + new pure
+      `js/ui/board-render-plan.js`):** timer-only ticks repaint just the
+      clock (0 board DOM mutations per tick, was ~243); no-op
+      text/aria-label writes skipped on full renders. Focus follows the
+      selected cell only when the selection moves, play resumes, or
+      focus is stranded (on the page body, or on a control the render
+      just disabled — e.g. Hint after use) — a tick, a number-pad press,
+      or a dialog closing no longer yanks focus to the board. 10 new
+      tests, including a check against the real game-state module.
+- [x] README (Tests + new validation section, corrected intro-video
+      description), MANUAL_QA (slow-connection, iOS second-visit, and
+      focus-stability checks; corrected "muted"), CLAUDE.md file map.
+- [ ] **Device checks still needed** (can't be done in the sandbox):
+      real intro playback on desktop + mobile; Slow-3G Start→Intro→Menu;
+      iOS Safari second-visit media from the service-worker cache; focus
+      stability with a real screen reader. See MANUAL_QA §3 and §5.
+
+## Hardening Phase 2 — Service Worker Hardening ✅ (2026-10-07)
+
+Builds on Hardening Phase 1. Full reasoning, alternatives, repro
+numbers, and the mutation-testing table are in `DEVELOPMENT_LOG.md`'s
+entry for this date.
+
+- [x] **Reproduced first** (headless Chromium, with a real outage —
+      the server stopped — on the Phase-1 worker): first install
+      cached 0 of 38 modules, so an offline reload never reached the
+      menu; the first load after a deploy ran new HTML with old
+      modules; a deploy deleted another same-origin project's cache; a
+      cached MP3 answered a Range request with a full `200`.
+- [x] **Whole runtime module graph precached** in one atomic
+      `cache.addAll()` (`SHELL_ASSETS` + `MODULE_ASSETS`, 39 JS files,
+      no tests), fetched with `cache: 'reload'` so the HTTP cache can't
+      slip stale files into a new version. `npm run validate:assets`
+      now fails if `MODULE_ASSETS` drifts from the real import graph or
+      lists a test file.
+- [x] **Optional media cached independently** (`OPTIONAL_ASSETS`):
+      each download succeeds or fails on its own, under one shared
+      60-second budget, so a stalled connection can't hang or fail the
+      install. Encoded music URLs (`Sudoku%20Zen.mp3`) unchanged.
+- [x] **Byte ranges from the cache:** `206` with correct
+      `Content-Range`/`Content-Length`/`Content-Type`/`Accept-Ranges`,
+      `416` with `Content-Range: bytes */size` past the end, full `200`
+      for malformed or multi-range headers. A network `206` is passed
+      through and never stored.
+- [x] **Scope-restricted:** only GET requests under this app's own
+      scope are intercepted. Cache names carry the scope path
+      (`inspire-sudoku:/<path>/:v22`); activation deletes only this
+      app's older caches and the legacy `inspire-sudoku-shell-vN` ones.
+- [x] **No mixed-version pages:** index.html is served from the same
+      cache as its modules. Updates install and *wait*; the banner's
+      Refresh sends `SKIP_WAITING`, and the page reloads once on
+      `controllerchange` (autosave flushes on that reload). One-time
+      compatibility: replacing a v20/v21 worker takes over immediately
+      so that old page's own Refresh button still works.
+- [x] `js/sw-register.js`: update flow split into a DOM-free
+      `createUpdateFlow()`; also announces an update that was already
+      waiting or installing when the page registered.
+- [x] `CACHE_VERSION` → `v22`.
+- [x] Tests: `sw.test.js` (18, runs the real `sw.js` against fake Cache
+      Storage + network), `js/sw-register.test.js` (5), +1 validator
+      test. 14 deliberate `sw.js` regressions and 4 `sw-register.js`
+      regressions all fail the suite. `npm test`: 249/249.
+- [x] Real-browser verification (Chromium, real outages): first
+      install → offline new game; offline 206/416 and a real audio seek
+      to 1:30; upgrade A→B with no mixed page and the save intact;
+      legacy v21→v22; missing MP3; missing required module.
+- [x] Docs: README (offline verification, cache/update instructions),
+      MANUAL_QA §10 (first install → offline, media seeking, missing
+      media, real-outage note) and §14 (upgrade, two tabs, legacy),
+      icons/README list name.
+- [ ] **Device checks still needed:** iOS Safari offline media from
+      the cache (second launch); a real GitHub Pages deploy of a bumped
+      version (banner → Refresh → save intact); installed-PWA (home
+      screen) update behavior on Android and iOS.
+
+## Hardening Phase 3 — Music Playback Hardening ✅ (2026-10-07)
+
+Builds on Hardening Phases 1–2. Full reasoning, the measured before/after
+behavior, and the mutation table are in `DEVELOPMENT_LOG.md`'s entry
+for this date.
+
+- [x] **Measured the old behavior first** (Chromium, Chrome's real
+      autoplay policy): the Start-tap unlock's `play()` immediately
+      `pause()`d always rejected or resolved unobserved; it ran even with
+      Music off; with Music off the page still downloaded both MP3s; and
+      with no user activation the 2-second recovery poll retried the
+      menu track forever (7 refused attempts in 10 s).
+- [x] **New `js/music-player.js`** — a DOM-free state machine (`idle` /
+      `starting` / `playing` / `blocked` / `retrying` / `failed`) for the
+      two HTMLAudio tracks. One rule, `shouldPlay()`, gates all sound:
+      target track + page active + music on with volume > 0. Every input
+      ends in one `reconcile()`.
+- [x] **Explicit outcomes instead of swallowed errors:** a refused
+      `play()` (`NotAllowedError`) → `blocked`, retried only inside the
+      next tap; a missing file → unavailable for the session; network
+      errors, stalls (8 s watchdog) and outside pauses → **bounded**
+      retries (0.5 s / 2 s / 6 s), refilled only by a fresh start (tap,
+      page visible again, music switched on, new screen). The endless
+      poll is gone.
+- [x] **Unlock respects Music off**: no `play()` — and no preload — while
+      music is off; the unlock is muted (iOS ignores `volume`), and
+      switching music on in Settings unlocks then.
+- [x] **Lifecycle:** visibilitychange, pagehide/pageshow (bfcache), and
+      screen lock pause at once and never restart while hidden, muted,
+      in Start/Intro, or after completion (`musicTrackFor()` now maps a
+      completed game to silence). Fade frames and pause timers are
+      cancellable, one per track; stale `play()` results and stale
+      `pause` events are ignored.
+- [x] **SFX/music independence:** music starts first; a missing or
+      throwing `AudioContext` (lookup included) only costs the SFX.
+      AudioContext `interrupted` (iOS) now resumes like `suspended`.
+- [x] **iOS volume:** detected (volume reads back 1); tracks hard-cut
+      instead of crossfading at full volume; Music volume 0 = off.
+- [x] Fixed two bugs the first real-browser run exposed: an idle track
+      sat at volume 1 (a full-volume blip at its first frame), and the
+      unlock's queued `pause` event could be misread as an interruption.
+- [x] Tests: `js/music-player.test.js` (28, fake Audio + fake clock) and
+      `js/audio.test.js` (9, the real wiring with a fake DOM and a
+      throwing AudioContext). 17 of 18 deliberate regressions fail the
+      suite (the 18th, initialization order, is defense in depth that
+      can't be observed while SFX creation can't throw). `npm test`:
+      286/286. `sw.js`: `music-player.js` precached, `CACHE_VERSION` →
+      `v23`.
+- [x] Docs: MANUAL_QA §9 updates + new §9a (Android/iOS × browser/
+      installed × online/offline checks; volume limitations), README.
+- [ ] **Device checks still needed (none done):** everything in
+      MANUAL_QA §9a on a real Android phone and a real iPhone/iPad —
+      especially whether the muted Start-tap unlock satisfies WebKit, so
+      menu music starts after the intro without a second tap.
+
+## Hardening Phase 4 — Achievement Infrastructure ✅ (2026-10-07)
+
+Infrastructure only: tracking, storage, and evaluation. The achievement
+catalog and its UI come in a later phase. Full reasoning, the
+measurements, and the mutation table are in `DEVELOPMENT_LOG.md`'s entry
+for this date.
+
+- [x] **Reproduced first:** undo restores the displayed mistake/hint
+      counts, so a run with an undone mistake is recorded as 0 mistakes
+      (it would look "perfect"); and the same run, restored from a copy
+      of its save and finished again, counted twice in Statistics and
+      High Scores.
+- [x] **Run identity** (`js/run-tracking.js`): every new game gets a
+      random run ID (works without `crypto.randomUUID`, e.g. over plain
+      http). The ID is kept through autosave, reload, and Continue.
+- [x] **Monotonic per-run counters** — mistakes, hints, undos, note
+      toggles — that undo never erases. Displayed counts and scoring
+      are unchanged.
+- [x] **Save schema 2** (`js/active-game-store.js`): carries the run ID
+      and counters. Schema-1 saves still load, upgraded conservatively:
+      a deterministic legacy ID (stable across loads), the displayed
+      counts as a floor, and never eligible for perfect/no-hint.
+- [x] **Progress** (`js/achievement-progress.js`, pure):
+      - lifetime and per-difficulty wins, earned score, completed-run
+        time, perfect and no-hint wins;
+      - consecutive wins: abandoning a game breaks this streak;
+      - distinct winning days and daily streaks, on local calendar
+        dates. Several wins in one day count once, and a missed day
+        breaks the daily streak (abandoning doesn't). If the clock goes
+        backwards, nothing is counted.
+- [x] **Bounded dedup:** the last 50 completed run IDs are stored, plus
+      an in-session set when storage is unavailable.
+- [x] **Existing players:** progress is seeded at first start from
+      Statistics, using only its exact totals (wins and completed time).
+      Nothing perfect is invented from history.
+- [x] **Evaluation** (`js/achievement-evaluation.js`): named metrics and
+      a generic `evaluateAchievements(definitions, metrics)` for the
+      future catalog.
+- [x] **Store** (`js/achievement-store.js`): versioned, validated
+      (including invariants), and on `storage.js`. Corrupt or unavailable
+      storage never throws.
+- [x] **Exactly once** (`js/game-persistence.js`): progress is recorded
+      first, with the existing `calculateScore`. A duplicate run updates
+      nothing — not progress, Statistics, or High Scores.
+- [x] **Wiring:**
+      - New Game over an unfinished game ends the win streak.
+      - Clear Data clears progress, and the dialog text says so.
+      - Export/Import include progress.
+      - `index.js` seeds progress at startup.
+      - `sw.js` precaches the 4 new modules; `CACHE_VERSION` → `v24`.
+- [x] Tests: 64 new (run tracking 11, progress 19, evaluation 6, store
+      12, game-persistence 5, game-state +7, save schema +4)
+      — `npm test` 350/350, also passing under TZ=UTC, UTC+14, UTC−11
+      and New York. 20 of 20 deliberate regressions fail the suite.
+- [x] Real browser (headless Chromium): startup backfill, a game solved
+      through the UI (earned score = the dialog's score, perfect +1,
+      local date), reload, and a schema-1 save finished without
+      perfect/no-hint credit.
+- [x] Docs: MANUAL_QA §15/§15b updated and new §16 (devtools checks
+      while there's no UI), README.
+- [x] **Later:** the achievement catalog (definitions targeting the
+      metrics) — done in Hardening Phase 5 below. Its UI is still open
+      (tracked there).
+
+## Hardening Phase 5 — Achievement Catalog: 100 Achievements ✅ (2026-10-07)
+
+Exactly 100 deterministic gameplay achievements on top of Phase 4's
+store and evaluator. Still no UI. Full reasoning, the target
+derivations, and the mutation table are in `DEVELOPMENT_LOG.md`'s entry
+for this date.
+
+- [x] **Catalog** (`js/achievement-catalog.js`, frozen data):
+      15 lifetime wins + 20 difficulty wins (5 × 4) + 10 perfect +
+      10 no-hint + 10 speed + 10 score + 10 consecutive-win + 10
+      daily-streak + 5 playstyle = **100**. Each has a stable semantic
+      ID, a name, an exact requirement with its number, a category, a
+      metric, a target, and a comparison.
+- [x] **Speed/score targets derived from `js/scoring.js`:**
+      - speed: par, half par, and a third of par at both ends of the
+        difficulty range;
+      - score: what a flawless win at par, or at half par, scores at
+        each difficulty's multiplier;
+      - lifetime points: 10× and 100× a flawless Easy-at-par game;
+      - all proven attainable on *every* puzzle of the difficulty: no
+        time below 2× the emptiest puzzle's fill floor (1 s per empty
+        cell), no score above the flawless score at that floor.
+- [x] **Perfect** = zero mistakes AND zero hints on the monotonic
+      counters, so undo can't erase either.
+- [x] **Playstyle** (completed runs only): 25+ notes; an Advanced/Insane
+      win with no notes; an Advanced/Insane win with no Undo; a win on
+      all 4 difficulties; a win despite 3+ mistakes. "Never used X"
+      claims need complete counters; "at least N" ones accept a floor.
+- [x] **Progress schema 2** (`js/achievement-progress.js`): adds per-
+      difficulty fastest time and best score, playstyle counts, and the
+      `unlocked` map (`id → { at, backfilled }`). Phase-4 (schema 1)
+      progress is upgraded on load, keeping its tracked counts.
+- [x] **Evaluated only on events:** startup (seed/upgrade/backfill) and
+      a recorded completion. Never on timer ticks, abandon, or reads.
+      Each achievement is unlocked once, in the same write as the
+      progress that earned it, and never re-dated or revoked.
+- [x] **Honest backfill:** credits only what Statistics and High Scores
+      prove (wins per difficulty, fastest time, best score, difficulties
+      won), marked `backfilled`. Perfect, no-hint, streaks, days,
+      lifetime points, and other playstyle goals start from zero.
+- [x] `sw.js` precaches the catalog; `CACHE_VERSION` → `v25`.
+- [x] Tests: 29 new — catalog 11 (count/allocation, golden IDs,
+      uniqueness, well-formedness, stated numbers, derived targets,
+      reachability bounds, every threshold boundary), unlocks 12
+      (a 1,000-win career unlocking all 100 exactly once, repeat events,
+      newer/retired catalog entries, honest backfill, schema-1 upgrade),
+      game-persistence +5 (a minute of timer ticks never touches
+      progress; perfect/no-hint through real undo; playstyle needs a
+      win), progress +1 (`withUnlocks`). `npm test` 379/379, also under
+      TZ=UTC, UTC+14, UTC−11, New York and London. 10 of 10 deliberate
+      regressions fail the suite.
+- [x] Real browser (headless Chromium): startup backfill from
+      Statistics, a game solved through the UI (0 progress writes during
+      5 s of live timer, 1 at completion), all 100 listed, the catalog
+      precached by the service worker.
+- [x] Docs: MANUAL_QA §16 (unlock checks), README test count.
+- [x] **Later:** the achievements UI — done in Hardening Phase 6 below.
+
+## Hardening Phase 6 — Achievements UI + Final Focused QA ✅ (2026-10-07)
+
+The Achievements screen, a won game's unlocks in the Puzzle Solved
+dialog, and queued toasts — then a focused QA pass across the hardening
+phases. Full reasoning and every measurement are in
+`DEVELOPMENT_LOG.md`'s entry for this date.
+
+- [x] **Screen** (`js/ui/achievements-screen.js`, menu → Achievements,
+      wired through `screens.js`, `index.js`, `menu.js`):
+      - "N of 100 unlocked" and a progress bar;
+      - All + 9 category tabs (the shared accessible tab control,
+        `difficulty-filter.js`, now keyed by any data attribute);
+      - per card: an inline-SVG badge, name, exact requirement, then
+        "✓ Unlocked <date>" (noting "from earlier games") or "Locked"
+        with progress in words;
+      - a "tracked since" note explaining what was backfilled.
+- [x] **Badges** (`js/ui/achievement-badges.js`): one glyph per category,
+      no files, every color from theme tokens; locked = dashed ring +
+      padlock + the word "Locked", never color alone.
+- [x] **Puzzle Solved dialog:** one batched summary of what the win
+      unlocked (5 by name, then "…and N more"), View Achievements, and
+      the summary as the dialog's accessible description. Focus still
+      starts where it did.
+- [x] **Toasts** (`js/toast-queue.js`, `js/ui/achievement-toasts.js`):
+      one at a time, batched, a polite live region, never focusable,
+      click-through. They only show on the main menu with no dialog
+      open, so a toast is never over a puzzle, a dialog or a control.
+      In practice that means unlocks credited at startup.
+- [x] **Store:** `onAchievementsUnlocked` (announced only once saved,
+      and a throwing listener can't break the win); startup reports
+      nothing it couldn't save.
+- [x] **Music:** Achievements shares the menu track (`audio.js`).
+- [x] **Reduced motion:** the toast entrance and badge pop only run
+      under `prefers-reduced-motion: no-preference`.
+- [x] `sw.js` precaches the 5 new modules; `CACHE_VERSION` → `v26`.
+- [x] **Fixed, found by this phase's QA:**
+      - **the landscape menu's title (and, with a 6th button, the top
+        of New Game) was unreachable.** Center-justified overflow can't
+        be scrolled to; it now uses auto margins;
+      - **the category tab strip collapsed to a sliver on phones.** A
+        scroll container has no minimum height in a flex column;
+      - **locked badges would paint black in Woodgrain and Paper.** I
+        had used gradient tokens as SVG paint.
+- [x] Tests: 38 new (view 16, toast queue 9, badges 6, store +4,
+      game-persistence +2, audio +1) — `npm test`
+      417/417 (also under UTC, UTC+14, New York); 17 of 17 deliberate
+      regressions fail the suite, and 3 of 3 DOM-level ones fail the
+      browser checks.
+- [x] Browser QA (headless Chromium), all passing:
+      - clean install;
+      - undo-proof perfect;
+      - no timer-driven progress access;
+      - no duplicate award;
+      - old-save migration;
+      - dialog focus and keyboard order;
+      - toasts clear of every control at 10 viewport sizes;
+      - contrast in all 8 theme/mode combinations;
+      - reduced motion;
+      - export/clear/import, and a Phase-4 backup;
+      - first install → offline;
+      - upgrade with an active save from v24 and v25;
+      - the music lifecycle.
+- [x] Docs: MANUAL_QA §1/§9/§9a/§10/§14 expanded, §16 retitled, new
+      §17; README features and test count.
+- [ ] **Not verified on real devices** — see MANUAL_QA §9a, §10
+      (installed PWA offline), §14 (upgrade on a phone) and §17
+      (touch, screen reader).
+
 ## Outstanding / Blocked
 
 - [x] `./inspiresoftwareintro.mp4` and `./logo.png` supplied by user

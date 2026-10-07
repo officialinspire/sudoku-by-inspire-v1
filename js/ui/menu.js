@@ -5,6 +5,7 @@ import { openSettingsDialog } from './settings.js';
 import { requestNewGame } from './new-game-confirm-dialog.js';
 import { refreshStatisticsScreen } from './statistics-screen.js';
 import { refreshHighScoresScreen } from './high-scores-screen.js';
+import { refreshAchievementsScreen } from './achievements-screen.js';
 
 const continueBtn = document.getElementById('btn-continue-game');
 
@@ -35,6 +36,11 @@ export function initMenuScreen() {
   document.getElementById('btn-highscores').addEventListener('click', () => {
     refreshHighScoresScreen();
     showScreen('highscores');
+  });
+
+  document.getElementById('btn-achievements').addEventListener('click', () => {
+    refreshAchievementsScreen();
+    showScreen('achievements');
   });
 
   document.getElementById('btn-settings').addEventListener('click', () => {

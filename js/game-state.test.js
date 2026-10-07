@@ -647,3 +647,80 @@ describe('resetToIdle', () => {
     assert.equal(getState().selectedIndex, null);
   });
 });
+
+describe('run identity and monotonic run counters', () => {
+  // A wrong digit for `index` (any digit except the solution's).
+  const wrongDigit = (index) => (solution[index] === 9 ? 1 : solution[index] + 1);
+
+  test('every new game gets its own run ID, kept through pause/resume', () => {
+    startGame(freshGameResult(), 'easy', { autoStartTimer: false });
+    const first = getState().runId;
+    pauseGame();
+    resumeGame();
+    assert.equal(getState().runId, first);
+    startGame(freshGameResult(), 'easy', { autoStartTimer: false });
+    assert.notEqual(getState().runId, first);
+    assert.equal(getState().runCountersComplete, true);
+  });
+
+  test('undo restores the displayed mistakes, but the run still remembers the mistake', () => {
+    startGame(freshGameResult(), 'easy', { autoStartTimer: false });
+    selectCell(10);
+    applyNumberInput(wrongDigit(10));
+    undo();
+    assert.equal(getState().mistakes, 0, 'displayed/scored count: unchanged behavior');
+    assert.deepEqual(getState().runCounters, { mistakes: 1, hints: 0, undos: 1, notes: 0 });
+  });
+
+  test('undo restores the displayed hint count, but the run still remembers the hint', () => {
+    startGame(freshGameResult(), 'easy', { autoStartTimer: false });
+    selectCell(10);
+    useHint();
+    undo();
+    assert.equal(getState().hintsUsed, 0);
+    assert.deepEqual(getState().runCounters, { mistakes: 0, hints: 1, undos: 1, notes: 0 });
+  });
+
+  test('note toggles are counted (adding and removing), and undoing them is counted too', () => {
+    startGame(freshGameResult(), 'easy', { autoStartTimer: false });
+    toggleNote(10, 3);
+    toggleNote(10, 3);
+    toggleNote(10, 4);
+    undo();
+    assert.deepEqual(getState().runCounters, { mistakes: 0, hints: 0, undos: 1, notes: 3 });
+  });
+
+  test('ignored inputs and no-op undos count nothing', () => {
+    startGame(freshGameResult(), 'easy', { autoStartTimer: false });
+    undo(); // nothing to undo
+    selectCell(0);
+    applyNumberInput(5); // a fixed clue
+    pauseGame();
+    applyNumberInput(5); // paused
+    assert.deepEqual(getState().runCounters, { mistakes: 0, hints: 0, undos: 0, notes: 0 });
+  });
+
+  test('restoreGame continues the same run: same ID, same counters', () => {
+    const runCounters = { mistakes: 3, hints: 1, undos: 4, notes: 12 };
+    restoreGame(
+      { ...freshGameResult(), entries: new Array(81).fill(0), notes: new Array(81).fill(0), selectedIndex: null, difficulty: 'easy', elapsedSeconds: 5, mistakes: 1, hintsUsed: 1, notesMode: false, runId: 'saved-run-0001', runCounters, runCountersComplete: true },
+      { autoStartTimer: false }
+    );
+    assert.equal(getState().runId, 'saved-run-0001');
+    assert.deepEqual(getState().runCounters, runCounters);
+    resumeGame();
+    selectCell(10);
+    applyNumberInput(wrongDigit(10));
+    assert.equal(getState().runCounters.mistakes, 4);
+  });
+
+  test('restoring a save from before run tracking is conservative: stable legacy ID, never perfect-eligible', () => {
+    const legacy = { ...freshGameResult(), entries: new Array(81).fill(0), notes: new Array(81).fill(0), selectedIndex: null, difficulty: 'easy', elapsedSeconds: 5, mistakes: 0, hintsUsed: 0, notesMode: false };
+    restoreGame(legacy, { autoStartTimer: false });
+    const firstId = getState().runId;
+    restoreGame(legacy, { autoStartTimer: false });
+    assert.equal(getState().runId, firstId);
+    assert.match(firstId, /^legacy-/);
+    assert.equal(getState().runCountersComplete, false);
+  });
+});

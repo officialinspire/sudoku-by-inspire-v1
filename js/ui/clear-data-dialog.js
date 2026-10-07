@@ -3,6 +3,7 @@ import { resetToIdle, suspendTimer, resumeTimer } from '../game-state.js';
 import { clearActiveGame } from '../active-game-store.js';
 import { clearStatistics } from '../statistics-store.js';
 import { clearHighScores } from '../high-scores-store.js';
+import { clearAchievementProgress } from '../achievement-store.js';
 
 const dialog = document.getElementById('clear-data-confirm-dialog');
 const openBtn = document.getElementById('btn-clear-data');
@@ -15,6 +16,7 @@ export function initClearDataDialog() {
     clearActiveGame();
     clearStatistics();
     clearHighScores();
+    clearAchievementProgress();
     // A stale in-memory game would just resurrect a fresh active-game
     // save on its next autosave, quietly undoing part of the clear.
     resetToIdle();

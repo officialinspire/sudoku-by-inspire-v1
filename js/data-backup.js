@@ -1,7 +1,8 @@
 /**
  * Manual local backup/restore: bundles every `inspireSudoku:v1:*` key
  * this app persists (appearance, gameplay/audio settings, statistics,
- * high scores, the active game) into one downloadable JSON file, and
+ * high scores, the active game, achievement progress) into one
+ * downloadable JSON file, and
  * restores from one. No server, no account — this is a plain file the
  * player keeps themselves, matching the app's fully local, offline-
  * first storage model rather than adding one.
@@ -35,6 +36,7 @@ const STORAGE_KEYS = [
   'inspireSudoku:v1:statistics',
   'inspireSudoku:v1:highScores',
   'inspireSudoku:v1:activeGame',
+  'inspireSudoku:v1:achievementProgress',
 ];
 
 /** Builds the exportable backup object from whatever's currently in localStorage. */

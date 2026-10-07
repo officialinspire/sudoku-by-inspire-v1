@@ -1,49 +1,104 @@
 /**
  * Registers sw.js with a relative scope (subpath-safe — see sw.js's own
- * header comment) and wires the small in-page "Update available" banner
- * that appears when a new service worker has installed alongside an
- * already-active one. Registration itself is entirely best-effort: older
- * browsers without `serviceWorker` support, and any registration failure
- * (blocked by a browser setting, running from an unsupported origin,
- * etc.), just mean the app runs without offline caching or installability
- * this session — never a broken app.
+ * header comment) and runs the "An updated version is available" banner.
+ * Registration itself is entirely best-effort: older browsers without
+ * `serviceWorker` support, and any registration failure (blocked by a
+ * browser setting, running from an unsupported origin, etc.), just mean
+ * the app runs without offline caching or installability this session —
+ * never a broken app.
+ *
+ * Updates are player-confirmed: a new sw.js installs in the background
+ * and *waits* (it never takes over a running page on its own, which is
+ * how a page used to end up running new HTML beside old modules). The
+ * banner's Refresh button asks that waiting worker to activate, and the
+ * page reloads once it has. That reload fires `pagehide`, where
+ * js/game-persistence.js flushes any pending autosave — so an
+ * in-progress game comes back intact through Continue Game.
  */
 
-const banner = document.getElementById('update-banner');
-const refreshBtn = document.getElementById('btn-update-refresh');
+const SKIP_WAITING_MESSAGE = { type: 'SKIP_WAITING' };
 
-function showUpdateBanner() {
-  if (banner) banner.hidden = false;
+/**
+ * The update flow, kept free of DOM lookups so it's testable with fake
+ * service-worker objects (js/sw-register.test.js). `container` is
+ * `navigator.serviceWorker`; `showBanner` reveals the refresh prompt;
+ * `reload` reloads the page.
+ */
+export function createUpdateFlow(container, { showBanner, reload }) {
+  let registration = null;
+  let playerAcceptedUpdate = false;
+
+  // A brand-new install's clients.claim() also fires controllerchange,
+  // and reloading then would just restart the intro mid-play — so only
+  // reload once the player has actually asked for the update, and only
+  // once even if several controllerchange events follow.
+  container.addEventListener('controllerchange', () => {
+    if (!playerAcceptedUpdate) return;
+    playerAcceptedUpdate = false;
+    reload();
+  });
+
+  // `controller` already being set means some other worker is serving
+  // this page, so a newly installed one is a genuine update — not the
+  // very first install, which has no "previous version" to replace.
+  function promptWhenInstalled(worker) {
+    worker.addEventListener('statechange', () => {
+      if (worker.state === 'installed' && container.controller) showBanner();
+    });
+  }
+
+  return {
+    track(newRegistration) {
+      registration = newRegistration;
+      // An update may already be waiting from an earlier visit the
+      // player didn't refresh, or already installing by the time
+      // register() resolved (its 'updatefound' fired before we listened).
+      if (registration.waiting && container.controller) showBanner();
+      if (registration.installing) promptWhenInstalled(registration.installing);
+      registration.addEventListener('updatefound', () => {
+        if (registration.installing) promptWhenInstalled(registration.installing);
+      });
+    },
+
+    applyUpdate() {
+      const waiting = registration?.waiting;
+      // Nothing waiting: another tab already activated the new version
+      // (this page is controlled by it already), so a reload is all
+      // that's left to do.
+      if (!waiting) {
+        reload();
+        return;
+      }
+      playerAcceptedUpdate = true;
+      waiting.postMessage(SKIP_WAITING_MESSAGE);
+    },
+  };
 }
 
 export function initServiceWorker() {
-  if (refreshBtn) {
-    refreshBtn.addEventListener('click', () => window.location.reload());
+  const banner = document.getElementById('update-banner');
+  const refreshBtn = document.getElementById('btn-update-refresh');
+  const reload = () => window.location.reload();
+
+  if (!('serviceWorker' in navigator)) {
+    refreshBtn?.addEventListener('click', reload);
+    return;
   }
 
-  if (!('serviceWorker' in navigator)) return;
+  const updateFlow = createUpdateFlow(navigator.serviceWorker, {
+    showBanner: () => {
+      if (banner) banner.hidden = false;
+    },
+    reload,
+  });
+  refreshBtn?.addEventListener('click', () => updateFlow.applyUpdate());
 
   // Registering after 'load' keeps the service-worker install from
   // competing with the initial page's own network requests.
   window.addEventListener('load', () => {
     navigator.serviceWorker
       .register('./sw.js', { scope: './' })
-      .then((registration) => {
-        registration.addEventListener('updatefound', () => {
-          const newWorker = registration.installing;
-          if (!newWorker) return;
-          newWorker.addEventListener('statechange', () => {
-            // `controller` already being set means some other service
-            // worker was already active before this one finished
-            // installing — i.e. this is a genuine update, not the
-            // page's very first install (which has no banner-worthy
-            // "previous version" to compare against).
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              showUpdateBanner();
-            }
-          });
-        });
-      })
+      .then((registration) => updateFlow.track(registration))
       .catch(() => {
         // No service worker this session — see module doc comment.
       });

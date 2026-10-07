@@ -29,6 +29,16 @@ to record dated results of an actual QA pass if you want that history.
 - [ ] No flash of unstyled content or wrong theme on load (the inline
       anti-FOUC script in `index.html`'s `<head>` should apply the
       saved — or default Light — theme before first paint).
+- [ ] **Clean install, achievements** (Hardening Phase 6): after Start →
+      intro → menu, the menu shows six buttons (New Game, Continue Game,
+      Statistics, High Scores, Achievements, Settings) and **no**
+      achievement toast — a brand-new player has nothing to credit.
+      Achievements shows "0 of 100 unlocked", every card locked, and a
+      "Tracked on this device since <today>" note.
+- [ ] Win the first game: the Puzzle Solved dialog lists what it
+      unlocked ("N achievements unlocked", First Victory first) with a
+      View Achievements button; the screen then shows those as unlocked,
+      dated today.
 
 ## 2. Touch/Click to Start
 
@@ -49,7 +59,7 @@ to record dated results of an actual QA pass if you want that history.
 ## 3. Intro playback, Skip, and missing/corrupt media fallback
 
 - [ ] With `./inspiresoftwareintro.mp4` present and playable, the video
-      plays automatically after Start, muted, and the Skip button is
+      plays automatically after Start, with sound, and the Skip button is
       visible and legible in the top-right corner regardless of what's
       currently showing in the video frame underneath it (checked
       across at least 2 theme packs — the Skip button doesn't use theme
@@ -63,6 +73,22 @@ to record dated results of an actual QA pass if you want that history.
       skip straight to the main menu with no error dialog, no stuck
       screen, and no console exception (only the video element's own
       `error` event, handled gracefully). Restore the file afterward.
+- [ ] **Slow connection** (Hardening Phase 1): clear site data,
+      devtools → Network → throttle to "Slow 3G", reload. The Network
+      panel should show **no** `inspiresoftwareintro.mp4` request until
+      you tap Start (the video is `preload="none"`). After the tap the
+      intro either starts, or — if it can't start within ~4 s, or
+      freezes waiting on data for ~4 s — the app moves on to the menu by
+      itself. Skip works the whole time.
+- [ ] **iOS Safari, second visit** (Hardening Phases 1–2): load once,
+      reload once (so the service worker is installed and controlling
+      the page), then fully close and reopen the app. The intro video
+      and both music tracks must still play. On that second visit they
+      come from the service worker's cache, which since Hardening Phase
+      2 answers Safari's byte-range requests with proper `206` slices;
+      if media works on the first visit but not the second, check
+      devtools (Safari Web Inspector → Network) for the media requests'
+      status codes.
 - [ ] **Missing logo**: temporarily rename/remove `logo.png`, reload to
       the main menu. The footer area shouldn't show a broken-image icon
       or console error — a `<img>` with a failed `src` degrading
@@ -130,6 +156,13 @@ For **each** of Easy, Intermediate, Advanced, and Insane:
 - [ ] Switching browser tabs away and back also pauses/resumes
       appropriately without losing progress or double-counting elapsed
       time.
+- [ ] **Focus stays put while the timer runs** (Hardening Phase 1):
+      Tab to a toolbar button (Notes/Erase/Undo) or a number-pad digit
+      and wait a few seconds — focus and its ring stay there. Press
+      Enter/Space on it — focus still stays. Open and close Settings via
+      the in-game gear — focus returns to the gear and stays. Arrow keys
+      from a board cell still carry focus with the selection, and
+      Resume after a pause puts focus back on the selected cell.
 
 ## 6. Reload and Continue
 
@@ -245,7 +278,9 @@ least once:
   - No audible click/pop/gap at any of these transitions — they should
     crossfade smoothly (an exponential ease, not a linear ramp, over
     ~1.8s — see Phase 14c, 2026-07-30), not cut instantly or sound
-    abrupt near the end of the fade.
+    abrupt near the end of the fade. **Exception (Hardening Phase 3):**
+    on iOS/iPadOS, where web pages can't set an element's volume, tracks
+    switch with a clean hard cut instead — see §9a.
 - [ ] **Mobile-specific: music survives interruptions** (Phase 14d/14f,
       2026-07-30; root-caused and reworked in Phase 14q, 2026-08-07 after
       a real-device report that 14d/14f's fixes still weren't enough —
@@ -265,7 +300,10 @@ least once:
       notification sound during play. If it ever does go silent and stay
       silent, that's a real regression worth reporting — the app should
       notice and recover automatically within about a second or two at
-      the very most.
+      the very most. (Since Hardening Phase 3: an interruption gets up
+      to three automatic retries, 0.5 s / 2 s / 6 s apart, then waits —
+      and the next tap anywhere resumes it. It never retries in an
+      endless loop, and never while the page is hidden or music is off.)
 - [ ] **Missing music (regression check only)**: temporarily rename or
       remove either MP3 and confirm the app still never shows an error,
       never breaks SFX, and the Music toggle simply has nothing audible
@@ -276,21 +314,132 @@ least once:
 - [ ] Backgrounding the tab (switching away) pauses whichever track was
       playing; returning to the tab resumes it only if the Music toggle
       is still on.
+- [ ] **Music off from the start** (Hardening Phase 3): turn Music off,
+      reload, tap Start. Nothing plays — not even silently — and the page
+      doesn't load the MP3s at all (devtools → Network, filtered to
+      `.mp3`: no requests from the page itself; a first visit's service
+      worker precache may still fetch them in the background). Turn Music
+      on in Settings: the current screen's track starts right away.
 
-## 10. Offline reload after first online visit
+- [ ] **Achievements is part of the menu family** (Hardening Phase 6):
+      with "Sudoku Zen" playing on the menu, open Achievements, switch
+      a few category tabs, go back, open Statistics, go back — the music
+      never stops, restarts from the beginning, or crossfades. (Verified
+      2026-10-07 in headless Chromium by logging every `play()`/`pause()`:
+      zero calls across those moves. Not yet heard on a real device.)
 
-- [ ] Load the app online at least once (so the service worker installs
-      and precaches the app shell — check devtools → Application →
-      Service Workers shows it "activated and is running").
-- [ ] Play through at least one full screen transition (e.g. reach the
-      main menu) so the rest of the JS module graph gets runtime-cached
-      too (see `sw.js`'s comment on why only a minimal shell is
-      precached at install time).
-- [ ] Set devtools → Network → "Offline" (or actually disable your
-      network connection), then reload the page. The app should load
-      and be fully playable — start a game, play a few moves — with no
-      network-error page.
-- [ ] Go back online and reload again — everything still works, no
+## 9a. Mobile & standalone audio (real devices)
+
+Run each check in **four** setups per platform: in the browser and as
+an installed app (Android: Chrome menu → Install app; iOS: Safari Share
+→ Add to Home Screen), each **online** and **offline** (airplane mode,
+after one online launch so the service worker has cached the music —
+see §10). Untested on real devices as of Hardening Phase 3; everything
+below was verified only in desktop/headless Chromium and with mocked
+lifecycle tests.
+
+- [ ] **Start → Intro → Menu**: tap Start; the intro plays; when it ends
+      or is skipped, "Sudoku Zen" fades in on the menu *without* another
+      tap. (On iOS this depends on the Start tap's silent unlock — if the
+      menu stays silent until you tap again, note it: the app still
+      recovers on that tap, but the unlock didn't take.)
+- [ ] **Game music**: New Game → "Logic Flow"; pause → "Sudoku Zen";
+      resume → "Logic Flow"; solve the puzzle → silence under the
+      completion dialog; Menu → "Sudoku Zen".
+- [ ] **Screen lock**: lock the phone mid-track for ~10 s, unlock — music
+      is silent while locked (it must not keep playing on the lock screen)
+      and resumes on unlock, or on the first tap if the OS demands one.
+- [ ] **App switch / home screen**: switch to another app and back, and
+      (installed app) go to the home screen and reopen from the
+      app switcher — same expectation as screen lock.
+- [ ] **Interruptions**: a phone call, an alarm, or another app's audio
+      (start a podcast, then return) — music resumes afterwards or on the
+      next tap; it never plays over the other app while the game is in
+      the background.
+- [ ] **Rapid switching**: menu ↔ Statistics ↔ High Scores ↔
+      Achievements ↔ game several times quickly, and mute/unmute during a crossfade — it
+      always ends on the right track (or silence when muted), never two
+      tracks at once for more than the fade.
+- [ ] **Offline** (airplane mode, second launch): both tracks play and
+      loop from the cache; seeking/looping doesn't stall (Hardening Phase
+      2 serves them as proper byte ranges).
+- [ ] **Lifecycle around the new UI**: win a game (silence under the
+      dialog) → View Achievements → "Sudoku Zen" fades in; lock the
+      screen on the Achievements screen and unlock — same rules as
+      above (silent while locked, resumes after). An achievement toast
+      on the menu never changes what's playing.
+
+**Volume limitations to expect (not bugs):**
+
+- **iOS/iPadOS ignore a web page's music volume.** Safari (and installed
+  web apps) don't let JavaScript set an audio element's volume — it's
+  always the hardware volume. So on iOS the Music volume slider only
+  distinguishes **zero (music off) vs. above zero (full volume)**, and
+  track changes are hard cuts instead of crossfades (a crossfade would
+  mean both tracks at full volume for 1.8 s). Use the device's volume
+  buttons for loudness.
+- **iOS silent switch:** sound effects (Web Audio) follow the
+  ring/silent switch and go quiet in silent mode, while music (an audio
+  element) may keep playing — Apple routes the two differently.
+- **Android:** music and effects both follow the *media* volume, and the
+  in-app sliders work as a percentage of it. Android 12+ may duck or
+  pause music for notifications; that counts as an interruption (see
+  above).
+- **Background playback is intentionally off:** the app pauses music
+  whenever it's hidden (tab switch, screen lock, home screen), on every
+  platform.
+
+## 10. Offline: first install, media seeking, missing media
+
+Use a **real** outage for these: turn off Wi-Fi / airplane mode, or
+stop your local server. Devtools' Network → "Offline" checkbox doesn't
+cut off the service worker's own fetches, so it can make a broken
+offline setup look fine.
+
+- [ ] **First install → offline reload** (Hardening Phase 2): clear
+      site data, load the app online **once**, and wait for devtools →
+      Application → Service Workers to show "activated and is running".
+      Don't reload, navigate, or click through first. Application →
+      Cache Storage should show a single
+      `inspire-sudoku:/<your-path>/:v<N>` cache holding `index.html`,
+      `styles.css`, `manifest.webmanifest`, `index.js`, every file under
+      `js/` **except** `*.test.js`, plus the logo, icons, intro video,
+      and both MP3s.
+- [ ] Now go offline for real and reload. The app loads; Start → intro
+      plays → menu; start a game and play a few moves. No network-error
+      page, no blank screen.
+- [ ] **Media seeking offline**: still offline, let menu music play,
+      start a game so "Logic Flow" plays, and let the intro play once.
+      In devtools → Network, the media requests show "(ServiceWorker)"
+      with status **206**. To test seeking directly, run in the console:
+      `const a = new Audio('./Logic%20Flow.mp3'); a.currentTime = 90; a.play()`
+      — it plays from 1:30 without stalling. On **iOS Safari** (the
+      strictest about this), confirm music and the intro both play
+      offline on a second launch.
+- [ ] **Missing optional media**: in a local copy (never the real
+      repo files), rename one MP3, clear site data, and load online.
+      The service worker still installs and activates; Cache Storage
+      just lacks that one file; offline reload still works; that track
+      is silent with no error dialog. Restore the file.
+- [ ] **Missing required file**: in a local copy, rename any `js/`
+      module and load with cleared site data. The service worker
+      install **fails** (Service Workers panel shows it as redundant or
+      errored) and nothing half-installed is left serving. With an
+      older version already installed, that older version keeps
+      working untouched. Restore the file.
+- [ ] **Achievements offline** (Hardening Phase 6): with the app
+      installed as above and the network really off, open Achievements
+      (100 cards, filters work) and win a game — the Puzzle Solved
+      dialog still lists its unlocks, and they're on the screen after.
+      Cache Storage includes `js/achievement-view.js`,
+      `js/toast-queue.js`, `js/ui/achievement-badges.js`,
+      `js/ui/achievement-toasts.js` and `js/ui/achievements-screen.js`.
+      (Verified 2026-10-07 in headless Chromium with the server stopped.)
+- [ ] **Installed app (PWA), offline**: repeat the item above in the
+      installed app (Android "Install app", iOS "Add to Home Screen",
+      desktop Chrome/Edge install), launched from its icon with the
+      device offline. Untested on real devices.
+- [ ] Go back online and reload — everything still works, no
       stale-cache weirdness.
 
 ## 10a. Installability and app icon (real device)
@@ -393,26 +542,56 @@ it's easy to only half-check.)
 
 ## 14. Service-worker updates
 
-- [ ] With the app already loaded and a service worker active, ship a
-      change to a core file and bump `sw.js`'s `CACHE_NAME` version
-      suffix (see that file's own header comment for the exact
-      convention), then reload the page or wait for the browser's
-      periodic update check.
-- [ ] The in-page "An updated version is available" banner appears with
-      a Refresh button.
-- [ ] Clicking Refresh reloads and the app continues working normally
-      on the new version; devtools → Application → Service Workers
-      shows only the new version active, and → Cache Storage shows only
-      the new cache name (the old one was cleaned up automatically on
-      activation).
+- [ ] With the app loaded and a service worker active, start a game and
+      place a few digits (so there's an active save).
+- [ ] Ship a change to any precached file and bump `CACHE_VERSION` in
+      `sw.js`. Locally: edit, bump, and serve; on GitHub Pages: push
+      and wait for the deploy.
+- [ ] Reload once. The page still runs the **old** release consistently
+      (HTML and modules both old; devtools → Network shows them "from
+      ServiceWorker"), and the "An updated version is available" banner
+      appears. Service Workers panel: the new worker is "waiting to
+      activate".
+- [ ] Tap Refresh. The page reloads **once** into the new release
+      (verify your change is visible). Continue Game restores the exact
+      board from before, including the digits you placed.
+- [ ] Cache Storage now holds only the new version's
+      `inspire-sudoku:/<your-path>/:v<N>` cache for this app. Caches
+      belonging to anything else on the same origin (another GitHub
+      Pages project under the same account) are untouched.
+- [ ] **Two tabs**: with the app open in two tabs when an update
+      lands, both show the banner. Refresh in one tab reloads only that
+      tab; Refresh in the other then simply reloads it into the new
+      version.
+- [ ] **Ignoring the banner**: close every tab of the app instead of
+      tapping Refresh, then reopen — the new release is running.
+- [ ] **Upgrading from v20/v21** (installs from before Hardening Phase
+      2): a page served by the old worker still shows its banner, its
+      Refresh lands on the new release, and the old
+      `inspire-sudoku-shell-v<N>` cache is removed.
 - [ ] Without a version bump, a plain reload does *not* show the update
       banner (nothing actually changed from the service worker's point
       of view).
+- [ ] **Upgrade with an active save, across the achievement releases**
+      (v24 Hardening Phase 4 → v26, and v25 Phase 5 → v26): on the old
+      release, win one game, then start another and place a few digits.
+      Publish v26, reload, tap Refresh. Then:
+  - Continue Game restores the same board (same digits, same run);
+  - from v25: no toast (its unlocks were already recorded) and the
+    Achievements screen shows them with their original dates;
+  - from v24: one toast on the menu credits what Phase 4 had tracked
+    (e.g. First Victory, Flawless), marked "from earlier games";
+  - finishing the continued game counts once, and its dialog lists
+    only what that win newly unlocked (e.g. Back to Back).
+
+  (Both verified 2026-10-07 in headless Chromium with real builds of
+  each release; repeat on a real phone, online, before calling it done.)
 
 ## 15. Data reset
 
 - [ ] Settings → Clear Data shows a confirmation dialog explaining what
-      will be removed (saved game, statistics, high scores) and what
+      will be removed (saved game, statistics, high scores, achievement
+      progress) and what
       won't (theme/gameplay/audio settings — pointing at Reset
       Appearance for those instead).
 - [ ] Cancelling leaves everything untouched.
@@ -459,7 +638,8 @@ New as of Phase 16g — Settings → "Your data" → Export/Import.
       readable JSON, not a scrambled/binary blob.
 - [ ] Tap "Import Data" and pick that same file — a confirmation names
       the backup's export date and warns it overwrites current
-      settings/statistics/high scores/saved game. Cancelling changes
+      settings/statistics/high scores/achievement progress/saved game.
+      Cancelling changes
       nothing (check a stat value before and after to confirm).
 - [ ] Confirming reloads the app. After reload, everything from the
       backup is back — theme/color mode, gameplay/audio settings,
@@ -479,6 +659,119 @@ New as of Phase 16g — Settings → "Your data" → Export/Import.
       dependency on where it came from.
 
 ---
+
+## 16. Achievement progress and unlocks (devtools checks)
+
+Hardening Phases 4–5 track progress and unlock the 100 achievements
+(`js/achievement-catalog.js`); §17 covers what the player sees. For the
+stored data underneath, check devtools → Application → Local Storage →
+`inspireSudoku:v1:achievementProgress` (a JSON value, `version: 2`).
+Unlocks are in its `unlocked` map: `id → { at, backfilled }`.
+
+- [ ] **First launch after updating** with existing history: the key
+      appears at startup with `wins` / `winsByDifficulty` /
+      `completedSeconds` matching Statistics, `trackingSince` = today,
+      and everything else (perfect/no-hint wins, streaks, days, earned
+      score) at 0 — past wins are never counted as perfect.
+- [ ] **Backfilled unlocks** on that first launch: only wins,
+      difficulty, speed (Statistics' best time), score (best High
+      Score) and `style-grand-tour` entries, each `backfilled: true`.
+      Never `perfect-*`, `no-hint-*`, `win-streak-*`, `daily-streak-*`,
+      `score-lifetime-*` or other `style-*`.
+- [ ] **A win adds unlocks once**: the first win adds `wins-1` (and
+      `perfect-1`/`no-hint-1` if clean) with `backfilled: false` and
+      `at` ≈ now. Reload and win again: those entries' `at` values
+      don't change.
+- [ ] **No evaluation while playing**: in devtools, watch the key's
+      value during a game (or break on `localStorage.setItem`) — it
+      doesn't change while the clock ticks, only when the game is won
+      (or replaced via New Game, which only resets `winStreak.current`).
+- [ ] **Undone hint** (fresh profile — Clear Data first): use a hint,
+      Undo it, finish — `wins-1` unlocks, but `no-hint-1` and
+      `perfect-1` don't.
+- [ ] **One win**: `wins` +1, `earnedScore` + exactly the score the
+      completion dialog showed, `lastWinDate` = today (local date, even
+      just after midnight), `recentRunIds` gains one ID.
+- [ ] **Perfect vs not**: a game with no wrong digits and no hints adds
+      to `perfectWins`; one where you entered a wrong digit and then
+      pressed Undo still shows 0 mistakes in the dialog (unchanged) but
+      does **not** add to `perfectWins`.
+- [ ] **Continue**: start a game, reload mid-game, Continue, finish —
+      counted once. The saved game (`inspireSudoku:v1:activeGame`)
+      shows `version: 2` with a `runId` that survives the reload.
+- [ ] **No double counting**: export a backup mid-game, finish the game,
+      import the backup, Continue and finish again — Statistics, High
+      Scores and `wins` don't change the second time.
+- [ ] **Streaks**: win on two consecutive days → `dailyStreak.current`
+      2; replace an unfinished game via New Game → `winStreak.current`
+      0 but the daily streak is untouched.
+- [ ] **Old save**: a game saved before this update (schema 1) still
+      appears under Continue and finishes as a win, but never as perfect
+      or no-hint.
+- [ ] Clear Data removes the key; Export includes it; Import restores it.
+
+## 17. Achievements screen, unlock summary, and toasts
+
+Hardening Phase 6. Each item below was checked in headless Chromium on
+2026-10-07 unless it says otherwise (see `DEVELOPMENT_LOG.md`); repeat on
+real devices — especially the touch, screen-reader, and installed-app
+items, which weren't.
+
+- [ ] **Screen**: Menu → Achievements shows "N of 100 unlocked", a
+      progress bar, the tracking note, ten category tabs (All +
+      9 categories, each with its own "n/total"), and one card per
+      achievement: badge, name, exact requirement, then either
+      "✓ Unlocked <date>" (plus "· from earlier games" if it was
+      credited from history) or "Locked" with progress in words
+      ("3 of 10", "Best 4:10 — goal 2:30", "No win yet").
+- [ ] Locked and unlocked never differ by color alone: locked cards have
+      a dashed border, an empty badge ring with a padlock, and the word
+      "Locked".
+- [ ] **All 8 theme/mode combinations** (Settings → Theme pack × Dark/
+      Light): text readable, unlocked badges a solid accent disc, locked
+      ones an outlined ring with a padlock — never a black disc (that
+      would mean a gradient token used as an SVG fill; Woodgrain and
+      Paper are the ones to look at).
+- [ ] **Keyboard**: Tab order is ← Menu → the selected tab → the list;
+      Left/Right/Home/End switch categories and keep the selected tab
+      scrolled into view.
+- [ ] **Phone widths (320–390px) and landscape**: no sideways page
+      scroll; the tab row scrolls sideways on its own and every tab is
+      full height; cards fit the width.
+- [ ] **Landscape menu**: on a phone on its side the menu scrolls, and
+      scrolling all the way up shows the title and the whole New Game
+      button (before this phase both were cut off and unreachable).
+- [ ] **Puzzle Solved summary**: a win that unlocks something lists it
+      (up to five by name, then "…and N more"), with View Achievements;
+      a win that unlocks nothing shows neither. Focus still starts on
+      the share text when the dialog opens; a screen reader announces
+      the unlocks with the dialog's title (they're its description).
+- [ ] **No double award**: finish a game, restore an older copy of it
+      (a backup made mid-game), Continue and finish again — no summary
+      the second time, and the count doesn't move.
+- [ ] **Undo-proof perfect**: enter a wrong digit, Undo it, finish —
+      the dialog lists On My Own (no hints) but not Flawless.
+- [ ] **Toasts** — only for unlocks credited at startup (an update that
+      backfills from Statistics/High Scores, an imported older backup,
+      or achievements added by a newer version). Seed a profile with
+      past wins (e.g. import a backup from before achievements), reload:
+  - one toast ("N achievements unlocked", the first few names, "From
+    games you'd already played") appears on the menu, bottom-center —
+    on a phone on its side, in the empty side gutter instead (a "+N"
+    badge on very small phones);
+  - it never covers a menu button at any scroll position, never takes
+    focus, and taps go through it;
+  - opening Settings hides it and closing Settings brings it back;
+    opening Achievements, Statistics, or a game dismisses it;
+  - reloading again shows no toast (nothing new);
+  - with a screen reader on, it's announced once, politely, without
+    moving focus. (Untested with a real screen reader.)
+- [ ] **Reduced motion** (OS setting, or devtools → Rendering → emulate
+      `prefers-reduced-motion: reduce`): the toast and the dialog's
+      badges appear without sliding or popping.
+- [ ] **Backup/reset**: Export → the file contains the unlocks; Clear
+      Data → Achievements shows 0; Import that file → the same unlocks
+      with the same dates and no toast.
 
 ## Known environment limitations (not bugs)
 

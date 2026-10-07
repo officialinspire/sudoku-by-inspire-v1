@@ -84,14 +84,18 @@
     <div id="menu-fade-overlay" class="menu-fade-overlay" hidden aria-hidden="true"></div>
 
     <section id="screen-start" class="screen is-active" tabindex="-1" aria-label="Start screen">
-      <img src="./logo.png" alt="" class="start-logo">
+      <img src="./logo.png" alt="" class="start-logo" width="600" height="181">
       <h1 class="brand">Sudoku <span>by Inspire</span></h1>
       <p class="start-prompt">Tap, click, or press any key to begin</p>
     </section>
 
     <section id="screen-intro" class="screen" tabindex="-1" aria-label="Intro video" hidden>
       <h1 class="visually-hidden">Intro</h1>
-      <video id="intro-video" class="intro-video" src="./inspiresoftwareintro.mp4" playsinline></video>
+      <!-- preload="none": nothing is fetched until the Start tap calls
+           play(), so the video never competes with the app's own startup
+           requests. width/height = the file's real 1080x720, reserving the
+           box up front (the validate:assets script checks they match). -->
+      <video id="intro-video" class="intro-video" src="./inspiresoftwareintro.mp4" width="1080" height="720" preload="none" playsinline></video>
       <button id="skip-intro-btn" type="button" class="skip-btn">Skip</button>
     </section>
 
@@ -117,13 +121,17 @@
           <svg class="menu-icon" viewBox="0 0 24 24" aria-hidden="true"><polygon points="12,3 14.23,8.93 20.56,9.22 15.61,13.17 17.29,19.28 12,15.8 6.71,19.28 8.39,13.17 3.44,9.22 9.77,8.93" fill="currentColor"/></svg>
           <span>High Scores</span>
         </button>
+        <button id="btn-achievements" type="button" class="btn-secondary">
+          <svg class="menu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2.5l3 7M16 2.5l-3 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="15" r="6.5" fill="currentColor"/></svg>
+          <span>Achievements</span>
+        </button>
         <button id="btn-settings" type="button" class="btn-secondary">
           <svg class="menu-icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9" cy="6" r="2.2" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="15" cy="12" r="2.2" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="11" cy="18" r="2.2" fill="currentColor"/></svg>
           <span>Settings</span>
         </button>
       </nav>
       <footer class="menu-footer">
-        <img src="./logo.png" alt="Inspire logo" class="menu-logo">
+        <img src="./logo.png" alt="Inspire logo" class="menu-logo" width="600" height="181">
       </footer>
     </section>
 
@@ -240,7 +248,37 @@
       <button id="btn-clear-difficulty-highscores" type="button" class="btn-secondary">Clear High Scores for This Difficulty</button>
     </section>
 
+    <section id="screen-achievements" class="screen screen-game" tabindex="-1" aria-label="Achievements" hidden>
+      <div class="game-header">
+        <button id="btn-achievements-back" type="button" class="btn-secondary game-back-btn">&larr; Menu</button>
+        <h1 class="brand brand--compact">Achievements</h1>
+      </div>
+
+      <div class="achievements-summary">
+        <p class="achievements-count">
+          <span id="achievements-unlocked-count" class="achievements-count-value">0</span>
+          of <span id="achievements-total-count">0</span> unlocked
+        </p>
+        <div class="achievements-meter" aria-hidden="true"><div id="achievements-meter-fill" class="achievements-meter-fill"></div></div>
+        <p id="achievements-tracking-note" class="settings-hint"></p>
+      </div>
+
+      <!-- Tabs are built by js/ui/achievements-screen.js from the catalog's
+           own category list, so this markup can't drift from it. -->
+      <div id="achievements-category-filter" class="achievement-filter" role="tablist" aria-label="Category" data-panel="achievements-panel"></div>
+
+      <div id="achievements-panel" role="tabpanel" tabindex="0" aria-label="Achievements in the selected category">
+        <ul id="achievements-list" class="achievements-list"></ul>
+      </div>
+    </section>
+
   </div>
+
+  <!-- Achievement toasts: a polite live region that's always in the
+       page (a region created at the moment of an announcement often
+       isn't read), never focusable, and click-through — see
+       js/ui/achievement-toasts.js for when it may show. -->
+  <div id="achievement-toasts" class="toast-region" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <dialog id="settings-dialog" class="settings-dialog" aria-labelledby="settings-title">
     <form method="dialog" class="settings-form">
@@ -354,7 +392,8 @@
       <section class="settings-group" aria-label="Privacy">
         <h3 class="settings-subheading">Your data</h3>
         <p class="settings-hint">
-          Everything — saved games, statistics, high scores, and settings —
+          Everything — saved games, statistics, high scores, achievements,
+          and settings —
           stays on this device, in your browser's local storage. Nothing is
           sent to a server, there's no account, and the app works fully
           offline once loaded. Clearing your browser's site data for this
@@ -450,6 +489,11 @@
           <dd id="completion-score">0</dd>
         </div>
       </dl>
+      <section id="completion-achievements" class="completion-achievements" aria-labelledby="completion-achievements-title" hidden>
+        <h3 id="completion-achievements-title" class="completion-achievements-title"></h3>
+        <ul id="completion-achievements-list" class="completion-achievements-list"></ul>
+        <p id="completion-achievements-more" class="settings-hint" hidden></p>
+      </section>
       <p class="settings-hint">Higher difficulties and faster times score more; mistakes and hints cost points. See High Scores for your best runs.</p>
 
       <label class="share-label" for="completion-share-text">Share results</label>
@@ -459,6 +503,7 @@
 
       <div class="settings-actions">
         <button type="button" id="btn-completion-menu" class="btn-secondary">Menu</button>
+        <button type="button" id="btn-completion-achievements" class="btn-secondary" hidden>View Achievements</button>
         <button type="button" id="btn-completion-new-game" class="btn-primary">New Game</button>
       </div>
     </div>
@@ -479,9 +524,9 @@
   <dialog id="clear-data-confirm-dialog" class="settings-dialog" aria-labelledby="clear-data-confirm-title">
     <form method="dialog" class="settings-form">
       <h2 id="clear-data-confirm-title">Clear Data?</h2>
-      <p>This permanently deletes your saved game, statistics, and high
-        scores. It does not change your theme or gameplay settings — use
-        Reset Appearance for those.</p>
+      <p>This permanently deletes your saved game, statistics, high
+        scores, and achievement progress. It does not change your theme or
+        gameplay settings — use Reset Appearance for those.</p>
       <div class="settings-actions">
         <button type="submit" value="cancel" class="btn-secondary">Cancel</button>
         <button type="submit" value="confirm" class="btn-primary">Clear Data</button>

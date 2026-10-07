@@ -23,7 +23,7 @@ shapes and a transparent edge would look broken.
 Already wired in:
 
 - `manifest.webmanifest`'s `icons` array.
-- `sw.js`'s `OPTIONAL_ROOT_ASSETS` (precached for offline use, but a
+- `sw.js`'s `OPTIONAL_ASSETS` (precached for offline use, but a
   missing/corrupt icon still can't block the service worker from
   installing — same resilience policy as `logo.png`/the intro video).
 - `index.html`'s `<link rel="icon">` (browser tab/favicon use — a

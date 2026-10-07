@@ -3,7 +3,11 @@ import { onStateChange } from '../game-state.js';
 import { DIFFICULTIES } from '../sudoku-generator.js';
 import { estimateScore, formatElapsedTime, buildShareText, findRankInHighScores } from '../completion.js';
 import { getHighScores } from '../high-scores-store.js';
+import { onAchievementsUnlocked } from '../achievement-store.js';
+import { describeUnlockBatch } from '../achievement-view.js';
 import { openDifficultyDialog } from './difficulty-dialog.js';
+import { refreshAchievementsScreen } from './achievements-screen.js';
+import { badgeSvg } from './achievement-badges.js';
 
 // Same star glyph as the High Scores menu button (index.html) — reused
 // rather than a new icon, so "you're on the leaderboard" reads as the
@@ -24,8 +28,22 @@ const copyBtn = document.getElementById('btn-copy-results');
 const copyConfirmation = document.getElementById('copy-confirmation');
 const menuBtn = document.getElementById('btn-completion-menu');
 const newGameBtn = document.getElementById('btn-completion-new-game');
+const achievementsSection = document.getElementById('completion-achievements');
+const achievementsTitleEl = document.getElementById('completion-achievements-title');
+const achievementsListEl = document.getElementById('completion-achievements-list');
+const achievementsMoreEl = document.getElementById('completion-achievements-more');
+const achievementsBtn = document.getElementById('btn-completion-achievements');
+
+const LISTED_UNLOCKS = 5;
 
 let previousStatus = null;
+
+// What the run just won unlocked: js/achievement-store.js announces it
+// while js/game-persistence.js records the completion — and that
+// module's state listener is registered first (index.js), so for the
+// same transition into 'complete' the announcement always arrives
+// before this module's own listener opens the dialog.
+let lastUnlock = null; // { runId, ids }
 
 /**
  * Top-3 gets the full "New High Score" chip treatment (matches the
@@ -50,6 +68,39 @@ function updateRankBanner(rank) {
   }
 }
 
+function buildUnlockItem(achievement, index) {
+  const item = document.createElement('li');
+  item.style.setProperty('--unlock-index', String(index)); // staggers the badge animation
+  item.insertAdjacentHTML('afterbegin', badgeSvg(achievement.category, true));
+  const name = document.createElement('span');
+  name.textContent = achievement.name;
+  item.append(name);
+  return item;
+}
+
+/**
+ * Every achievement this win unlocked, as one batch: a heading with the
+ * count, the first few by name, and "…and N more". Hidden (with its
+ * View Achievements button) when the win unlocked nothing.
+ */
+function updateAchievementsSummary(ids) {
+  const batch = describeUnlockBatch(ids, LISTED_UNLOCKS);
+  const hasUnlocks = batch.count > 0;
+  achievementsSection.hidden = !hasUnlocks;
+  achievementsBtn.hidden = !hasUnlocks;
+  // Read out along with the dialog's title when it opens. Focus starts
+  // further down (the share text), so otherwise a screen reader user
+  // could finish the dialog without ever hearing about the unlocks.
+  if (hasUnlocks) dialog.setAttribute('aria-describedby', 'completion-achievements');
+  else dialog.removeAttribute('aria-describedby');
+  if (!hasUnlocks) return;
+
+  achievementsTitleEl.textContent = batch.title;
+  achievementsListEl.replaceChildren(...batch.shown.map(buildUnlockItem));
+  achievementsMoreEl.hidden = batch.more === 0;
+  achievementsMoreEl.textContent = `…and ${batch.more} more — see Achievements.`;
+}
+
 function showCompletion(state) {
   const config = DIFFICULTIES[state.difficulty];
   const score = estimateScore(state, config);
@@ -61,6 +112,8 @@ function showCompletion(state) {
   hintsEl.textContent = String(state.hintsUsed);
   scoreEl.textContent = String(score);
   updateRankBanner(rank);
+  updateAchievementsSummary(lastUnlock?.runId === state.runId ? lastUnlock.ids : []);
+  lastUnlock = null;
   shareTextarea.value = buildShareText(state, config, rank);
   copyConfirmation.textContent = '';
 
@@ -78,6 +131,10 @@ function showCompletion(state) {
 }
 
 export function initCompletionDialog() {
+  onAchievementsUnlocked((ids, { runId }) => {
+    lastUnlock = { runId, ids };
+  });
+
   // Announced once, exactly on the transition into 'complete' — not on
   // every render, which would reopen the dialog after a manual close.
   onStateChange((state) => {
@@ -103,6 +160,12 @@ export function initCompletionDialog() {
   menuBtn.addEventListener('click', () => {
     dialog.close();
     showScreen('menu');
+  });
+
+  achievementsBtn.addEventListener('click', () => {
+    dialog.close();
+    refreshAchievementsScreen();
+    showScreen('achievements');
   });
 
   newGameBtn.addEventListener('click', () => {

@@ -61,7 +61,7 @@ function handleFileSelected(event) {
 
     pendingBackup = parsed;
     confirmMessageEl.textContent =
-      `This overwrites your current settings, statistics, high scores, and saved game with the backup from ${formatBackupDate(parsed.exportedAt)}. This can't be undone.`;
+      `This overwrites your current settings, statistics, high scores, achievement progress, and saved game with the backup from ${formatBackupDate(parsed.exportedAt)}. This can't be undone.`;
     suspendTimer('dialog');
     confirmDialog.showModal();
   };
