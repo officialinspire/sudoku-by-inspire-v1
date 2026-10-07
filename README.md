@@ -122,6 +122,15 @@ Either music file's absence never causes an error, a broken install, or
 blocked service worker installation (see `sw.js`'s optional-asset
 precaching).
 
+Music on phones has platform limits worth knowing (details and
+real-device checks in `MANUAL_QA.md` §9a): **iOS/iPadOS ignore a web
+page's volume setting**, so there the Music slider is effectively
+off/on and tracks switch with a hard cut instead of a crossfade; iOS's
+silent switch mutes sound effects but not necessarily music; and on
+every platform music pauses whenever the app is hidden (tab switch,
+screen lock, home screen) and resumes when it's visible again — or on
+the next tap if the browser insists on one.
+
 PWA icons (192×192, 512×512, and a maskable 512×512) live in `icons/` —
 generated from `logo.png` rather than a separately-supplied source image
 (a 3×3 Sudoku-grid mark in the app's own `theme_color` blue, with the
@@ -138,11 +147,12 @@ dependency to install:
 npm test
 ```
 
-This runs every `*.test.js` file in the repo (249 tests across 73
+This runs every `*.test.js` file in the repo (286 tests across 81
 suites as of this writing, covering the Sudoku engine, puzzle generator,
 game state, scoring, every persisted store, the board's render
-decisions, the service worker and its update flow, and the asset
-validator below) in a few seconds. `sw.test.js` runs the real `sw.js`
+decisions, background music's lifecycle (`js/music-player.test.js`,
+with fake audio elements and a fake clock), the service worker and its
+update flow, and the asset validator below) in a few seconds. `sw.test.js` runs the real `sw.js`
 against a fake Cache Storage and network, so install, update, offline,
 and byte-range behavior are all checked without a browser. See
 `DEVELOPMENT_LOG.md`'s Phase 12 entry for what's covered here versus

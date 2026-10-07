@@ -5,6 +5,227 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-10-07 — Hardening Phase 3: Music Playback Hardening
+
+**Branch:** `claude/nifty-lovelace-9zf07w` (PR
+officialinspire/sudoku-by-inspire-v1#4, on top of Hardening Phases 1–2)
+
+**Goal:** make background music predictable. It should start when it
+should, never when it shouldn't (hidden, muted, Start/Intro, after
+completion), and recover from failures without endless retry loops.
+The parts to keep: the two HTMLAudio tracks (Sudoku Zen for the menu
+family of screens, Logic Flow for gameplay), mute/volume settings, and
+music's independence from the SFX AudioContext (Phase 14q).
+
+**No real-device testing was done in this phase.** Everything below was
+verified in Node with fakes and in desktop headless Chromium. What a
+phone still needs to confirm is in MANUAL_QA §9a.
+
+### Measured first: what the old code actually did
+
+These runs used Chromium with Chrome's real autoplay policy
+(`--autoplay-policy=document-user-activation-required`; Playwright sets
+none) and an instrumented `HTMLMediaElement.prototype.play`.
+
+- **The Start-tap unlock** (`play()` then an immediate `pause()` on both
+  tracks):
+  - Its promise rejects with `AbortError` when playback is allowed and
+    `NotAllowedError` when it isn't, and the code swallowed both
+    identically.
+  - If the file is already loaded it can even *resolve*: `play()` hands
+    its promise to a queued "notify about playing" task before `pause()`
+    runs, and a stray `playing` event follows.
+  - In Chromium the menu track plays afterwards regardless, because
+    Chrome's permission is per *document* (sticky user activation). The
+    per-element unlock only matters on WebKit, which I can't run here.
+- **It ignored the Music-off setting.** With Music off it still called
+  `play()` on both tracks, and the page still downloaded both MP3s
+  (`preload = 'auto'`).
+- **Endless recovery.** With no user activation (the app started by an
+  untrusted event), the 2-second `setInterval` retried the menu track
+  forever: 7 `NotAllowedError`s in 10 s, and nothing would stop it.
+- **A test-harness gotcha:** Playwright's `page.evaluate` grants user
+  activation, so the "no activation" probe had to start the app from a
+  page timer and avoid all Playwright calls until a single read at the
+  end.
+
+### What changed, and why
+
+**`js/music-player.js` (new): the state machine, DOM-free.**
+- **Why a new module.** The music logic needed fakes to be tested, so
+  `Audio`, timers, animation frames and settings are injected, the same
+  way `cell-aria.js`/`board-render-plan.js` keep logic testable. It's
+  also the boundary the old file already described in prose: music
+  independent of SFX.
+- **Statuses:** `idle`, `starting`, `playing`, `blocked`, `retrying`,
+  `failed`.
+- **One rule decides sound:** `shouldPlay()` = target track AND page
+  active AND music on with volume > 0. Every input ends in one
+  `reconcile()`, so "never restart while hidden / muted / Intro / after
+  completion" is one condition rather than checks scattered across
+  handlers.
+- **Outcomes are explicit:**
+  - `NotAllowedError` → `blocked`. It waits for the next real gesture and
+    never a timer, because a timer can't succeed there; that's what made
+    the old poll endless.
+  - A missing or unsupported file before it ever played (error code 4,
+    or `NotSupportedError`) → unavailable for the session, matching the
+    asset policy.
+  - Network errors, stalls (an 8 s watchdog, while starting or while
+    buffering mid-track) and pauses from outside (the OS, a dialog) →
+    retries after 0.5 s, 2 s, then 6 s, then `failed`.
+- **What refills the retry budget.** Only a *fresh start*: a tap, the
+  page becoming visible, music switched on, or a new target. It is
+  deliberately **not** refilled by a successful restart. Otherwise an OS
+  that pauses the track again right after each recovery would loop
+  forever (a mutation test confirms this). During play every digit tap
+  is a gesture, so the budget refills naturally.
+- **Stale callbacks are ignored by construction.** Each `play()` request
+  gets a token, and pausing, reloading or giving up bumps it, so a late
+  resolve/reject of a superseded request does nothing. A `pause` event
+  whose element is playing again is stale too.
+- **Timers.** Each track has at most one retry timer, one watchdog, one
+  pending pause and one fade frame, and setting any of them cancels its
+  predecessor. There is no `setInterval` at all.
+- **Fades.** The same exponential ease (Phase 14c), now cancellable, and
+  a fade already heading to the same level isn't restarted. Hidden pages
+  get no animation frames, so a hidden page pauses at once and the next
+  fade-in starts from silence.
+- **Unlock, kept but corrected:**
+  - **Kept** because WebKit needs it: menu music's first real `play()`
+    comes when the intro *ends*, which isn't a gesture.
+  - **Muted**, because iOS ignores `volume`.
+  - **Skipped entirely while music is off**, and the tracks aren't even
+    preloaded then. When music is switched on in Settings (itself a
+    tap), the other track is unlocked and the current one simply plays.
+  - **Alternative considered:** start the menu track muted during the
+    intro and unmute it later. That avoids the unlock question on WebKit
+    but plays (and decodes) music the player can't hear, and would start
+    the menu mid-song. I rejected it.
+- **iOS volume.** iOS volume is detected (a write of 0.5 reads back as 1).
+  There, crossfades become hard cuts, since a "crossfade" would be both
+  tracks at full volume for 1.8 s. Music volume 0 counts as off on every
+  platform, so the slider can silence music on iOS too.
+
+**`js/audio.js`: SFX unchanged, wiring rebuilt.**
+- **Music starts first.** `createSfxEngine()` looks up and constructs the
+  AudioContext inside one try/catch. A missing or throwing constructor
+  (context caps, policy blocks, a throwing getter) only costs the SFX,
+  and it can never throw out of the Start tap, which would have skipped
+  the intro.
+- **AudioContext `interrupted` state** (WebKit, after a call or a screen
+  lock) now resumes like `suspended`.
+- **Lifecycle.** `visibilitychange`, `pagehide`/`pageshow` (for the
+  back/forward cache, where visibility can still read "visible") feed
+  `setPageActive`. Gesture events (`pointerup`, `touchend`, `click`,
+  `keydown`) feed `userGesture()`.
+- **Every listener is registered exactly once** in the guarded
+  `initAudioEngine()`, verified by counting `addEventListener` calls
+  across a second init.
+- **`musicTrackFor()`** now maps a completed game to `null` directly,
+  instead of relying on a one-off `setActiveMusicTrack(null)` call.
+- Music URLs are `encodeURI`'d exactly as `sw.js` precaches them.
+
+**`sw.js`:** `./js/music-player.js` was added to `MODULE_ASSETS`. The
+Phase-2 drift check flagged it immediately, in both the validator and
+the tests. `CACHE_VERSION` → `v23`.
+
+### Two bugs the first real-browser run caught (the fakes didn't)
+
+1. **A full-volume blip.** Only the first element got `volume = 0`
+   (inside the volume detection), so Logic Flow sat at 1 and would play
+   its first frames at full volume before the fade-in began. Every
+   element now starts at 0. Regression test added.
+2. **A stale `pause` read as an interruption.** When music was switched
+   on, the unlock's queued `pause` event arrived after the real
+   `play()` had started, cost a retry, and caused an extra `play()`
+   (seen in Chrome's trace). Two fixes: a `pause` event whose element
+   isn't paused is now ignored, and the track about to play is no
+   longer unlock-paused at all.
+   - **Why the fakes missed it:** they fired media events as microtasks,
+     while browsers fire them as queued *tasks*, after promise
+     callbacks. The fake now uses macrotasks, and a regression test
+     reproduces the race and fails without the fix.
+
+### Tests
+
+- `js/music-player.test.js` (28) uses a fake HTMLAudioElement:
+  - it mimics the browser rules that matter: `play()` flips `paused`
+    at once, a refusal is decided synchronously, `pause()`/`load()`
+    reject a pending `play()` with `AbortError`, and events fire as
+    tasks;
+  - it can simulate iOS's read-only `volume`;
+  - one fake clock runs both the timers and the animation frames.
+
+  It covers:
+  - the unlock (muted, and nothing touched or preloaded while off);
+  - targets and crossfades, rapid switching with no leftover timers,
+    and silence for a null target;
+  - mute during a crossfade, a mute→unmute→mute flurry with no early
+    cut, volume 0 = off, and live slider changes;
+  - hidden → immediate pause and no restart, the fade-in on return, and
+    a screen-lock sequence;
+  - `blocked` → gesture-only retry, bounded retries then stop, a
+    missing file (with and without an `error` event), network-error
+    reload, start and mid-track stalls, and stale rejections;
+  - the iOS hard cut, and idempotency.
+- `js/audio.test.js` (9) imports the *real* `audio.js`, `screens.js`,
+  `game-state.js` and `audio-settings.js` against a fake DOM, a throwing
+  AudioContext and mocked timers, then plays one session:
+  - init succeeds and music is still created; the unlock is silent;
+    Start/Intro stay silent and the menu plays;
+  - a second init adds nothing;
+  - hidden pauses and nothing restarts until visible; `pagehide`
+    pauses and `pageshow` resumes;
+  - a refusal is retried *inside* the next `pointerup`;
+  - new game → Logic Flow, completion → silence, and nothing restarts
+    under the completion dialog;
+  - mute/unmute.
+- **Mutation check:** 18 deliberate regressions. 17 fail the suite.
+  The 18th (initializing SFX before music) can't be observed while SFX
+  creation can't throw; the ordering is kept as defense in depth.
+  The first mutation run missed four. Three were weak tests, now
+  strengthened (the code was already right):
+  - a muted unlock had slipped past a play counter;
+  - the mute-flurry timing missed the stale-pause window;
+  - the `NotSupportedError`-only branch wasn't exercised.
+
+  The fourth is the ordering above.
+- `npm test`: **286/286** (81 suites). `npm run validate:assets`: 0
+  errors, 0 warnings.
+
+### Real-browser verification (desktop headless Chromium only)
+
+All with the real autoplay policy:
+- **Full flow:** menu → Logic Flow on New Game → menu on pause → Logic
+  Flow on resume. The idle track sits at volume 0.
+- **Music off at Start:** zero `play()` calls and zero MP3 requests from
+  the page (the old build fetched both). Switching it on in Settings
+  plays once, with no wasted retry.
+- **No activation:** exactly one refused attempt in 12 s (the old build
+  made 7 in 10 s), and the first real tap plays it.
+- **Visibility and mute:** a hidden page pauses at once and stays
+  paused, comes back with a fade-in, and muting stops it.
+- **Offline:** with the server stopped, the menu track plays from the
+  Phase-2 cache.
+- **Not exercised in a real browser:** headless Chromium did not
+  restore the page from the back/forward cache, so real
+  `pagehide`/`pageshow` restores are covered only by the fake-DOM test.
+  Visibility was simulated in-page (headless pages are always visible),
+  with real media elements reacting.
+
+### Still needs real devices (nothing here was run on one)
+
+Everything in MANUAL_QA §9a on a real Android phone and a real
+iPhone/iPad, in the browser and installed, online and offline. The
+single most important open question is whether WebKit accepts the
+*muted* Start-tap unlock, so that menu music starts after the intro
+with no second tap. If it doesn't, the app still recovers on the first
+tap in the menu (the `blocked` → gesture path), but the intro-to-menu
+moment would be silent.
+
+---
+
 ## 2026-10-07 — Hardening Phase 2: Service Worker Hardening
 
 **Branch:** `claude/nifty-lovelace-9zf07w` (PR

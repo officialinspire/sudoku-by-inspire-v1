@@ -1873,6 +1873,61 @@ entry for this date.
       version (banner → Refresh → save intact); installed-PWA (home
       screen) update behavior on Android and iOS.
 
+## Hardening Phase 3 — Music Playback Hardening ✅ (2026-10-07)
+
+Builds on Hardening Phases 1–2. Full reasoning, the measured before/after
+behavior, and the mutation table are in `DEVELOPMENT_LOG.md`'s entry
+for this date.
+
+- [x] **Measured the old behavior first** (Chromium, Chrome's real
+      autoplay policy): the Start-tap unlock's `play()` immediately
+      `pause()`d always rejected or resolved unobserved; it ran even with
+      Music off; with Music off the page still downloaded both MP3s; and
+      with no user activation the 2-second recovery poll retried the
+      menu track forever (7 refused attempts in 10 s).
+- [x] **New `js/music-player.js`** — a DOM-free state machine (`idle` /
+      `starting` / `playing` / `blocked` / `retrying` / `failed`) for the
+      two HTMLAudio tracks. One rule, `shouldPlay()`, gates all sound:
+      target track + page active + music on with volume > 0. Every input
+      ends in one `reconcile()`.
+- [x] **Explicit outcomes instead of swallowed errors:** a refused
+      `play()` (`NotAllowedError`) → `blocked`, retried only inside the
+      next tap; a missing file → unavailable for the session; network
+      errors, stalls (8 s watchdog) and outside pauses → **bounded**
+      retries (0.5 s / 2 s / 6 s), refilled only by a fresh start (tap,
+      page visible again, music switched on, new screen). The endless
+      poll is gone.
+- [x] **Unlock respects Music off**: no `play()` — and no preload — while
+      music is off; the unlock is muted (iOS ignores `volume`), and
+      switching music on in Settings unlocks then.
+- [x] **Lifecycle:** visibilitychange, pagehide/pageshow (bfcache), and
+      screen lock pause at once and never restart while hidden, muted,
+      in Start/Intro, or after completion (`musicTrackFor()` now maps a
+      completed game to silence). Fade frames and pause timers are
+      cancellable, one per track; stale `play()` results and stale
+      `pause` events are ignored.
+- [x] **SFX/music independence:** music starts first; a missing or
+      throwing `AudioContext` (lookup included) only costs the SFX.
+      AudioContext `interrupted` (iOS) now resumes like `suspended`.
+- [x] **iOS volume:** detected (volume reads back 1); tracks hard-cut
+      instead of crossfading at full volume; Music volume 0 = off.
+- [x] Fixed two bugs the first real-browser run exposed: an idle track
+      sat at volume 1 (a full-volume blip at its first frame), and the
+      unlock's queued `pause` event could be misread as an interruption.
+- [x] Tests: `js/music-player.test.js` (28, fake Audio + fake clock) and
+      `js/audio.test.js` (9, the real wiring with a fake DOM and a
+      throwing AudioContext). 17 of 18 deliberate regressions fail the
+      suite (the 18th, initialization order, is defense in depth that
+      can't be observed while SFX creation can't throw). `npm test`:
+      286/286. `sw.js`: `music-player.js` precached, `CACHE_VERSION` →
+      `v23`.
+- [x] Docs: MANUAL_QA §9 updates + new §9a (Android/iOS × browser/
+      installed × online/offline checks; volume limitations), README.
+- [ ] **Device checks still needed (none done):** everything in
+      MANUAL_QA §9a on a real Android phone and a real iPhone/iPad —
+      especially whether the muted Start-tap unlock satisfies WebKit, so
+      menu music starts after the intro without a second tap.
+
 ## Outstanding / Blocked
 
 - [x] `./inspiresoftwareintro.mp4` and `./logo.png` supplied by user

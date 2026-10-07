@@ -268,7 +268,9 @@ least once:
   - No audible click/pop/gap at any of these transitions — they should
     crossfade smoothly (an exponential ease, not a linear ramp, over
     ~1.8s — see Phase 14c, 2026-07-30), not cut instantly or sound
-    abrupt near the end of the fade.
+    abrupt near the end of the fade. **Exception (Hardening Phase 3):**
+    on iOS/iPadOS, where web pages can't set an element's volume, tracks
+    switch with a clean hard cut instead — see §9a.
 - [ ] **Mobile-specific: music survives interruptions** (Phase 14d/14f,
       2026-07-30; root-caused and reworked in Phase 14q, 2026-08-07 after
       a real-device report that 14d/14f's fixes still weren't enough —
@@ -288,7 +290,10 @@ least once:
       notification sound during play. If it ever does go silent and stay
       silent, that's a real regression worth reporting — the app should
       notice and recover automatically within about a second or two at
-      the very most.
+      the very most. (Since Hardening Phase 3: an interruption gets up
+      to three automatic retries, 0.5 s / 2 s / 6 s apart, then waits —
+      and the next tap anywhere resumes it. It never retries in an
+      endless loop, and never while the page is hidden or music is off.)
 - [ ] **Missing music (regression check only)**: temporarily rename or
       remove either MP3 and confirm the app still never shows an error,
       never breaks SFX, and the Music toggle simply has nothing audible
@@ -299,6 +304,68 @@ least once:
 - [ ] Backgrounding the tab (switching away) pauses whichever track was
       playing; returning to the tab resumes it only if the Music toggle
       is still on.
+- [ ] **Music off from the start** (Hardening Phase 3): turn Music off,
+      reload, tap Start. Nothing plays — not even silently — and the page
+      doesn't load the MP3s at all (devtools → Network, filtered to
+      `.mp3`: no requests from the page itself; a first visit's service
+      worker precache may still fetch them in the background). Turn Music
+      on in Settings: the current screen's track starts right away.
+
+## 9a. Mobile & standalone audio (real devices)
+
+Run each check in **four** setups per platform: in the browser and as
+an installed app (Android: Chrome menu → Install app; iOS: Safari Share
+→ Add to Home Screen), each **online** and **offline** (airplane mode,
+after one online launch so the service worker has cached the music —
+see §10). Untested on real devices as of Hardening Phase 3; everything
+below was verified only in desktop/headless Chromium and with mocked
+lifecycle tests.
+
+- [ ] **Start → Intro → Menu**: tap Start; the intro plays; when it ends
+      or is skipped, "Sudoku Zen" fades in on the menu *without* another
+      tap. (On iOS this depends on the Start tap's silent unlock — if the
+      menu stays silent until you tap again, note it: the app still
+      recovers on that tap, but the unlock didn't take.)
+- [ ] **Game music**: New Game → "Logic Flow"; pause → "Sudoku Zen";
+      resume → "Logic Flow"; solve the puzzle → silence under the
+      completion dialog; Menu → "Sudoku Zen".
+- [ ] **Screen lock**: lock the phone mid-track for ~10 s, unlock — music
+      is silent while locked (it must not keep playing on the lock screen)
+      and resumes on unlock, or on the first tap if the OS demands one.
+- [ ] **App switch / home screen**: switch to another app and back, and
+      (installed app) go to the home screen and reopen from the
+      app switcher — same expectation as screen lock.
+- [ ] **Interruptions**: a phone call, an alarm, or another app's audio
+      (start a podcast, then return) — music resumes afterwards or on the
+      next tap; it never plays over the other app while the game is in
+      the background.
+- [ ] **Rapid switching**: menu ↔ Statistics ↔ High Scores ↔ game
+      several times quickly, and mute/unmute during a crossfade — it
+      always ends on the right track (or silence when muted), never two
+      tracks at once for more than the fade.
+- [ ] **Offline** (airplane mode, second launch): both tracks play and
+      loop from the cache; seeking/looping doesn't stall (Hardening Phase
+      2 serves them as proper byte ranges).
+
+**Volume limitations to expect (not bugs):**
+
+- **iOS/iPadOS ignore a web page's music volume.** Safari (and installed
+  web apps) don't let JavaScript set an audio element's volume — it's
+  always the hardware volume. So on iOS the Music volume slider only
+  distinguishes **zero (music off) vs. above zero (full volume)**, and
+  track changes are hard cuts instead of crossfades (a crossfade would
+  mean both tracks at full volume for 1.8 s). Use the device's volume
+  buttons for loudness.
+- **iOS silent switch:** sound effects (Web Audio) follow the
+  ring/silent switch and go quiet in silent mode, while music (an audio
+  element) may keep playing — Apple routes the two differently.
+- **Android:** music and effects both follow the *media* volume, and the
+  in-app sliders work as a percentage of it. Android 12+ may duck or
+  pause music for notifications; that counts as an interruption (see
+  above).
+- **Background playback is intentionally off:** the app pauses music
+  whenever it's hidden (tab switch, screen lock, home screen), on every
+  platform.
 
 ## 10. Offline: first install, media seeking, missing media
 
