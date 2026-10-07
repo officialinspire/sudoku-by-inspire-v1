@@ -49,7 +49,7 @@ to record dated results of an actual QA pass if you want that history.
 ## 3. Intro playback, Skip, and missing/corrupt media fallback
 
 - [ ] With `./inspiresoftwareintro.mp4` present and playable, the video
-      plays automatically after Start, muted, and the Skip button is
+      plays automatically after Start, with sound, and the Skip button is
       visible and legible in the top-right corner regardless of what's
       currently showing in the video frame underneath it (checked
       across at least 2 theme packs — the Skip button doesn't use theme
@@ -63,6 +63,22 @@ to record dated results of an actual QA pass if you want that history.
       skip straight to the main menu with no error dialog, no stuck
       screen, and no console exception (only the video element's own
       `error` event, handled gracefully). Restore the file afterward.
+- [ ] **Slow connection** (Hardening Phase 1): clear site data,
+      devtools → Network → throttle to "Slow 3G", reload. The Network
+      panel should show **no** `inspiresoftwareintro.mp4` request until
+      you tap Start (the video is `preload="none"`). After the tap the
+      intro either starts, or — if it can't start within ~4 s, or
+      freezes waiting on data for ~4 s — the app moves on to the menu by
+      itself. Skip works the whole time.
+- [ ] **iOS Safari, second visit** (Hardening Phase 1): load once,
+      reload once (so the service worker is installed and controlling
+      the page), then fully close and reopen the app. The intro video
+      and both music tracks must still play. On that second visit they
+      come from the service worker's cache as full (200) responses, and
+      Safari is the browser most likely to reject that for media range
+      requests — if media works on the first visit but the intro
+      silently skips / music never starts on the second, that's the bug
+      described in `DEVELOPMENT_LOG.md`'s Hardening Phase 1 entry.
 - [ ] **Missing logo**: temporarily rename/remove `logo.png`, reload to
       the main menu. The footer area shouldn't show a broken-image icon
       or console error — a `<img>` with a failed `src` degrading
@@ -130,6 +146,13 @@ For **each** of Easy, Intermediate, Advanced, and Insane:
 - [ ] Switching browser tabs away and back also pauses/resumes
       appropriately without losing progress or double-counting elapsed
       time.
+- [ ] **Focus stays put while the timer runs** (Hardening Phase 1):
+      Tab to a toolbar button (Notes/Erase/Undo) or a number-pad digit
+      and wait a few seconds — focus and its ring stay there. Press
+      Enter/Space on it — focus still stays. Open and close Settings via
+      the in-game gear — focus returns to the gear and stays. Arrow keys
+      from a board cell still carry focus with the selection, and
+      Resume after a pause puts focus back on the selected cell.
 
 ## 6. Reload and Continue
 

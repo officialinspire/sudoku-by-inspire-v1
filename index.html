@@ -84,14 +84,18 @@
     <div id="menu-fade-overlay" class="menu-fade-overlay" hidden aria-hidden="true"></div>
 
     <section id="screen-start" class="screen is-active" tabindex="-1" aria-label="Start screen">
-      <img src="./logo.png" alt="" class="start-logo">
+      <img src="./logo.png" alt="" class="start-logo" width="600" height="181">
       <h1 class="brand">Sudoku <span>by Inspire</span></h1>
       <p class="start-prompt">Tap, click, or press any key to begin</p>
     </section>
 
     <section id="screen-intro" class="screen" tabindex="-1" aria-label="Intro video" hidden>
       <h1 class="visually-hidden">Intro</h1>
-      <video id="intro-video" class="intro-video" src="./inspiresoftwareintro.mp4" playsinline></video>
+      <!-- preload="none": nothing is fetched until the Start tap calls
+           play(), so the video never competes with the app's own startup
+           requests. width/height = the file's real 1080x720, reserving the
+           box up front (the validate:assets script checks they match). -->
+      <video id="intro-video" class="intro-video" src="./inspiresoftwareintro.mp4" width="1080" height="720" preload="none" playsinline></video>
       <button id="skip-intro-btn" type="button" class="skip-btn">Skip</button>
     </section>
 
@@ -123,7 +127,7 @@
         </button>
       </nav>
       <footer class="menu-footer">
-        <img src="./logo.png" alt="Inspire logo" class="menu-logo">
+        <img src="./logo.png" alt="Inspire logo" class="menu-logo" width="600" height="181">
       </footer>
     </section>
 

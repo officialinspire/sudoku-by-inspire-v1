@@ -25,6 +25,10 @@ body {
 
 img {
   max-width: 100%;
+  /* Lets an <img>'s width/height attributes act as an aspect ratio
+     (space reserved before the file arrives, no layout shift) instead of
+     a fixed pixel height that would distort any CSS-narrowed image. */
+  height: auto;
   display: block;
 }
 
@@ -728,8 +732,15 @@ button {
 }
 
 .intro-video {
-  max-width: 100%;
+  /* The width attribute is a fixed width, so it wouldn't shrink when
+     max-height kicks in (landscape phones) — this caps it at the width
+     80dvh allows at the video's own 1080x720 ratio, keeping the box
+     snug around the picture exactly as when it sized from metadata. */
+  max-width: min(100%, calc(80dvh * 1080 / 720));
   max-height: 80dvh;
+  /* Same reason as the img rule above: the width/height attributes
+     (index.html) become an aspect ratio, not a fixed 720px height. */
+  height: auto;
   border-radius: var(--radius-md);
 }
 

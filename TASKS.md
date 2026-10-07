@@ -1760,6 +1760,61 @@ entry):
       high-score rank banner/medals, per-difficulty reset,
       export/import) to the feature highlights.
 
+## Hardening Phase 1 — Asset/Loading Hardening ✅ (2026-10-07)
+
+First phase of a post-v1 hardening pass. Named "Hardening Phase 1"
+rather than "Phase 1" so it can't be confused with the original App
+Shell phase above. Full reasoning, alternatives, and verification
+numbers are in `DEVELOPMENT_LOG.md`'s entry for this date.
+
+- [x] **Audit** of every HTML/CSS/module/media/manifest reference for
+      missing files, case mismatches, MIME mismatches, and startup
+      downloads. No missing or case-mismatched files, and every binary's
+      bytes match its extension. Real findings: (1) the intro video was
+      fetched at page load, before the Start tap; (2) no `<img>`/`<video>`
+      had intrinsic dimensions; (3) a stalled intro download stranded the
+      player on a black screen; (4) the service worker broke uncached
+      media range requests; (5) stale docs claimed the intro video is
+      silent/muted.
+- [x] **`npm run validate:assets`** (`scripts/validate-assets.js`) —
+      dependency-free; exact-case path resolution, root-absolute/bare/
+      remote import detection, magic-byte MIME check, PNG/JPEG/MP4
+      dimension check against `width`/`height`/manifest `sizes`/
+      `og:image:*`, plus a startup-vs-precache download summary.
+      `scripts/validate-assets.test.js` runs it against the repo and
+      against a deliberately broken fixture (10 tests).
+- [x] **Image/video dimensions:** `width="600" height="181"` on both
+      `logo.png` images and `width="1080" height="720"` on the intro
+      video, with `height: auto` (and a ratio-aware `max-width` on the
+      video) so they act as aspect ratios. Measured pixel-identical to
+      the old layout at 5 viewports, now reserved before the file loads.
+- [x] **`preload="none"` on the intro video** — zero video bytes before
+      the Start tap (was 1 request at page load).
+- [x] **Intro stall watchdog** (`js/ui/intro-video.js`): if the intro
+      hasn't started, or freezes waiting on data, for 4 s, it moves on to
+      the menu itself. `finishIntro()` is now once-only, so racing
+      exits (error + rejected play()) can't double-transition.
+- [x] **Service worker:** only cache complete `200` responses, and never
+      let a failed cache write fail the response — a `206 Partial
+      Content` media response used to make `cache.put()` throw and the
+      request fail. `CACHE_NAME` → `v21`.
+- [x] **Board render (`js/ui/board-view.js` + new pure
+      `js/ui/board-render-plan.js`):** timer-only ticks repaint just the
+      clock (0 board DOM mutations per tick, was ~243); no-op
+      text/aria-label writes skipped on full renders. Focus follows the
+      selected cell only when the selection moves, play resumes, or
+      focus is stranded (on the page body, or on a control the render
+      just disabled — e.g. Hint after use) — a tick, a number-pad press,
+      or a dialog closing no longer yanks focus to the board. 10 new
+      tests, including a check against the real game-state module.
+- [x] README (Tests + new validation section, corrected intro-video
+      description), MANUAL_QA (slow-connection, iOS second-visit, and
+      focus-stability checks; corrected "muted"), CLAUDE.md file map.
+- [ ] **Device checks still needed** (can't be done in the sandbox):
+      real intro playback on desktop + mobile; Slow-3G Start→Intro→Menu;
+      iOS Safari second-visit media from the service-worker cache; focus
+      stability with a real screen reader. See MANUAL_QA §3 and §5.
+
 ## Outstanding / Blocked
 
 - [x] `./inspiresoftwareintro.mp4` and `./logo.png` supplied by user

@@ -5,6 +5,249 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-10-07 — Hardening Phase 1: Asset/Loading Hardening
+
+**Branch:** `claude/nifty-lovelace-9zf07w`
+
+**Goal:** make sure every file the app references really ships and is
+served correctly; keep Start → Intro → Menu responsive on slow
+connections and when media fails; stop the game board from repainting
+itself, and stealing keyboard focus, on every one-second timer tick.
+Named "Hardening Phase 1" so it doesn't collide with the original Phase 1
+(App Shell).
+
+### Audit — what was checked, what was found
+
+Every reference from `index.html` outward: HTML `src`/`href`, CSS
+`url()`, the imports of `index.js` and all 38 modules under `js/`, asset
+strings in JS, the service worker's precache lists, the manifest, and
+the social-share image.
+
+- **Missing files / case mismatches:** none. (GitHub Pages is
+  case-sensitive; macOS/Windows disks usually aren't. So a `./Logo.png`
+  typo would work locally and 404 only once deployed. That's why the new
+  validator compares names against real directory listings instead of
+  using `existsSync()`.)
+- **MIME:** every binary's first bytes match its extension (PNG, JPEG,
+  MP4 `ftyp`, MP3 `ID3`), and that matters because a static host picks
+  the Content-Type from the extension. Every import ends in `.js`, which
+  matters more: browsers reject a module script served without a
+  JavaScript MIME type.
+- **Real problems found:**
+  1. The intro `<video>` had no `preload`, so the browser fetched it at
+     page load, before the player had even tapped Start. That competed
+     with the app's own startup requests (confirmed: 1 video request
+     before the tap).
+  2. No `<img>`/`<video>` had intrinsic `width`/`height`, so the page
+     reflowed as each file arrived.
+  3. If the intro download stalled, the player sat on a black intro
+     screen indefinitely (confirmed: still on the intro after 10 s).
+     Only Skip got them out.
+  4. **Service-worker bug:** `<audio>`/`<video>` fetch with a `Range`
+     header and get `206 Partial Content` back. The fetch handler cached
+     anything `response.ok` (which includes 206), but `cache.put()`
+     refuses 206 responses outright. The awaited rejection fell into the
+     `catch` and returned `Response.error()`, so a good network response
+     became a failed one. Reproduced: an uncached range request for
+     `Logic Flow.mp3` failed with `TypeError: Failed to fetch`. Any media
+     file that missed the install-time precache (a network blip during
+     that ~5 MB download) would have failed on every visit.
+  5. Stale docs: README called the intro video "silent — no audio
+     track" and MANUAL_QA said it plays "muted". It has an AAC track,
+     and `muted` was removed in Phase 14b.
+- **Noted, not changed:** `Sudoku-Instagram.png` (5 MB) isn't referenced
+  by the app, so players never download it. It's harmless in the repo.
+
+### What changed, and why it's built this way
+
+**`scripts/validate-assets.js` + `npm run validate:assets`.** A single
+dependency-free Node script. It exports `validateAssets(rootDir)`, so
+tests can call it, and it also runs as a command (exit 1 on any error).
+- It uses regexes rather than a real HTML/JS parser. A parser would mean
+  the repo's first dependency, and this codebase's own files are regular
+  enough for a few anchored patterns. Import patterns must start their
+  line, so an import mentioned in a comment doesn't count.
+- Paths are resolved one segment at a time against `readdirSync()`
+  listings, so a case mismatch is reported as a case mismatch, with the
+  real on-disk name.
+- MIME is checked by reading magic bytes, and dimensions by reading the
+  PNG `IHDR`, the JPEG `SOF` segment, and the MP4 `tkhd` box. That's a
+  few lines each, and it lets the script confirm the new `width`/`height`
+  attributes, the manifest icon `sizes`, and `og:image:width/height`
+  against the real files, so swapping in a different-sized logo later
+  gets caught.
+- The social image URL is absolute (crawlers need that), so it's mapped
+  back to a repo file by stripping the `og:url` prefix. That way a
+  renamed banner is still caught.
+- It prints a download summary. Before the Start tap: 44 files, about
+  303 KB (HTML, CSS, JS, logo, favicon, manifest). After page load, the
+  service-worker precache adds about 5 MB on a first visit (video plus
+  both MP3s).
+- `scripts/validate-assets.test.js` (10 tests) runs it against this repo
+  (expects zero errors and warnings) and against a temp fixture that's
+  broken on purpose: case-mismatched image and import, bare import,
+  extensionless import, CDN import, root-absolute paths in HTML, CSS and
+  the manifest, a JPEG saved as `.png`, a wrong aspect ratio, wrong
+  icon sizes, and a missing MP3. Pointed at the pre-change commit, the
+  validator reports exactly the four gaps fixed below as warnings.
+
+**Intrinsic dimensions (`index.html`, `styles.css`).** Both `logo.png`
+images get `width="600" height="181"` and the video gets
+`width="1080" height="720"`. These are the real file sizes, read with
+`file`/`ffprobe`. On their own, those attributes would be fixed pixel
+sizes. The start logo's CSS width (`clamp(…)`) would then pair with a
+181px height and squash it. So the global `img` rule gains `height: auto`,
+which turns the attributes into an aspect ratio. The video needed one
+more step. Its `width` attribute is a fixed width, so when `max-height:
+80dvh` kicked in on a landscape phone the box came out 732×312 around a
+468×312 picture. `max-width: min(100%, calc(80dvh * 1080 / 720))` caps
+the width at whatever 80dvh allows at the video's own ratio. Measured
+with a stand-in WebM (headless Chromium can't decode the real H.264)
+at 390×844, 844×390, 768×1024, 1280×800 and 1366×768: the box is
+identical to the old metadata-sized one at every viewport, and now it's
+correct *before* any byte of video arrives. The logos measure identical
+too (96×29 / 144×43.4).
+
+**`preload="none"` on the intro video.** Alternatives considered:
+- `metadata`: cheap for this file (`moov` sits before `mdat`, about 8 KB),
+  but with intrinsic dimensions in the markup the metadata buys nothing
+  before the tap.
+- `auto`, or upgrading to it after `load`: warms the video while the
+  player reads the Start screen, but competes with the startup requests.
+  The service worker's precache (registered after `load`) already
+  downloads the file in the background anyway.
+
+With `none`, nothing is fetched until `play()` runs on the Start tap.
+Verified: zero video requests before the tap, at the root and at a
+GitHub Pages subpath.
+
+**Intro stall watchdog (`js/ui/intro-video.js`).** `preload="none"`
+means a slow connection only starts the download after the tap, so the
+intro needs a way out that doesn't depend on the player finding Skip.
+`playIntro()` arms a 4-second timer, `'playing'` clears it, and
+`'waiting'` re-arms it. `'waiting'` means "playback stopped for lack of
+data", so a mid-intro freeze is covered too. `'stalled'` was rejected
+because it also fires while playback continues happily from the buffer,
+which would cut a healthy intro short. 4 s is about two-thirds of the
+5.8 s intro: long enough for a typical 3G start, short enough not to
+feel stuck. `finishIntro()` now returns early unless the intro screen
+is active. A missing file fires both `'error'` and a rejected `play()`,
+and the timer could race a Skip click; only the first exit should leave
+the intro. Verified in Chromium:
+- 404: menu in about 80 ms.
+- Undecodable file: menu in about 150 ms.
+- Request that never answers: menu at 4.4 s (was: stuck after 10 s).
+- 6-second decodable stand-in: plays to the end and reaches the menu at
+  6.4 s, so the watchdog doesn't cut a healthy intro.
+
+**Service worker (`sw.js`).** The runtime cache-fill now stores only
+`status === 200` responses, and the write runs as
+`event.waitUntil(cache.put(…).catch(() => {}))` instead of being awaited
+inside the `try`. That way a refused or failed write (206, quota) can
+never turn a good network response into an error, and the worker still
+stays alive until the write finishes. Re-ran the repro: the uncached
+range request now returns 206 with exactly 100 bytes, and plain requests
+still fill the cache. `CACHE_NAME` bumped `v20` → `v21`. Without the
+bump, returning visitors' cache-first service worker would keep serving
+the old `board-view.js` and `intro-video.js`.
+
+**Board render (`js/ui/board-view.js`, new `js/ui/board-render-plan.js`).**
+Before this change, every one-second tick re-ran the whole render: 81
+cells' classes and aria-labels, plus all 729 note spans' `textContent`,
+which a MutationObserver counted at 729 records over 3 seconds. It also
+ran `selectedCell.focus()` on every render, so within a second focus was
+pulled back to the board from a toolbar button, a number-pad digit, or
+the Settings gear the dialog had just returned focus to (all
+reproduced). Two pure functions in a new DOM-free module (same pattern
+as `cell-aria.js`, so Node can test them):
+- `isTimerOnlyChange(previous, next)` compares each board-relevant
+  snapshot field by **identity**. That works because `game-state.js`
+  updates immutably: a mutation replaces only the arrays it touches,
+  and `getState()` spreads the same references into each snapshot. So
+  "nothing but the clock changed" means every listed field is `===`.
+  There's no deep compare of 81-element arrays and no change to
+  `game-state.js` itself. The alternative was a separate "tick" event
+  from `game-state.js`, but other subscribers (autosave, the menu's
+  Continue button) rely on ticks arriving through `onStateChange`, so
+  that would have widened the change. A test drives the real game-state
+  module to pin the identity assumption: a tick is timer-only, and every
+  real mutation (select, enter, wrong entry, notes, undo, pause, resume)
+  is not.
+- `shouldFocusSelectedCell(previous, next, focusIsStranded)` moves
+  focus only when the selection actually moved (arrow keys, click, undo
+  jumping back) or play just resumed from pause. The Resume button
+  disappears, so focus belongs back on the board. Anything else leaves
+  focus where the player put it.
+- One case was caught in review rather than up front. The old
+  every-render refocus had also been quietly rescuing focus whenever the
+  focused control got **disabled** by that same render: Hint once its
+  cell is solved, or a number-pad digit once all nine are placed. With
+  the new gating, a keyboard hint left focus on `<body>` (verified: the
+  original returned it to the cell). The DOM layer now passes
+  `focusIsStranded` (focus on the body, or on a now-disabled control).
+  The focus block moved below the number-pad/Undo/Hint `disabled`
+  updates so it sees a control this very render just disabled, while
+  staying above the pause-overlay block, which must still win.
+  Verified: after a keyboard hint, focus is back on the selected
+  cell.
+
+In `render()`: if the change is timer-only, update `#game-timer` and
+return. The settings listener passes `{ force: true }`, because
+immediate-error-checking lives outside the game snapshot and the diff
+can't see it (verified: toggling it still repaints error highlights at
+once). On full renders, text and `aria-label` writes are skipped when
+unchanged. An identical write still counts as a DOM mutation, and for
+`aria-label` it can make a screen reader re-announce. Results:
+- 0 board mutations per tick (was about 243).
+- One arrow-key move: 265 → about 145 mutations (it varies slightly by
+  puzzle). The rest are `hidden`/class writes, deliberately left as-is
+  to keep this phase small.
+- Focus stays on Erase, on a number-pad digit after Enter, and on the
+  gear after Settings closes.
+- Arrow-key focus-follow and Pause → Resume focus still work.
+
+### Verification
+
+- `npm test`: **225/225 pass**, 67 suites (205 existing + 10
+  board-render tests + 10 validator tests).
+- `npm run validate:assets`: 0 errors, 0 warnings.
+- Headless Chromium (Playwright), at the root and at a simulated
+  `/sudoku-by-inspire-v1/` subpath: zero console/page errors through
+  Start → Intro → Menu → game. The service worker installs with the
+  `/sudoku-by-inspire-v1/` scope and runtime-caches the new module.
+  Offline reload, then a new puzzle generated and played, with no
+  network.
+- Scratch tooling (stand-in WebM, servers, scripts) lived only in the
+  session scratchpad. No binaries were added, and the user-owned files
+  are untouched.
+
+### Still needs a real device
+
+- Real intro playback with sound on a desktop and a mobile browser
+  (headless Chromium can't decode H.264).
+- Slow-3G Start → Intro → Menu by hand (MANUAL_QA §3).
+- **iOS Safari, second visit:** once the service worker has precached
+  the video and MP3s, it serves them as full `200` responses even to
+  `Range` requests. Chrome accepts that. Safari has historically
+  required `206` for media from a service worker. If the intro skips or
+  music is silent on the *second* iOS visit, the fix is to answer
+  `Range` requests from the cached `Blob` with a sliced `206` (about 20
+  lines in `sw.js`). Not built speculatively; check on a device first.
+- Focus stability with a real screen reader (MANUAL_QA §5).
+
+### Follow-ups worth considering (out of this phase's scope)
+
+- Autosave (`js/game-persistence.js`) and the menu's Continue-button
+  refresh still run on every tick, which means a debounced
+  `localStorage` write about once a second during play.
+- `js/audio.js` creates both music tracks with `preload = 'auto'` on the
+  Start tap, so the gameplay track (about 2.3 MB) downloads while the
+  intro plays. On a slow first visit it competes with the intro video.
+- The first-visit precache is about 5 MB, mostly music. That's correct
+  for offline play, but heavy on metered mobile data.
+
+---
+
 ## 2026-08-11 — Phase 16h follow-up: Real Banner Image for Social Share
 
 **Branch:** `claude/image-meta-tags-social-p7xu9d`

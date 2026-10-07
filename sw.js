@@ -22,7 +22,7 @@
  * devtools -> Application -> Service Workers -> Unregister, and/or
  * Application -> Storage -> "Clear site data."
  */
-const CACHE_NAME = 'inspire-sudoku-shell-v20';
+const CACHE_NAME = 'inspire-sudoku-shell-v21';
 
 // The minimum set of files the app cannot boot without. Listed
 // explicitly and installed with cache.addAll(), which is all-or-nothing:
@@ -144,7 +144,16 @@ self.addEventListener('fetch', (event) => {
 
       try {
         const response = await fetch(request);
-        if (response.ok) await cache.put(request, response.clone());
+        // Only a complete 200 is cacheable. <audio>/<video> fetch with
+        // Range headers and get 206 Partial Content back, which
+        // cache.put() rejects outright — and awaiting that rejection here
+        // used to turn a perfectly good network response into
+        // Response.error(), breaking the very media it was serving. The
+        // write is also best-effort (quota, etc.): a failed cache write
+        // must never fail the response itself.
+        if (response.status === 200) {
+          event.waitUntil(cache.put(request, response.clone()).catch(() => {}));
+        }
         return response;
       } catch {
         // Offline and not already cached — nothing more this worker can

@@ -89,6 +89,8 @@ then review the user's code on return before finishing the phase.
 - `js/` — ES modules imported by `index.js` (screens, sudoku engine, UI,
   audio, theme, storage, service-worker registration).
 - `manifest.webmanifest`, `sw.js` — offline/PWA support.
+- `scripts/` — dev-only Node tooling, never loaded by the app
+  (`npm run validate:assets` checks every asset/import reference).
 - `PROJECT_BRIEF.md` — product scope and acceptance criteria.
 - `TASKS.md` — phased build checklist (source of truth for progress).
 - `DEVELOPMENT_LOG.md` — dated running log of what happened each session.

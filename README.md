@@ -102,7 +102,9 @@ in this repo, and must never be fabricated or overwritten by anyone
 editing this codebase (see `CLAUDE.md`'s asset policy):
 
 - `./inspiresoftwareintro.mp4` — the intro video played after the start
-  screen (currently silent — no audio track).
+  screen (1080×720 H.264 with its own AAC soundtrack; plays unmuted
+  because it starts inside the Start tap's user gesture). It's
+  `preload="none"`, so none of it downloads until that tap.
 - `./logo.png` — displayed on the Start screen and in the main-menu
   footer.
 - `./Sudoku Zen.mp3` — background music that fades in on the main menu
@@ -136,11 +138,32 @@ dependency to install:
 npm test
 ```
 
-This runs every `*.test.js` file under `js/` (205 tests across 63
+This runs every `*.test.js` file in the repo (225 tests across 67
 suites as of this writing, covering the Sudoku engine, puzzle generator,
-game state, scoring, and every persisted store) in a few seconds. See
+game state, scoring, every persisted store, the board's render
+decisions, and the asset validator below) in a few seconds. See
 `DEVELOPMENT_LOG.md`'s Phase 12 entry for what's covered here versus
 what belongs in manual browser QA instead.
+
+### Asset and import validation
+
+```bash
+npm run validate:assets
+```
+
+A dependency-free static check (`scripts/validate-assets.js`) that
+starts from `index.html` and follows every reference the app makes —
+HTML `src`/`href`, CSS `url()`, the whole ES-module import graph, asset
+paths in JS (`'./Sudoku Zen.mp3'`), the service worker's precache lists,
+the manifest, and the social-share image. It fails (exit code 1) on a
+missing file, a **case mismatch** (works on macOS/Windows, 404s on
+GitHub Pages), a root-absolute `/path`, a bare or remote import, a file
+whose bytes don't match its extension's MIME type, or declared
+dimensions/types (`width`/`height`, manifest icon `sizes`,
+`og:image:*`) that don't match the real file. It also prints what
+downloads before the Start tap versus what the service worker
+precaches afterward. `npm test` runs it against the repo too, so a
+broken reference fails the test suite.
 
 For everything a unit test can't reach — real video/audio playback, the
 real service-worker lifecycle, real viewport rendering, real
