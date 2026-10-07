@@ -6,7 +6,7 @@ import { emptyProgress, applyCompletedRun } from './achievement-progress.js';
 function progressWithWins(days) {
   let progress = emptyProgress(days[0]);
   days.forEach((day, i) => {
-    const run = { runId: `eval-run-${i}-x`, difficulty: i % 2 ? 'insane' : 'easy', score: 100, elapsedSeconds: 60, perfect: i === 0, noHint: true };
+    const run = { runId: `eval-run-${i}-x`, difficulty: i % 2 ? 'insane' : 'easy', score: 100, elapsedSeconds: 60, perfect: i === 0, noHint: true, noNotes: false, noUndo: false, heavyNotes: false, comeback: false };
     progress = applyCompletedRun(progress, run, day).progress;
   });
   return progress;
@@ -51,7 +51,7 @@ describe('currentDailyStreak', () => {
 describe('evaluateAchievements', () => {
   const metrics = getProgressMetrics(progressWithWins(['2026-10-01', '2026-10-02']), '2026-10-02');
 
-  test('reports progress and unlocks, in definition order', () => {
+  test('reports progress and whether each is met, in definition order', () => {
     const results = evaluateAchievements(
       [
         { id: 'first-win', metric: 'wins', target: 1 },
@@ -62,7 +62,7 @@ describe('evaluateAchievements', () => {
       metrics
     );
     assert.deepEqual(
-      results.map(({ id, current, unlocked, fraction }) => [id, current, unlocked, fraction]),
+      results.map(({ id, current, met, fraction }) => [id, current, met, fraction]),
       [
         ['first-win', 2, true, 1],
         ['ten-wins', 2, false, 0.2],

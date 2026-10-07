@@ -60,7 +60,7 @@ describe('legacy saves (from before run tracking)', () => {
     const tracking = normalizeRunTracking({ puzzle, difficulty: 'easy', mistakes: 0, hintsUsed: 0 });
     assert.deepEqual(tracking.runCounters, { mistakes: 0, hints: 0, undos: 0, notes: 0 });
     assert.equal(tracking.runCountersComplete, false);
-    assert.deepEqual(classifyCompletedRun(tracking), { perfect: false, noHint: false });
+    assert.deepEqual(classifyCompletedRun(tracking), { perfect: false, noHint: false, noNotes: false, noUndo: false, heavyNotes: false, comeback: false });
   });
 
   test('a save that already has valid tracking keeps it as-is', () => {
@@ -77,14 +77,14 @@ describe('classifyCompletedRun', () => {
   const run = (counters) => ({ runCounters: { ...emptyRunCounters(), ...counters }, runCountersComplete: true });
 
   test('perfect = no mistakes and no hints; undos and notes don\'t matter', () => {
-    assert.deepEqual(classifyCompletedRun(run({ undos: 5, notes: 40 })), { perfect: true, noHint: true });
+    assert.deepEqual(classifyCompletedRun(run({ undos: 5, notes: 40 })), { perfect: true, noHint: true, noNotes: false, noUndo: false, heavyNotes: true, comeback: false });
   });
 
   test('a mistake (even one later undone) ends perfect but not no-hint', () => {
-    assert.deepEqual(classifyCompletedRun(run({ mistakes: 1, undos: 1 })), { perfect: false, noHint: true });
+    assert.deepEqual(classifyCompletedRun(run({ mistakes: 1, undos: 1 })), { perfect: false, noHint: true, noNotes: true, noUndo: false, heavyNotes: false, comeback: false });
   });
 
   test('a hint ends both', () => {
-    assert.deepEqual(classifyCompletedRun(run({ hints: 1 })), { perfect: false, noHint: false });
+    assert.deepEqual(classifyCompletedRun(run({ hints: 1 })), { perfect: false, noHint: false, noNotes: true, noUndo: true, heavyNotes: false, comeback: false });
   });
 });

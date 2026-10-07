@@ -1988,8 +1988,70 @@ for this date.
       perfect/no-hint credit.
 - [x] Docs: MANUAL_QA §15/§15b updated and new §16 (devtools checks
       while there's no UI), README.
-- [ ] **Later:** the achievement catalog (definitions targeting the
-      metrics) and its UI.
+- [x] **Later:** the achievement catalog (definitions targeting the
+      metrics) — done in Hardening Phase 5 below. Its UI is still open
+      (tracked there).
+
+## Hardening Phase 5 — Achievement Catalog: 100 Achievements ✅ (2026-10-07)
+
+Exactly 100 deterministic gameplay achievements on top of Phase 4's
+store and evaluator. Still no UI. Full reasoning, the target
+derivations, and the mutation table are in `DEVELOPMENT_LOG.md`'s entry
+for this date.
+
+- [x] **Catalog** (`js/achievement-catalog.js`, frozen data):
+      15 lifetime wins + 20 difficulty wins (5 × 4) + 10 perfect +
+      10 no-hint + 10 speed + 10 score + 10 consecutive-win + 10
+      daily-streak + 5 playstyle = **100**. Each has a stable semantic
+      ID, a name, an exact requirement with its number, a category, a
+      metric, a target, and a comparison.
+- [x] **Speed/score targets derived from `js/scoring.js`:**
+      - speed: par, half par, and a third of par at both ends of the
+        difficulty range;
+      - score: what a flawless win at par, or at half par, scores at
+        each difficulty's multiplier;
+      - lifetime points: 10× and 100× a flawless Easy-at-par game;
+      - all proven attainable on *every* puzzle of the difficulty: no
+        time below 2× the emptiest puzzle's fill floor (1 s per empty
+        cell), no score above the flawless score at that floor.
+- [x] **Perfect** = zero mistakes AND zero hints on the monotonic
+      counters, so undo can't erase either.
+- [x] **Playstyle** (completed runs only): 25+ notes; an Advanced/Insane
+      win with no notes; an Advanced/Insane win with no Undo; a win on
+      all 4 difficulties; a win despite 3+ mistakes. "Never used X"
+      claims need complete counters; "at least N" ones accept a floor.
+- [x] **Progress schema 2** (`js/achievement-progress.js`): adds per-
+      difficulty fastest time and best score, playstyle counts, and the
+      `unlocked` map (`id → { at, backfilled }`). Phase-4 (schema 1)
+      progress is upgraded on load, keeping its tracked counts.
+- [x] **Evaluated only on events:** startup (seed/upgrade/backfill) and
+      a recorded completion. Never on timer ticks, abandon, or reads.
+      Each achievement is unlocked once, in the same write as the
+      progress that earned it, and never re-dated or revoked.
+- [x] **Honest backfill:** credits only what Statistics and High Scores
+      prove (wins per difficulty, fastest time, best score, difficulties
+      won), marked `backfilled`. Perfect, no-hint, streaks, days,
+      lifetime points, and other playstyle goals start from zero.
+- [x] `sw.js` precaches the catalog; `CACHE_VERSION` → `v25`.
+- [x] Tests: 29 new — catalog 11 (count/allocation, golden IDs,
+      uniqueness, well-formedness, stated numbers, derived targets,
+      reachability bounds, every threshold boundary), unlocks 12
+      (a 1,000-win career unlocking all 100 exactly once, repeat events,
+      newer/retired catalog entries, honest backfill, schema-1 upgrade),
+      game-persistence +5 (a minute of timer ticks never touches
+      progress; perfect/no-hint through real undo; playstyle needs a
+      win), progress +1 (`withUnlocks`). `npm test` 379/379, also under
+      TZ=UTC, UTC+14, UTC−11, New York and London. 10 of 10 deliberate
+      regressions fail the suite.
+- [x] Real browser (headless Chromium): startup backfill from
+      Statistics, a game solved through the UI (0 progress writes during
+      5 s of live timer, 1 at completion), all 100 listed, the catalog
+      precached by the service worker.
+- [x] Docs: MANUAL_QA §16 (unlock checks), README test count.
+- [ ] **Later:** the achievements UI (list, progress, unlock toast,
+      possibly a sound), reading `getAchievements()` and the
+      `newlyUnlocked` IDs `recordCompletedRun` returns
+      (`js/game-persistence.js` doesn't pass them on yet).
 
 ## Outstanding / Blocked
 

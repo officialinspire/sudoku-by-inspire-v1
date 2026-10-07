@@ -612,17 +612,35 @@ New as of Phase 16g — Settings → "Your data" → Export/Import.
 
 ---
 
-## 16. Achievement progress (no UI yet — devtools checks)
+## 16. Achievement progress and unlocks (no UI yet — devtools checks)
 
-Hardening Phase 4 tracks progress but shows nothing yet; check it in
+Hardening Phases 4–5 track progress and unlock the 100 achievements
+(`js/achievement-catalog.js`) but show nothing yet; check it in
 devtools → Application → Local Storage →
-`inspireSudoku:v1:achievementProgress` (a JSON value).
+`inspireSudoku:v1:achievementProgress` (a JSON value, `version: 2`).
+Unlocks are in its `unlocked` map: `id → { at, backfilled }`.
 
 - [ ] **First launch after updating** with existing history: the key
       appears at startup with `wins` / `winsByDifficulty` /
       `completedSeconds` matching Statistics, `trackingSince` = today,
       and everything else (perfect/no-hint wins, streaks, days, earned
       score) at 0 — past wins are never counted as perfect.
+- [ ] **Backfilled unlocks** on that first launch: only wins,
+      difficulty, speed (Statistics' best time), score (best High
+      Score) and `style-grand-tour` entries, each `backfilled: true`.
+      Never `perfect-*`, `no-hint-*`, `win-streak-*`, `daily-streak-*`,
+      `score-lifetime-*` or other `style-*`.
+- [ ] **A win adds unlocks once**: the first win adds `wins-1` (and
+      `perfect-1`/`no-hint-1` if clean) with `backfilled: false` and
+      `at` ≈ now. Reload and win again: those entries' `at` values
+      don't change.
+- [ ] **No evaluation while playing**: in devtools, watch the key's
+      value during a game (or break on `localStorage.setItem`) — it
+      doesn't change while the clock ticks, only when the game is won
+      (or replaced via New Game, which only resets `winStreak.current`).
+- [ ] **Undone hint** (fresh profile — Clear Data first): use a hint,
+      Undo it, finish — `wins-1` unlocks, but `no-hint-1` and
+      `perfect-1` don't.
 - [ ] **One win**: `wins` +1, `earnedScore` + exactly the score the
       completion dialog showed, `lastWinDate` = today (local date, even
       just after midnight), `recentRunIds` gains one ID.

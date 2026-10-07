@@ -5,6 +5,282 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-10-07 — Hardening Phase 5: 100 Achievements
+
+**Branch:** `claude/nifty-lovelace-9zf07w` (PR
+officialinspire/sudoku-by-inspire-v1#4, on top of Hardening Phases 1–4)
+
+**Goal:** exactly 100 deterministic gameplay achievements, evaluated by
+Phase 4's store and evaluator. Each is unlocked once, only when a
+relevant event happens, and existing players are credited only for what
+their history proves. Still no UI: nothing visible changes.
+
+### The catalog (`js/achievement-catalog.js`)
+
+| Category | Count | Metric | Targets |
+|---|---|---|---|
+| Lifetime wins | 15 | `wins` | 1, 3, 5, 10, 15, 25, 40, 50, 75, 100, 150, 200, 300, 500, 1000 |
+| Difficulty wins | 20 | `wins:<difficulty>` | 1, 5, 10, 25, 50 at each of the 4 |
+| Perfect | 10 | `perfectWins` | 1, 3, 5, 10, 15, 25, 40, 50, 75, 100 |
+| No hints | 10 | `noHintWins` | 1, 5, 10, 25, 50, 75, 100, 150, 200, 300 |
+| Speed | 10 | `bestTime:<difficulty>` (at most) | par and ½ par × 4, ⅓ par on Easy and Insane |
+| Score | 10 | `bestScore:<difficulty>`, `earnedScore` | flawless at par and at ½ par × 4; 10,000 and 100,000 lifetime |
+| Consecutive wins | 10 | `bestWinStreak` | 2, 3, 5, 7, 10, 15, 20, 25, 30, 50 |
+| Daily streak | 10 | `bestDailyStreak` | 2, 3, 5, 7, 10, 14, 21, 30, 60, 100 |
+| Playstyle | 5 | see below | 1 each (Grand Tour: 4 difficulties) |
+
+Each definition is a frozen `{ id, name, description, category, metric,
+target, comparison }`. The description is the exact requirement, with
+its number in it ("Win an Easy game in 2:30 or less."). A test checks
+that every description states its own target, so the text can't drift
+from what's actually checked.
+
+### What changed, and why
+
+**Stable, semantic IDs** (`wins-100`, `speed-easy-half-par`,
+`style-ink-only`). Unlocks are stored under the ID forever, so an ID
+names the *goal*, never a derived number. If `js/scoring.js`'s par
+times are retuned later, `speed-easy-half-par` moves its target with
+them instead of orphaning everyone's unlock. A golden-list test pins
+all 100 IDs in order, so renaming one is a deliberate, visible change.
+
+**Speed and score targets are derived, not typed in.**
+- **Speed** = `round(PAR_SECONDS[d] × fraction)`: par and half par at
+  every difficulty, plus a third of par at Easy and Insane (both ends
+  of the range). 4 × 2 + 2 = 10.
+- **Score** = `calculateScore` of a flawless win (0 mistakes, 0 hints)
+  finished at that fraction of par. At par the speed bonus is 0, so the
+  target is exactly base × multiplier (1,000 / 1,500 / 2,250 / 3,500).
+  At half par it adds par × 1 point (1,300 / 2,100 / 3,150 / 5,000).
+  If the multipliers or the formula change, the targets follow.
+- **Lifetime points** = 10× and 100× a flawless Easy-at-par game.
+
+**Attainable maxima.** Every empty cell needs at least one input, and
+nobody enters more than one a second. On the *emptiest* puzzle a
+difficulty generates (`81 − minClues` empty cells), that gives a floor
+of 41 / 47 / 53 / 59 s. A flawless game at that floor scores 1,518 /
+2,606 / 3,944 / 6,382: the best score every puzzle of the difficulty
+can reach. The catalog tests prove:
+- no speed target is under 2× the floor (no goal needs near-mechanical
+  speed) or over par;
+- no score target is above that maximum.
+- **Why the emptiest puzzle, not any puzzle:** a puzzle with more clues
+  can be finished sooner. The headless browser's scripted solve below
+  took 37 s on an Easy puzzle, under the 41 s floor. A goal must be
+  reachable whichever puzzle the player is dealt, so the bound uses the
+  worst case. (That run is how I caught a comment claiming "no real game
+  can beat this time". It now says what the number really is, and the
+  helper is named `emptiestPuzzleFillSeconds`.)
+
+**Perfect = zero mistakes AND zero hints**, on the monotonic per-run
+counters from Phase 4. Undo can't erase either: an undone wrong digit
+still rules out perfect, and an undone hint rules out both perfect and
+no-hint. The requirement text says so: "undone mistakes still count."
+
+**Playstyle: 5 goals, all requiring a completed run.**
+- **Note Taker:** win a game with 25+ note toggles;
+- **Ink Only:** win an Advanced or Insane game with no notes at all;
+- **No Take-Backs:** win an Advanced or Insane game without Undo;
+- **Grand Tour:** win on all 4 difficulties;
+- **Comeback Kid:** win despite 3+ mistakes.
+
+`classifyCompletedRun` (`js/run-tracking.js`) now returns six flags.
+- **Claims that something never happened** (perfect, no-hint, no notes,
+  no undo) need complete counters (`runCountersComplete`). A save from
+  before Phase 4 can't prove a negative.
+- **"At least N" claims** (25+ notes, 3+ mistakes) are fine on floor
+  counts. An old save's counts can only be too low, never too high.
+- **The thresholds** (`HEAVY_NOTES_MIN_TOGGLES`, `COMEBACK_MIN_MISTAKES`)
+  live next to the classification, and the catalog imports them for its
+  text.
+- `applyCompletedRun` now rejects flag combinations no real run can
+  produce: perfect with 3+ mistakes, and no-notes with 25+ notes.
+- **"Hard"** means Advanced or Insane (`HARD_DIFFICULTIES`). On Easy,
+  "no notes" and "no undo" are too easy to be worth a goal.
+
+**Progress schema 2** (`js/achievement-progress.js`) adds:
+- the fastest win and best score per difficulty (`null` until the
+  first);
+- the four playstyle counts;
+- `unlocked`: `id → { at, backfilled }`.
+
+Validation adds checks for each. Unknown IDs in `unlocked` are allowed
+on purpose: a later catalog may retire an achievement, and that mustn't
+invalidate anyone's progress.
+
+**Why store unlocks at all?** Phase 4 noted that, with only
+never-decreasing metrics, "met" is a pure function of progress. That's
+still true and still how unlocks are *detected*. But a stored record
+adds what a pure function can't:
+- **when** it was earned;
+- **whether it was backfilled**;
+- **permanence** if a target is ever retuned upward. An unlock is never
+  revoked or re-dated (`withUnlocks` skips IDs already present).
+
+"Unlocked" for display comes only from the stored record, so it can't
+flicker.
+
+**Evaluated on events, never on ticks** (`js/achievement-store.js`).
+The catalog is checked in exactly two places:
+- **at startup** (`initAchievementProgress`: first seed, Phase-4 upgrade,
+  or an achievement a newer catalog added that's already earned);
+- **when a completion is recorded** (`recordCompletedRun`).
+
+The new unlocks are written in the same `saveJSON` as the progress that
+earned them, so progress and unlocks can't disagree after a crash.
+- The live timer's once-a-second `notify()` reaches only the autosave.
+  A test runs a minute of real ticks and counts zero reads or writes of
+  the progress key, then exactly one write for the completion.
+- **Abandoning** a game saves the broken streak without evaluating:
+  giving up can't unlock anything, and it can't take an unlock back
+  either. A 2-win streak's unlock survives the abandon that resets the
+  streak to 0.
+- `getAchievements()` (for the future UI) is read-only. It returns every
+  achievement with `current`, `fraction` (0..1; for times, target ÷
+  best), `unlocked`, `unlockedAt` and `backfilled`.
+- `recordCompletedRun` returns the `newlyUnlocked` IDs for a future
+  toast. `js/game-persistence.js` doesn't pass them on yet.
+
+**Honest backfill.** On a first start, the seed uses only facts the
+existing stores record exactly:
+- **Statistics:** wins per difficulty, total time, and the fastest win
+  (`bestTimeSeconds`, used only when `gamesCompleted > 0`);
+- **High Scores:** the best score per difficulty.
+
+From those, wins, difficulty, speed, best-score and Grand Tour
+achievements can unlock, dated now and marked `backfilled: true`.
+
+Not credited, each for a reason:
+- **Perfect / no-hint:** High Scores' mistake/hint counts are
+  undo-erasable (Phase 4's finding 1). Five flawless-looking past wins
+  prove nothing.
+- **Win streaks:** Statistics' streaks are per difficulty. An abandoned
+  game in *another* difficulty would have broken the overall streak, so
+  a per-difficulty streak of 5 doesn't prove 5 in a row.
+- **Days and daily streaks:** only a top-10 High Scores entry keeps a
+  date. A test seeds five wins on five consecutive days, and no daily
+  streak is credited.
+- **Lifetime points:** High Scores keep only a top 10, so the total is
+  unknown.
+- **The other playstyle goals:** notes and undo were never recorded.
+
+All of these start from zero (`trackingSince` = today) and are tracked
+from now on.
+
+**Upgrading Phase-4 progress (schema 1).**
+- **Kept as-is:** every count Phase 4 tracked, including its genuinely
+  tracked perfect wins, streaks and days, and the dedup list.
+- **Taken from proven history:** the new bests.
+- **Started at 0:** playstyle (never recorded).
+
+Whatever that proves is unlocked as backfilled. A backup exported
+from the Phase-4 build is handled the same way: Import writes it
+as-is and reloads, and that start upgrades it.
+
+**`sw.js`:** the catalog module is precached; `CACHE_VERSION` →
+`v25`. The validator's module-graph drift check failed until it was
+added, which is what it's for.
+
+### Tests
+
+29 new tests (379/379, 114 suites):
+- **catalog (11):**
+  - exactly 100, and the per-category allocation;
+  - golden IDs, unique IDs and names;
+  - well-formed, frozen definitions; times compared at-most, everything
+    else at-least; no `current*` metric;
+  - every description states its target;
+  - speed and score targets equal the `PAR_SECONDS`/`calculateScore`
+    derivations;
+  - reachability bounds;
+  - **threshold boundaries for all 100:** one short of the target
+    (target − 1, or + 1 second for times) isn't met, exactly the target
+    is; for times, no win yet isn't met and a faster one is.
+- **unlocks (12),** through the real store:
+  - **reachability:** a realistic 1,000-win career over 125 straight
+    days. Runs are built from counters with the real score formula and
+    classification, never faster than the emptiest-puzzle floor, with
+    an abandon every 100 wins. It unlocks all 100, each reported exactly
+    once at the win that crossed its threshold (`wins-1000` on win
+    1,000, `daily-streak-100` on the 100th day's first win…), and the
+    stored dates match;
+  - **repeat events:** a duplicate completion (same session, after a
+    reload, days later) leaves storage byte-for-byte unchanged;
+    restarting writes nothing; reads never write; later wins don't
+    re-report or re-date; abandon revokes nothing;
+  - **catalog changes:** an achievement a newer catalog adds that's
+    already earned unlocks at the next start (backfilled); a retired
+    one is kept but never listed;
+  - **honest backfill:** exactly 17 proven unlocks from a seeded
+    history, nothing else; the next tracked win earns perfect/no-hint
+    for real (not backfilled); the schema-1 upgrade.
+- **game-persistence (+5):**
+  - a minute of live timer ticks never touches progress;
+  - perfect/no-hint through the real game state: clean, an undone
+    mistake, an undone hint;
+  - 25 note toggles unlock nothing until that game is won (across a
+    reload and Continue).
+- **progress (+1):** `withUnlocks` never re-dates.
+
+**Time zones:** the full suite passes under TZ=UTC,
+Pacific/Kiritimati (UTC+14), Pacific/Pago_Pago (UTC−11),
+America/New_York and Europe/London. The career crosses both the US and
+EU daylight-saving changes; its days are built from local calendar
+parts.
+
+**Mutation check:** 10 deliberate regressions, all caught:
+- evaluating on every state change (i.e. timer ticks);
+- perfect ignoring hints;
+- re-dating existing unlocks (first survived: the store filters through
+  `findNewlyMet` before `withUnlocks`, so I added a direct `withUnlocks`
+  test);
+- the backfill crediting flawless history as perfect;
+- the backfill trusting per-difficulty streaks;
+- seed unlocks not marked backfilled;
+- an unreachable speed target;
+- abandon wiping unlocks;
+- the upgrade dropping tracked perfect wins;
+- startup rewriting progress every time.
+
+**Fixed along the way:**
+- **Grand Tour's text didn't state its number.** The description test
+  caught it; it now reads "each of the 4 difficulties (…)".
+- **The floor comment overstated what the number means** (see
+  "Attainable maxima" above).
+- **Test gotcha:** Node's mock timers don't run timeouts scheduled
+  *during* one big `tick(60_000)`, so the autosave never fired. The
+  tick test advances one second at a time, like a real clock.
+
+### Real browser (headless Chromium)
+
+- **A returning player** (3 Easy wins in Statistics, best 4:10):
+  progress is seeded at startup as schema 2, with `wins-1`, `wins-3`,
+  `wins-easy-1` and `speed-easy-par` unlocked, all backfilled.
+- **A game solved through clicks and number keys,** with 5 s of live
+  timer first:
+  - 0 progress writes while the timer ticked, exactly 1 at completion;
+  - newly unlocked, not backfilled: `perfect-1`, `no-hint-1`,
+    `speed-easy-half-par`, `speed-easy-third-par`, `score-easy-par`,
+    `score-easy-half-par`;
+  - best Easy score = the completion dialog's score (1,526).
+- `getAchievements()` in the page lists 100, 10 unlocked.
+- **Service worker:** cache `v25` holds `js/achievement-catalog.js` and
+  no test files.
+- No page errors.
+
+### Not done / for later
+
+- **The achievements UI:** list, progress bars, an unlock toast, maybe a
+  sound. The data is ready: `getAchievements()` and `newlyUnlocked`.
+- **Players with history start their lifetime-points, perfect/no-hint,
+  streak and playstyle goals from zero.** That's honest, but the UI
+  should say "tracked since <date>" (`trackingSince`) so it doesn't
+  read as lost progress.
+- Per-difficulty Statistics/High Scores clears still don't touch
+  progress (it's lifetime, including bests). Only Clear Data resets it.
+
+---
+
 ## 2026-10-07 — Hardening Phase 4: Achievement Infrastructure
 
 **Branch:** `claude/nifty-lovelace-9zf07w` (PR

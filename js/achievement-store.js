@@ -4,9 +4,15 @@
  * pattern as the statistics and high-score stores: missing, corrupt, or
  * unreadable data never throws, it just falls back.
  *
- * The fallback for a player with no stored progress (first run after
- * this feature shipped, after Clear Data, or after a corrupt value) is
- * the statistics backfill, not zero — see progressFromStatistics.
+ * The fallback for a player with no stored progress (first run of this
+ * feature, after Clear Data, or after a corrupt value) is what existing
+ * history *proves* (progressFromHistory), not zero; Phase-4 progress
+ * (schema 1) is upgraded the same way.
+ *
+ * Achievements (js/achievement-catalog.js) are evaluated only when
+ * progress changes — startup (seed/upgrade/backfill) and a recorded
+ * completion — never on a timer tick, and an unlock is written once, in
+ * the same write as the progress that earned it, and never re-dated.
  *
  * Completions are counted once per run ID. The stored list of recent run
  * IDs covers reloads and restored backups; `sessionRecordedRunIds`
@@ -16,68 +22,117 @@
 
 import { loadJSON, saveJSON, removeJSON } from './storage.js';
 import { getAllStatistics } from './statistics-store.js';
+import { getAllHighScores } from './high-scores-store.js';
 import {
+  PROGRESS_VERSION,
   localDateKey,
-  progressFromStatistics,
+  progressFromHistory,
+  upgradeProgress,
   applyCompletedRun,
   applyAbandonedRun,
+  withUnlocks,
   isValidProgress,
+  isValidProgressV1,
 } from './achievement-progress.js';
-import { getProgressMetrics } from './achievement-evaluation.js';
+import { getProgressMetrics, evaluateAchievements, findNewlyMet } from './achievement-evaluation.js';
+import { ACHIEVEMENTS } from './achievement-catalog.js';
 
 const STORAGE_KEY = 'inspireSudoku:v1:achievementProgress';
 
 const sessionRecordedRunIds = new Set();
 
 const todayKeyAt = (now) => localDateKey(new Date(now));
+const readHistory = () => ({ statistics: getAllStatistics(), highScores: getAllHighScores() });
 
-function loadStored() {
-  return loadJSON(STORAGE_KEY, null, isValidProgress);
-}
-
-function load(now) {
-  return loadStored() ?? progressFromStatistics(getAllStatistics(), todayKeyAt(now));
+/** Unlocks every achievement `progress` meets that isn't unlocked yet. */
+function unlockMet(progress, now, backfilled) {
+  const ids = findNewlyMet(ACHIEVEMENTS, getProgressMetrics(progress, todayKeyAt(now)), progress.unlocked);
+  return withUnlocks(progress, ids, { at: now, backfilled });
 }
 
 /**
- * Called once at startup: writes the statistics backfill as soon as the
- * feature first runs (so `trackingSince` is the day tracking really
- * began, and later statistics changes can't shift the baseline).
+ * Current-schema progress plus whether it still needs writing: stored
+ * progress as-is, or — when it's missing, corrupt, or schema 1 — the
+ * history seed/upgrade with whatever that history proves already unlocked
+ * (marked `backfilled`, since no win happened just now).
+ */
+function load(now) {
+  const stored = loadJSON(STORAGE_KEY, null, (value) => isValidProgress(value) || isValidProgressV1(value));
+  if (stored?.version === PROGRESS_VERSION) return { progress: stored, needsSave: false, newlyUnlocked: [] };
+  const seeded = stored ? upgradeProgress(stored, readHistory()) : progressFromHistory(readHistory(), todayKeyAt(now));
+  return { ...unlockMet(seeded, now, true), needsSave: true };
+}
+
+/**
+ * Called once at startup: writes the seed/upgrade the first time, and
+ * unlocks anything already met but not yet recorded (say, an achievement
+ * a newer catalog added). Returns the IDs it unlocked.
  */
 export function initAchievementProgress(now = Date.now()) {
-  if (loadStored() === null) saveJSON(STORAGE_KEY, load(now));
+  const loaded = load(now);
+  const { progress, newlyUnlocked } = unlockMet(loaded.progress, now, true);
+  if (loaded.needsSave || newlyUnlocked.length > 0) saveJSON(STORAGE_KEY, progress);
+  return [...loaded.newlyUnlocked, ...newlyUnlocked];
 }
 
 /**
  * Records one completed run: `{ runId, difficulty, score,
- * elapsedSeconds, perfect, noHint }`. Returns `{ duplicate: true }` if
- * this run was already counted (do not count it anywhere else either),
- * otherwise `{ duplicate: false, persisted }`. Never throws.
+ * elapsedSeconds, ...classifyCompletedRun(state) }`. Returns
+ * `{ duplicate: true, newlyUnlocked: [] }` if this run was already
+ * counted (count it nowhere else either), otherwise `{ duplicate: false,
+ * persisted, newlyUnlocked }` — the achievement IDs this win unlocked.
+ * Never throws.
  */
 export function recordCompletedRun(run, now = Date.now()) {
-  if (sessionRecordedRunIds.has(run?.runId)) return { duplicate: true };
-  let result;
+  if (sessionRecordedRunIds.has(run?.runId)) return { duplicate: true, newlyUnlocked: [] };
+  let applied;
   try {
-    result = applyCompletedRun(load(now), run, todayKeyAt(now));
+    applied = applyCompletedRun(load(now).progress, run, todayKeyAt(now));
   } catch {
-    return { duplicate: false, persisted: false }; // malformed run: skip progress, never break completion
+    // Malformed run: skip progress rather than break the completion flow.
+    return { duplicate: false, persisted: false, newlyUnlocked: [] };
   }
   sessionRecordedRunIds.add(run.runId);
-  if (result.duplicate) return { duplicate: true };
-  return { duplicate: false, persisted: saveJSON(STORAGE_KEY, result.progress) };
+  if (applied.duplicate) return { duplicate: true, newlyUnlocked: [] };
+  const { progress, newlyUnlocked } = unlockMet(applied.progress, now, false);
+  return { duplicate: false, persisted: saveJSON(STORAGE_KEY, progress), newlyUnlocked };
 }
 
-/** An unfinished game was replaced by a new one: ends the win streak. */
+/**
+ * An unfinished game was replaced by a new one: ends the win streak.
+ * Nothing can become unlocked by giving up, so nothing is evaluated.
+ */
 export function recordRunAbandoned(now = Date.now()) {
-  saveJSON(STORAGE_KEY, applyAbandonedRun(load(now)));
+  saveJSON(STORAGE_KEY, applyAbandonedRun(load(now).progress));
 }
 
 export function getAchievementProgress(now = Date.now()) {
-  return load(now);
+  return load(now).progress;
 }
 
 export function getAchievementMetrics(now = Date.now()) {
-  return getProgressMetrics(load(now), todayKeyAt(now));
+  return getProgressMetrics(load(now).progress, todayKeyAt(now));
+}
+
+/**
+ * Every achievement, in catalog order, with its progress: `{ ...definition,
+ * current, fraction, unlocked, unlockedAt, backfilled }`. Read-only —
+ * "unlocked" comes from the stored record, so it can never flicker.
+ */
+export function getAchievements(now = Date.now()) {
+  const { progress } = load(now);
+  const results = evaluateAchievements(ACHIEVEMENTS, getProgressMetrics(progress, todayKeyAt(now)));
+  return ACHIEVEMENTS.map((definition, i) => {
+    const unlock = Object.hasOwn(progress.unlocked, definition.id) ? progress.unlocked[definition.id] : null;
+    return {
+      ...definition,
+      current: results[i].current,
+      fraction: unlock ? 1 : results[i].fraction,
+      unlocked: unlock !== null,
+      unlockedAt: unlock?.at ?? null,
+      backfilled: unlock?.backfilled ?? false,
+    };
+  });
 }
 
 /** Part of Settings → Clear Data. */

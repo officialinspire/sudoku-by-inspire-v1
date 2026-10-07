@@ -4,9 +4,10 @@ import {
   localDateKey,
   daysBetween,
   emptyProgress,
-  progressFromStatistics,
+  progressFromHistory,
   applyCompletedRun,
   applyAbandonedRun,
+  withUnlocks,
   isValidProgress,
   MAX_RECENT_RUN_IDS,
 } from './achievement-progress.js';
@@ -14,7 +15,7 @@ import {
 let nextRun = 0;
 function run(overrides = {}) {
   nextRun++;
-  return { runId: `run-${String(nextRun).padStart(6, '0')}`, difficulty: 'easy', score: 1000, elapsedSeconds: 300, perfect: false, noHint: false, ...overrides };
+  return { runId: `run-${String(nextRun).padStart(6, '0')}`, difficulty: 'easy', score: 1000, elapsedSeconds: 300, perfect: false, noHint: false, noNotes: false, noUndo: false, heavyNotes: false, comeback: false, ...overrides };
 }
 
 /** Applies wins as [dateKey, runOverrides?] pairs, asserting each is counted. */
@@ -155,7 +156,7 @@ describe('backfill from existing statistics', () => {
   };
 
   test('copies only what statistics record exactly: wins and completed time', () => {
-    const progress = progressFromStatistics(stats, '2026-10-07');
+    const progress = progressFromHistory({ statistics: stats }, '2026-10-07');
     assert.equal(progress.wins, 10);
     assert.deepEqual(progress.winsByDifficulty, { easy: 7, intermediate: 2, advanced: 0, insane: 1 });
     assert.equal(progress.completedSeconds, 4800);
@@ -164,7 +165,7 @@ describe('backfill from existing statistics', () => {
   });
 
   test('invents nothing else — even a history of 0-mistake, 0-hint wins is not perfect', () => {
-    const progress = progressFromStatistics(stats, '2026-10-07');
+    const progress = progressFromHistory({ statistics: stats }, '2026-10-07');
     assert.equal(progress.perfectWins, 0);
     assert.equal(progress.noHintWins, 0);
     assert.equal(progress.earnedScore, 0);
@@ -174,14 +175,27 @@ describe('backfill from existing statistics', () => {
   });
 
   test('missing or malformed statistics just contribute nothing', () => {
-    assert.equal(progressFromStatistics(undefined, '2026-10-07').wins, 0);
-    assert.equal(progressFromStatistics({ easy: { gamesCompleted: -3, totalPlayTimeSeconds: 10 } }, '2026-10-07').wins, 0);
+    assert.equal(progressFromHistory(undefined, '2026-10-07').wins, 0);
+    assert.equal(progressFromHistory({ statistics: { easy: { gamesCompleted: -3, totalPlayTimeSeconds: 10 } } }, '2026-10-07').wins, 0);
   });
 
   test('the first tracked win after a backfill starts the day counts fresh', () => {
-    const progress = winOn(progressFromStatistics(stats, '2026-10-07'), ['2026-10-07']);
+    const progress = winOn(progressFromHistory({ statistics: stats }, '2026-10-07'), ['2026-10-07']);
     assert.equal(progress.wins, 11);
     assert.equal(progress.winningDays, 1);
+  });
+});
+
+describe('withUnlocks', () => {
+  test('records each new ID once; repeating it never re-dates or re-reports an unlock', () => {
+    const first = withUnlocks(emptyProgress('2026-10-01'), ['wins-1', 'wins-1', 'perfect-1'], { at: 1000, backfilled: false });
+    assert.deepEqual(first.newlyUnlocked, ['wins-1', 'perfect-1']);
+    const again = withUnlocks(first.progress, ['wins-1', 'wins-3'], { at: 2000, backfilled: true });
+    assert.deepEqual(again.newlyUnlocked, ['wins-3']);
+    assert.deepEqual(again.progress.unlocked['wins-1'], { at: 1000, backfilled: false });
+    const nothingNew = withUnlocks(again.progress, ['wins-1', 'wins-3'], { at: 3000, backfilled: false });
+    assert.equal(nothingNew.progress, again.progress, 'untouched');
+    assert.deepEqual(nothingNew.newlyUnlocked, []);
   });
 });
 

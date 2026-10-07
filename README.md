@@ -147,11 +147,13 @@ dependency to install:
 npm test
 ```
 
-This runs every `*.test.js` file in the repo (350 tests across 103
+This runs every `*.test.js` file in the repo (379 tests across 114
 suites as of this writing, covering the Sudoku engine, puzzle generator,
 game state, scoring, every persisted store, achievement tracking
 (run IDs, undo-proof run counters, progress, dates and streaks, and
-exactly-once completion through autosave/Continue), the board's render
+exactly-once completion through autosave/Continue), the 100-achievement
+catalog (every threshold, reachability, unlock-once, honest backfill
+of existing history), the board's render
 decisions, background music's lifecycle (`js/music-player.test.js`,
 with fake audio elements and a fake clock), the service worker and its
 update flow, and the asset validator below) in a few seconds. `sw.test.js` runs the real `sw.js`

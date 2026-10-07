@@ -6,7 +6,7 @@
  */
 import { describe, test, before, beforeEach, after, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { startGame, restoreGame, resumeGame, selectCell, applyNumberInput, undo, getState, resetToIdle } from './game-state.js';
+import { startGame, restoreGame, resumeGame, selectCell, applyNumberInput, toggleNote, useHint, undo, getState, resetToIdle } from './game-state.js';
 import { initGamePersistence } from './game-persistence.js';
 import { loadActiveGame } from './active-game-store.js';
 import { getStatistics } from './statistics-store.js';
@@ -14,8 +14,10 @@ import { getHighScores } from './high-scores-store.js';
 import { getAchievementProgress, clearAchievementProgress } from './achievement-store.js';
 import { calculateScore } from './scoring.js';
 import { DIFFICULTIES } from './sudoku-generator.js';
+import { HEAVY_NOTES_MIN_TOGGLES } from './run-tracking.js';
 
 const SAVE_KEY = 'inspireSudoku:v1:activeGame';
+const PROGRESS_KEY = 'inspireSudoku:v1:achievementProgress';
 const solution = [...Array(81)].map((_, i) => ((3 * (Math.floor(i / 9) % 3) + Math.floor(Math.floor(i / 9) / 3) + (i % 9)) % 9) + 1);
 const OPEN_CELLS = [0, 1];
 const puzzle = solution.map((digit, i) => (OPEN_CELLS.includes(i) ? 0 : digit));
@@ -31,8 +33,8 @@ function createFakeStorage() {
   };
 }
 
-function newGame() {
-  startGame({ puzzle, solution, status: 'generated', attempts: 1, elapsedMs: 1, clueCount: 79 }, 'easy', { autoStartTimer: false });
+function newGame({ autoStartTimer = false } = {}) {
+  startGame({ puzzle, solution, status: 'generated', attempts: 1, elapsedMs: 1, clueCount: 79 }, 'easy', { autoStartTimer });
 }
 function fill(index) {
   selectCell(index);
@@ -49,7 +51,7 @@ function continueSavedGame() {
 
 before(() => {
   globalThis.window = new EventTarget(); // initGamePersistence listens for pagehide
-  mock.timers.enable({ apis: ['setTimeout'] });
+  mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
   initGamePersistence();
 });
 beforeEach(() => {
@@ -152,10 +154,71 @@ describe('scoring and display are unchanged; achievements see the truth', () => 
   });
 });
 
+describe('achievements are checked on game events, never on timer ticks', () => {
+  test('a minute of live clock (and the autosaves it triggers) never reads or writes achievement progress', () => {
+    newGame({ autoStartTimer: true });
+    fill(0);
+    const access = countStorageAccess();
+    // One second at a time, like a real clock: a single big tick() doesn't
+    // run the autosave timeouts each tick schedules along the way.
+    for (let second = 0; second < 60; second++) mock.timers.tick(1000);
+    assert.ok(access.writes[SAVE_KEY] >= 59, 'the clock really ticked: each tick re-saved the game');
+    assert.equal(access.reads[PROGRESS_KEY], undefined);
+    assert.equal(access.writes[PROGRESS_KEY], undefined);
+
+    fill(1); // the completion: one evaluation, one write
+    assert.equal(access.writes[PROGRESS_KEY], 1);
+    assert.ok(Object.hasOwn(getAchievementProgress().unlocked, 'wins-1'));
+  });
+});
+
+describe('perfect means no mistakes and no hints all game — undo erases neither', () => {
+  const cases = [
+    ['a clean game', () => {}, { perfect: true, noHint: true }],
+    ['an undone mistake', () => { selectCell(0); applyNumberInput(wrongDigit(0)); undo(); }, { perfect: false, noHint: true }],
+    ['an undone hint', () => { selectCell(0); useHint(); undo(); }, { perfect: false, noHint: false }],
+  ];
+  for (const [name, play, expected] of cases) {
+    test(`${name}: perfect ${expected.perfect ? 'unlocks' : 'stays locked'}, no-hint ${expected.noHint ? 'unlocks' : 'stays locked'}`, () => {
+      newGame();
+      play();
+      OPEN_CELLS.forEach(fill);
+      const { unlocked } = getAchievementProgress();
+      assert.ok(Object.hasOwn(unlocked, 'wins-1'));
+      assert.equal(Object.hasOwn(unlocked, 'perfect-1'), expected.perfect);
+      assert.equal(Object.hasOwn(unlocked, 'no-hint-1'), expected.noHint);
+    });
+  }
+});
+
+describe('playstyle achievements need a completed run', () => {
+  test('heavy note-taking unlocks nothing until that game is won', () => {
+    newGame();
+    for (let i = 0; i < HEAVY_NOTES_MIN_TOGGLES; i++) toggleNote(0, (i % 9) + 1);
+    letAutosaveRun();
+    assert.equal(Object.hasOwn(getAchievementProgress().unlocked, 'style-note-taker'), false);
+
+    resetToIdle(); // a reload mid-game — the counters travel with the save
+    continueSavedGame();
+    assert.equal(Object.hasOwn(getAchievementProgress().unlocked, 'style-note-taker'), false);
+    OPEN_CELLS.forEach(fill);
+    assert.ok(Object.hasOwn(getAchievementProgress().unlocked, 'style-note-taker'));
+  });
+});
+
+/** Counts storage reads and writes per key from now on. */
+function countStorageAccess() {
+  const access = { reads: {}, writes: {} };
+  const { getItem, setItem } = storage;
+  const bump = (counts, key) => { counts[key] = (counts[key] ?? 0) + 1; };
+  storage.getItem = (key) => { bump(access.reads, key); return getItem(key); };
+  storage.setItem = (key, value) => { bump(access.writes, key); setItem(key, value); };
+  return access;
+}
+
 // A page reload forgets the in-session dedup set; stored progress stays.
 function clearAchievementProgressSessionOnly() {
-  const key = 'inspireSudoku:v1:achievementProgress';
-  const saved = storage.getItem(key);
+  const saved = storage.getItem(PROGRESS_KEY);
   clearAchievementProgress();
-  if (saved !== null) storage.setItem(key, saved);
+  if (saved !== null) storage.setItem(PROGRESS_KEY, saved);
 }

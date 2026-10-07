@@ -13,6 +13,11 @@
 
 export const RUN_COUNTER_KEYS = ['mistakes', 'hints', 'undos', 'notes'];
 
+// Playstyle thresholds (js/achievement-catalog.js quotes them in its
+// requirement text, so the two can't drift apart).
+export const HEAVY_NOTES_MIN_TOGGLES = 25;
+export const COMEBACK_MIN_MISTAKES = 3;
+
 const RUN_ID_PATTERN = /^[A-Za-z0-9-]{8,64}$/;
 
 /**
@@ -91,14 +96,26 @@ export function normalizeRunTracking(saved) {
 }
 
 /**
- * Perfect = not a single wrong digit and no hints, ever — undone or not.
- * No-hint = no hints, ever. Both need complete counters: a migrated run
- * qualifies for neither.
+ * What a finished run proves, for achievements.
+ *
+ * Claims that something *never* happened — perfect (no wrong digit and
+ * no hint, ever, undone or not), no-hint, no notes, no undo — need
+ * complete counters: a migrated run's counters are only a floor, so it
+ * qualifies for none of them.
+ *
+ * Claims that something happened *at least* N times — heavy note use,
+ * a comeback after several mistakes — are fine on a floor: if the floor
+ * reaches N, the real count did too.
  */
 export function classifyCompletedRun({ runCounters, runCountersComplete }) {
-  const complete = runCountersComplete === true && isValidRunCounters(runCounters);
+  const valid = isValidRunCounters(runCounters);
+  const complete = valid && runCountersComplete === true;
   return {
     perfect: complete && runCounters.mistakes === 0 && runCounters.hints === 0,
     noHint: complete && runCounters.hints === 0,
+    noNotes: complete && runCounters.notes === 0,
+    noUndo: complete && runCounters.undos === 0,
+    heavyNotes: valid && runCounters.notes >= HEAVY_NOTES_MIN_TOGGLES,
+    comeback: valid && runCounters.mistakes >= COMEBACK_MIN_MISTAKES,
   };
 }

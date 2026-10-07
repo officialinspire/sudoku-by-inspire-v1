@@ -39,7 +39,7 @@
  * Workers -> Unregister, and/or Application -> Storage -> "Clear site
  * data."
  */
-const CACHE_VERSION = 'v24';
+const CACHE_VERSION = 'v25';
 
 // A cache name is shared by everything on an origin — and every GitHub
 // Pages project under one account is the *same* origin — so this app's
@@ -60,6 +60,7 @@ const SHELL_ASSETS = ['./index.html', './styles.css', './manifest.webmanifest', 
 // *.test.js file. Checked against the real import graph by
 // `npm run validate:assets` and sw.test.js.
 const MODULE_ASSETS = [
+  './js/achievement-catalog.js',
   './js/achievement-evaluation.js',
   './js/achievement-progress.js',
   './js/achievement-store.js',

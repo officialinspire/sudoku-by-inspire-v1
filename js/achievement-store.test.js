@@ -44,7 +44,7 @@ const DAY = 86_400_000;
 let nextRun = 0;
 function run(overrides = {}) {
   nextRun++;
-  return { runId: `store-run-${nextRun}`, difficulty: 'easy', score: 1500, elapsedSeconds: 240, perfect: false, noHint: true, ...overrides };
+  return { runId: `store-run-${nextRun}`, difficulty: 'easy', score: 1500, elapsedSeconds: 240, perfect: false, noHint: true, noNotes: false, noUndo: false, heavyNotes: false, comeback: false, ...overrides };
 }
 
 describe('startup and backfill', () => {
@@ -71,7 +71,9 @@ describe('startup and backfill', () => {
 describe('recording completions', () => {
   test('a completion is recorded with its score, time, and local day', () => {
     const result = recordCompletedRun(run({ score: 2300, elapsedSeconds: 410, perfect: true }), OCT_7_NOON);
-    assert.deepEqual(result, { duplicate: false, persisted: true });
+    assert.equal(result.duplicate, false);
+    assert.equal(result.persisted, true);
+    assert.ok(result.newlyUnlocked.includes('wins-1') && result.newlyUnlocked.includes('perfect-1'));
     const metrics = getAchievementMetrics(OCT_7_NOON);
     assert.equal(metrics.wins, 1);
     assert.equal(metrics.earnedScore, 2300);
@@ -83,9 +85,9 @@ describe('recording completions', () => {
   test('a duplicate completion is reported and counted once — within a session and after a reload', () => {
     const finished = run();
     recordCompletedRun(finished, OCT_7_NOON);
-    assert.deepEqual(recordCompletedRun(finished, OCT_7_NOON + 1000), { duplicate: true });
+    assert.deepEqual(recordCompletedRun(finished, OCT_7_NOON + 1000), { duplicate: true, newlyUnlocked: [] });
     clearAchievementProgressMemoryOnly();
-    assert.deepEqual(recordCompletedRun(finished, OCT_7_NOON + DAY), { duplicate: true }, 'from the stored list');
+    assert.deepEqual(recordCompletedRun(finished, OCT_7_NOON + DAY), { duplicate: true, newlyUnlocked: [] }, 'from the stored list');
     assert.equal(getAchievementProgress().wins, 1);
   });
 
@@ -96,14 +98,14 @@ describe('recording completions', () => {
     const afterwards = buildBackup(); // …and one taken after
     assert.ok(applyBackup(afterwards).ok);
     clearAchievementProgressMemoryOnly();
-    assert.deepEqual(recordCompletedRun(finished, OCT_7_NOON + DAY), { duplicate: true });
+    assert.deepEqual(recordCompletedRun(finished, OCT_7_NOON + DAY), { duplicate: true, newlyUnlocked: [] });
     assert.ok(applyBackup(backup).ok); // the older backup has no progress key: current progress stays
     assert.equal(getAchievementProgress().wins, 1);
   });
 
   test('a malformed run is skipped without throwing', () => {
-    assert.deepEqual(recordCompletedRun({ runId: 'nope' }, OCT_7_NOON), { duplicate: false, persisted: false });
-    assert.deepEqual(recordCompletedRun(undefined, OCT_7_NOON), { duplicate: false, persisted: false });
+    assert.deepEqual(recordCompletedRun({ runId: 'nope' }, OCT_7_NOON), { duplicate: false, persisted: false, newlyUnlocked: [] });
+    assert.deepEqual(recordCompletedRun(undefined, OCT_7_NOON), { duplicate: false, persisted: false, newlyUnlocked: [] });
     assert.equal(getAchievementProgress().wins, 0);
   });
 
@@ -154,8 +156,10 @@ describe('corrupt or unavailable storage', () => {
     globalThis.localStorage = deniedStorage;
     assert.doesNotThrow(() => initAchievementProgress(OCT_7_NOON));
     const finished = run();
-    assert.deepEqual(recordCompletedRun(finished, OCT_7_NOON), { duplicate: false, persisted: false });
-    assert.deepEqual(recordCompletedRun(finished, OCT_7_NOON), { duplicate: true });
+    const first = recordCompletedRun(finished, OCT_7_NOON);
+    assert.equal(first.duplicate, false);
+    assert.equal(first.persisted, false);
+    assert.deepEqual(recordCompletedRun(finished, OCT_7_NOON), { duplicate: true, newlyUnlocked: [] });
     assert.doesNotThrow(() => recordRunAbandoned(OCT_7_NOON));
     assert.doesNotThrow(() => clearAchievementProgress());
     assert.equal(getAchievementMetrics(OCT_7_NOON).wins, 0);
