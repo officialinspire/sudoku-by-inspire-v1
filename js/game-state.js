@@ -19,6 +19,7 @@
  */
 
 import { isValidPlacement, isSolved, indexToRowCol, rowColToIndex } from './sudoku-engine.js';
+import { createRunId, emptyRunCounters, incrementRunCounter, normalizeRunTracking } from './run-tracking.js';
 
 const BOARD_SIZE = 81;
 
@@ -55,6 +56,12 @@ function createEmptyState() {
     status: 'idle', // 'idle' | 'playing' | 'paused' | 'complete'
     notesMode: false,
     generationMeta: null,
+    // Run identity + monotonic counters (js/run-tracking.js). Never part
+    // of undo history: undo restores the *displayed* mistakes/hintsUsed
+    // above, but can't take back what actually happened in the run.
+    runId: null,
+    runCounters: emptyRunCounters(),
+    runCountersComplete: true,
   };
 }
 
@@ -230,6 +237,7 @@ export function startGame(generationResult, difficultyId, options = {}) {
     solution: generationResult.solution.slice(),
     difficulty: difficultyId,
     status: 'playing',
+    runId: options.runId ?? createRunId(),
     generationMeta: {
       status: generationResult.status,
       attempts: generationResult.attempts,
@@ -275,6 +283,10 @@ export function restoreGame(saved, options = {}) {
     hintsUsed: saved.hintsUsed,
     notesMode: saved.notesMode,
     status: 'paused',
+    // The same run continues — same ID, same counters — so autosave +
+    // Continue can never turn one run into two. A save from before run
+    // tracking is upgraded conservatively (see legacyRunTracking).
+    ...normalizeRunTracking(saved),
   };
   // No interval starts here, matching pauseGame()'s "fully stopped, not
   // just idling" policy — status is 'paused', so there's nothing for it
@@ -337,7 +349,7 @@ export function toggleNote(index, value) {
   const next = pushHistory(state);
   const notes = next.notes.slice();
   notes[index] ^= 1 << (value - 1); // every other bit is untouched — unrelated notes are preserved by construction
-  state = { ...next, notes };
+  state = { ...next, notes, runCounters: incrementRunCounter(state.runCounters, 'notes') };
   notify();
 }
 
@@ -381,9 +393,11 @@ export function applyNumberInput(value) {
     if (notes[peerIndex] & bit) notes[peerIndex] &= ~bit;
   }
 
-  const mistakes = next.solution[index] !== value ? next.mistakes + 1 : next.mistakes;
+  const isMistake = next.solution[index] !== value;
+  const mistakes = isMistake ? next.mistakes + 1 : next.mistakes;
+  const runCounters = isMistake ? incrementRunCounter(state.runCounters, 'mistakes') : state.runCounters;
 
-  state = { ...next, entries, notes, mistakes };
+  state = { ...next, entries, notes, mistakes, runCounters };
   finishIfSolved();
   notify();
 }
@@ -442,7 +456,7 @@ export function useHint() {
     if (notes[peerIndex] & bit) notes[peerIndex] &= ~bit;
   }
 
-  state = { ...next, entries, notes, hintsUsed: next.hintsUsed + 1 };
+  state = { ...next, entries, notes, hintsUsed: next.hintsUsed + 1, runCounters: incrementRunCounter(state.runCounters, 'hints') };
   finishIfSolved();
   notify();
   return true;
@@ -461,6 +475,9 @@ export function undo() {
     mistakes: previous.mistakes,
     hintsUsed: previous.hintsUsed,
     history,
+    // Deliberately not restored from `previous`: undo is counted, and
+    // never uncounts a mistake or hint.
+    runCounters: incrementRunCounter(state.runCounters, 'undos'),
   };
   notify();
 }

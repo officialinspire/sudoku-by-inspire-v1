@@ -147,9 +147,11 @@ dependency to install:
 npm test
 ```
 
-This runs every `*.test.js` file in the repo (286 tests across 81
+This runs every `*.test.js` file in the repo (350 tests across 103
 suites as of this writing, covering the Sudoku engine, puzzle generator,
-game state, scoring, every persisted store, the board's render
+game state, scoring, every persisted store, achievement tracking
+(run IDs, undo-proof run counters, progress, dates and streaks, and
+exactly-once completion through autosave/Continue), the board's render
 decisions, background music's lifecycle (`js/music-player.test.js`,
 with fake audio elements and a fake clock), the service worker and its
 update flow, and the asset validator below) in a few seconds. `sw.test.js` runs the real `sw.js`
@@ -206,7 +208,8 @@ See `MANUAL_QA.md` §10 (offline, media seeking, missing media) and §14
 
 ## Local-Data Behavior
 
-Everything — saved games, statistics, high scores, and every setting —
+Everything — saved games, statistics, high scores, achievement
+progress, and every setting —
 is stored **only** in this browser's `localStorage`, under versioned
 keys prefixed `inspireSudoku:v1:`. There is no account, no server, and
 no data ever leaves the device. Clearing the browser's site data for

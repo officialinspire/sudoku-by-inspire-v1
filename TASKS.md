@@ -1928,6 +1928,69 @@ for this date.
       especially whether the muted Start-tap unlock satisfies WebKit, so
       menu music starts after the intro without a second tap.
 
+## Hardening Phase 4 — Achievement Infrastructure ✅ (2026-10-07)
+
+Infrastructure only: tracking, storage, and evaluation. The achievement
+catalog and its UI come in a later phase. Full reasoning, the
+measurements, and the mutation table are in `DEVELOPMENT_LOG.md`'s entry
+for this date.
+
+- [x] **Reproduced first:** undo restores the displayed mistake/hint
+      counts, so a run with an undone mistake is recorded as 0 mistakes
+      (it would look "perfect"); and the same run, restored from a copy
+      of its save and finished again, counted twice in Statistics and
+      High Scores.
+- [x] **Run identity** (`js/run-tracking.js`): every new game gets a
+      random run ID (works without `crypto.randomUUID`, e.g. over plain
+      http). The ID is kept through autosave, reload, and Continue.
+- [x] **Monotonic per-run counters** — mistakes, hints, undos, note
+      toggles — that undo never erases. Displayed counts and scoring
+      are unchanged.
+- [x] **Save schema 2** (`js/active-game-store.js`): carries the run ID
+      and counters. Schema-1 saves still load, upgraded conservatively:
+      a deterministic legacy ID (stable across loads), the displayed
+      counts as a floor, and never eligible for perfect/no-hint.
+- [x] **Progress** (`js/achievement-progress.js`, pure):
+      - lifetime and per-difficulty wins, earned score, completed-run
+        time, perfect and no-hint wins;
+      - consecutive wins: abandoning a game breaks this streak;
+      - distinct winning days and daily streaks, on local calendar
+        dates. Several wins in one day count once, and a missed day
+        breaks the daily streak (abandoning doesn't). If the clock goes
+        backwards, nothing is counted.
+- [x] **Bounded dedup:** the last 50 completed run IDs are stored, plus
+      an in-session set when storage is unavailable.
+- [x] **Existing players:** progress is seeded at first start from
+      Statistics, using only its exact totals (wins and completed time).
+      Nothing perfect is invented from history.
+- [x] **Evaluation** (`js/achievement-evaluation.js`): named metrics and
+      a generic `evaluateAchievements(definitions, metrics)` for the
+      future catalog.
+- [x] **Store** (`js/achievement-store.js`): versioned, validated
+      (including invariants), and on `storage.js`. Corrupt or unavailable
+      storage never throws.
+- [x] **Exactly once** (`js/game-persistence.js`): progress is recorded
+      first, with the existing `calculateScore`. A duplicate run updates
+      nothing — not progress, Statistics, or High Scores.
+- [x] **Wiring:**
+      - New Game over an unfinished game ends the win streak.
+      - Clear Data clears progress, and the dialog text says so.
+      - Export/Import include progress.
+      - `index.js` seeds progress at startup.
+      - `sw.js` precaches the 4 new modules; `CACHE_VERSION` → `v24`.
+- [x] Tests: 64 new (run tracking 11, progress 19, evaluation 6, store
+      12, game-persistence 5, game-state +7, save schema +4)
+      — `npm test` 350/350, also passing under TZ=UTC, UTC+14, UTC−11
+      and New York. 20 of 20 deliberate regressions fail the suite.
+- [x] Real browser (headless Chromium): startup backfill, a game solved
+      through the UI (earned score = the dialog's score, perfect +1,
+      local date), reload, and a schema-1 save finished without
+      perfect/no-hint credit.
+- [x] Docs: MANUAL_QA §15/§15b updated and new §16 (devtools checks
+      while there's no UI), README.
+- [ ] **Later:** the achievement catalog (definitions targeting the
+      metrics) and its UI.
+
 ## Outstanding / Blocked
 
 - [x] `./inspiresoftwareintro.mp4` and `./logo.png` supplied by user

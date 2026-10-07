@@ -4,8 +4,14 @@
  * calls `notify()`); this module subscribes via the same
  * `onStateChange` hook the UI uses, and is the sole caller of
  * js/active-game-store.js's save/clear, js/statistics-store.js's
- * recordGameCompleted, js/high-scores-store.js's recordHighScore, and
- * js/scoring.js's calculateScore for "a game just finished."
+ * recordGameCompleted, js/high-scores-store.js's recordHighScore,
+ * js/achievement-store.js's recordCompletedRun, and js/scoring.js's
+ * calculateScore for "a game just finished."
+ *
+ * Each run is counted exactly once, by its run ID: a run that was
+ * already recorded (say, a stale copy of it restored from a backup and
+ * finished again) updates nothing — not achievements, statistics, or
+ * high scores.
  *
  * `recordGameStarted`/`recordGameAbandoned` are deliberately NOT called
  * from here — they're called directly by the UI code that knows the
@@ -23,6 +29,8 @@ import { recordGameCompleted } from './statistics-store.js';
 import { recordHighScore } from './high-scores-store.js';
 import { calculateScore } from './scoring.js';
 import { DIFFICULTIES } from './sudoku-generator.js';
+import { recordCompletedRun } from './achievement-store.js';
+import { classifyCompletedRun } from './run-tracking.js';
 
 const AUTOSAVE_DEBOUNCE_MS = 500;
 
@@ -46,13 +54,21 @@ function scheduleAutosave(state) {
   }, AUTOSAVE_DEBOUNCE_MS);
 }
 
-function handleCompletion(state) {
+function recordCompletion(state, score) {
   recordGameCompleted(state.difficulty, {
     elapsedSeconds: state.elapsedSeconds,
     mistakes: state.mistakes,
     hintsUsed: state.hintsUsed,
   });
+  recordHighScore(state.difficulty, {
+    score,
+    elapsedSeconds: state.elapsedSeconds,
+    mistakes: state.mistakes,
+    hintsUsed: state.hintsUsed,
+  });
+}
 
+function handleCompletion(state) {
   const config = DIFFICULTIES[state.difficulty];
   const score = calculateScore(
     {
@@ -63,12 +79,19 @@ function handleCompletion(state) {
     },
     config
   );
-  recordHighScore(state.difficulty, {
+
+  // Achievement progress goes first, for two reasons: it's the record of
+  // which runs were already counted (a duplicate skips everything else
+  // too), and a first-ever progress record is seeded from statistics,
+  // which mustn't already include this win.
+  const { duplicate } = recordCompletedRun({
+    runId: state.runId,
+    difficulty: state.difficulty,
     score,
     elapsedSeconds: state.elapsedSeconds,
-    mistakes: state.mistakes,
-    hintsUsed: state.hintsUsed,
+    ...classifyCompletedRun(state),
   });
+  if (!duplicate) recordCompletion(state, score);
 
   // A completed game has nothing left to "continue" — drop the save
   // (and any pending debounced write that could otherwise resurrect it).

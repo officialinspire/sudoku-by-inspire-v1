@@ -542,7 +542,8 @@ it's easy to only half-check.)
 ## 15. Data reset
 
 - [ ] Settings → Clear Data shows a confirmation dialog explaining what
-      will be removed (saved game, statistics, high scores) and what
+      will be removed (saved game, statistics, high scores, achievement
+      progress) and what
       won't (theme/gameplay/audio settings — pointing at Reset
       Appearance for those instead).
 - [ ] Cancelling leaves everything untouched.
@@ -589,7 +590,8 @@ New as of Phase 16g — Settings → "Your data" → Export/Import.
       readable JSON, not a scrambled/binary blob.
 - [ ] Tap "Import Data" and pick that same file — a confirmation names
       the backup's export date and warns it overwrites current
-      settings/statistics/high scores/saved game. Cancelling changes
+      settings/statistics/high scores/achievement progress/saved game.
+      Cancelling changes
       nothing (check a stat value before and after to confirm).
 - [ ] Confirming reloads the app. After reload, everything from the
       backup is back — theme/color mode, gameplay/audio settings,
@@ -609,6 +611,38 @@ New as of Phase 16g — Settings → "Your data" → Export/Import.
       dependency on where it came from.
 
 ---
+
+## 16. Achievement progress (no UI yet — devtools checks)
+
+Hardening Phase 4 tracks progress but shows nothing yet; check it in
+devtools → Application → Local Storage →
+`inspireSudoku:v1:achievementProgress` (a JSON value).
+
+- [ ] **First launch after updating** with existing history: the key
+      appears at startup with `wins` / `winsByDifficulty` /
+      `completedSeconds` matching Statistics, `trackingSince` = today,
+      and everything else (perfect/no-hint wins, streaks, days, earned
+      score) at 0 — past wins are never counted as perfect.
+- [ ] **One win**: `wins` +1, `earnedScore` + exactly the score the
+      completion dialog showed, `lastWinDate` = today (local date, even
+      just after midnight), `recentRunIds` gains one ID.
+- [ ] **Perfect vs not**: a game with no wrong digits and no hints adds
+      to `perfectWins`; one where you entered a wrong digit and then
+      pressed Undo still shows 0 mistakes in the dialog (unchanged) but
+      does **not** add to `perfectWins`.
+- [ ] **Continue**: start a game, reload mid-game, Continue, finish —
+      counted once. The saved game (`inspireSudoku:v1:activeGame`)
+      shows `version: 2` with a `runId` that survives the reload.
+- [ ] **No double counting**: export a backup mid-game, finish the game,
+      import the backup, Continue and finish again — Statistics, High
+      Scores and `wins` don't change the second time.
+- [ ] **Streaks**: win on two consecutive days → `dailyStreak.current`
+      2; replace an unfinished game via New Game → `winStreak.current`
+      0 but the daily streak is untouched.
+- [ ] **Old save**: a game saved before this update (schema 1) still
+      appears under Continue and finishes as a win, but never as perfect
+      or no-hint.
+- [ ] Clear Data removes the key; Export includes it; Import restores it.
 
 ## Known environment limitations (not bugs)
 

@@ -5,6 +5,232 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-10-07 — Hardening Phase 4: Achievement Infrastructure
+
+**Branch:** `claude/nifty-lovelace-9zf07w` (PR
+officialinspire/sudoku-by-inspire-v1#4, on top of Hardening Phases 1–3)
+
+**Goal:** everything achievements will need, but no achievements yet.
+That means:
+- a stable identity for each run;
+- honest per-run counters;
+- lifetime progress (wins, score, time, perfect/no-hint wins, win
+  streaks, winning days, daily streaks), recorded exactly once per run
+  and stored safely.
+
+The catalog and its UI are a later phase. Nothing visible changes except
+the Clear Data and Import confirmation wording.
+
+### Reproduced first (Node, real modules, fake storage)
+
+1. **Undo makes a run look perfect.** `undo()` restores the displayed
+   `mistakes`/`hintsUsed` from its snapshot. That's deliberate, existing
+   scoring behavior: an undone mistake costs no points. But it means a
+   run with a wrong digit that was then undone was recorded with 0
+   mistakes and 0 hints, which is indistinguishable from a perfect run.
+2. **One run, counted twice.** A copy of a game's autosave taken mid-game
+   (as inside an exported backup), restored and finished again after the
+   original was finished, produced 2 completions in Statistics and 2
+   High Scores entries for a single run. Nothing identified a run.
+
+### What changed, and why
+
+**Run identity (`js/run-tracking.js`, `js/game-state.js`).**
+- `startGame` assigns a random `runId`. `crypto.randomUUID` only exists
+  in secure contexts, so there's a `getRandomValues` fallback (plain-http
+  LAN hosting) and a Math.random one (very old browsers).
+- `restoreGame` keeps the saved ID, so autosave → reload → Continue is
+  provably the same run.
+
+**Monotonic counters.** `runCounters` counts:
+- **mistakes** — the same rule as the display: a digit that doesn't
+  match the solution;
+- **hints** used;
+- **undos**;
+- **notes** — each note toggle.
+
+They only ever go up. They aren't in undo history, and `undo()` itself
+increments `undos` instead of restoring anything. The displayed
+`mistakes`/`hintsUsed`, the scoring, and all 57 pre-existing game-state
+tests are unchanged.
+- **Alternative considered:** make undo stop restoring the displayed
+  counts. Rejected: that changes scoring, which this phase must
+  preserve.
+
+**Save schema 2 (`js/active-game-store.js`).** Adds `runId`,
+`runCounters` and `runCountersComplete`; a v2 save with broken run
+fields is rejected outright. Schema-1 saves still load, upgraded by
+`legacyRunTracking`:
+- **The ID is deterministic** (a hash of difficulty and puzzle). Every
+  load of the same old save agrees, so its completion can still be
+  deduplicated, and nothing has to be written back. A random ID per load
+  would have made each Continue a "different run".
+- **The displayed counts become the counters**, as a floor: undo can
+  only have erased mistakes, never added any.
+- **`runCountersComplete: false`** rules the run out of perfect and
+  no-hint credit permanently. Its true history is unknown, and "0
+  mistakes" from an old save proves nothing (see finding 1).
+
+`serializeActiveGame` normalizes too, so it can never write a save its
+own loader would reject.
+
+**Progress (`js/achievement-progress.js`, pure).** A completed run adds
+to:
+- wins, the run's difficulty, earned score, completed time;
+- perfect wins (no mistake and no hint, ever, complete counters) and
+  no-hint wins;
+- the consecutive-win streak;
+- winning days and the daily streak.
+
+**Dates** are local `YYYY-MM-DD` keys. Day gaps are computed from the
+date parts through `Date.UTC`, so a 23- or 25-hour DST day can't become
+0 or 2 days. A win on:
+- **the same day** as the last one changes no day counts;
+- **the next day** extends the daily streak;
+- **any later day** restarts it at 1;
+- **an earlier day than the last** (the device clock moved back) counts
+  nothing, because the app can't tell whether that day was already
+  counted.
+
+**Abandoning** a game breaks the win streak, not the daily streak.
+
+**Dedup** keeps the last 50 completed run IDs. A repeat can only come
+from a stale copy of a recent run; the bound keeps storage and backups
+small. The documented tradeoff: a copy of a run from more than 50 wins
+ago wouldn't be recognized.
+
+`isValidProgress` checks the shape plus the invariants every update
+keeps:
+- per-difficulty wins sum to the total;
+- perfect wins ≤ no-hint wins ≤ wins;
+- best streak ≥ current;
+- there's a last win date whenever days were counted.
+
+So corruption is caught rather than built upon.
+
+**Existing players (`progressFromStatistics`).** Progress is seeded from
+the only history recorded exactly: Statistics' completed games per
+difficulty and their total time. Everything else starts at 0, with
+`trackingSince` set to the day tracking began:
+- **Earned score:** High Scores keep only a top 10.
+- **Perfect/no-hint:** stored mistake/hint counts are undo-erasable.
+- **Streaks and days:** can't be reconstructed.
+
+`initAchievementProgress()` writes the seed at startup so the baseline
+never shifts later.
+
+**Evaluation (`js/achievement-evaluation.js`).** Named metrics (`wins`,
+`wins:easy`…, `earnedScore`, `perfectWins`, `bestDailyStreak`,
+`currentDailyStreak`…) and `evaluateAchievements(definitions, metrics)`
+for the future catalog.
+- Definitions should target never-decreasing metrics (totals, best
+  streaks). That way "unlocked" is a pure function of progress and no
+  unlock state has to be stored.
+- `currentDailyStreak` is evaluated against today: two days without a
+  win reads as 0 before the stored number is next updated.
+- An unknown metric or bad target throws. The catalog is static code, so
+  its tests should catch that.
+
+**Store (`js/achievement-store.js`).** A new versioned key,
+`inspireSudoku:v1:achievementProgress`, read and written through
+`storage.js`:
+- missing → the statistics seed; corrupt → the same fallback, replaced
+  on the next write; storage denied or absent → nothing throws;
+- an in-session set of recorded run IDs still prevents double counting
+  when nothing can be stored;
+- a malformed run is skipped rather than allowed to throw out of the
+  completion listener (that would stop later listeners, such as the
+  completion dialog).
+
+**Exactly once (`js/game-persistence.js`).** On completion, progress is
+recorded **first**, with the same `calculateScore` value that goes to
+High Scores (verified in the browser: identical to the dialog's score).
+- **Why first:** the progress record is what knows which runs were
+  already counted, so a duplicate skips Statistics and High Scores too.
+  And a first-ever progress record is seeded from Statistics, which
+  mustn't already contain this win: putting Statistics first double
+  counts (a mutation test proves it).
+- **Re-run of finding 2:** one completion, one High Scores entry, one
+  win. Finding 1 now records `mistakes: 1, undos: 1` → a no-hint win,
+  not a perfect one, while the displayed and scored counts stay 0.
+
+**Wiring:**
+- **New Game over an unfinished game** → `recordRunAbandoned()`.
+- **Clear Data** → `clearAchievementProgress()`, and the dialog lists
+  achievement progress.
+- **Backup:** the key is included, and the import confirmation mentions
+  it. An older backup without the key leaves current progress as it is,
+  the same as for any other missing key.
+- **`index.js`** → `initAchievementProgress()`.
+- **`sw.js`:** the 4 new modules are precached (the validator's drift
+  check would flag them otherwise), and `CACHE_VERSION` → `v24`.
+
+### Tests
+
+64 new tests (350/350, 103 suites):
+- **run tracking (11):** IDs with all three fallbacks, validation,
+  stable legacy IDs, classification;
+- **progress (19):** totals, immutability, dedup and its bound,
+  malformed runs, win streaks, same-day/next-day/missed-day/abandon/
+  clock-moved-back day logic, month/year/leap/DST day math, the
+  statistics seed inventing nothing, invariant validation;
+- **evaluation (6);**
+- **store (12):** startup seed, stable baseline, duplicates within a
+  session and after a reload, backup round trips, Clear Data, corrupt
+  JSON/shape/version, denied storage, no `localStorage` at all;
+- **`game-persistence` end to end (5):**
+  - a win recorded everywhere with the existing formula;
+  - Continue after a reload being the same run;
+  - the stale-copy repro counting once;
+  - an undone mistake keeping its score but not counting as perfect;
+  - a schema-1 save finishing as a win with no perfect/no-hint credit;
+- **game-state (+7) and the save schema (+4).**
+
+**Local calendar:** the full suite passes under TZ=UTC,
+Pacific/Kiritimati (UTC+14), Pacific/Pago_Pago (UTC−11) and
+America/New_York.
+
+**Mutation check:** 20 deliberate regressions, all caught. They
+include:
+- statistics before progress;
+- duplicates still updating stats;
+- undo erasing counters;
+- restore starting a new run;
+- legacy saves trusted as complete;
+- a random legacy ID;
+- no dedup, or unbounded dedup;
+- a missed day not breaking the streak, same-day wins counted as new
+  days, abandon breaking the daily streak;
+- UTC instead of local dates (run under UTC+14, where the two differ);
+- no in-session dedup;
+- a malformed run throwing;
+- a broken daily streak still reported as current;
+- progress missing from backups;
+- a schema-2 save with broken tracking being accepted.
+
+### Real browser (headless Chromium)
+
+- **A returning player** (3 easy wins in Statistics): the key is seeded
+  at startup with 3 wins, 900 s, 0 perfect, and `trackingSince` today.
+- **A game solved entirely through clicks and number keys:**
+  - the save is schema 2 with a `runId`;
+  - earned score = the completion dialog's score (1594);
+  - +1 perfect win;
+  - `lastWinDate` = the local date;
+  - Statistics agree.
+- **Reload:** progress persists, and Continue is disabled.
+- **A schema-1 save** one cell from done, continued and finished:
+  +1 win, no perfect or no-hint credit.
+- No page errors.
+
+### Not done / for later
+
+- The achievement catalog (definitions over these metrics) and its UI.
+- Progress isn't touched by the per-difficulty Statistics/High Scores
+  clears (it's lifetime). Only Clear Data resets it.
+
+---
+
 ## 2026-10-07 — Hardening Phase 3: Music Playback Hardening
 
 **Branch:** `claude/nifty-lovelace-9zf07w` (PR
