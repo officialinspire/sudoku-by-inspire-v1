@@ -5,6 +5,226 @@ history. Newest entry at the top.
 
 ---
 
+## 2026-10-07 — Hardening Phase 2: Service Worker Hardening
+
+**Branch:** `claude/nifty-lovelace-9zf07w` (PR
+officialinspire/sudoku-by-inspire-v1#4, on top of Hardening Phase 1)
+
+**Goal:** make `sw.js` and `js/sw-register.js` trustworthy. That means
+offline launch straight after the first install, correct cached media
+(seeking included), touching only this app's URLs and caches, and
+updates that never leave a page half old and half new.
+
+### A correction first: how offline was being tested
+
+Two testing traps showed up while reproducing, and one of them affects
+a claim in my Hardening Phase 1 entry below:
+
+- **Playwright's `context.setOffline(true)` doesn't reach a service
+  worker's own fetches.** With it "offline", the Phase-1 worker (0
+  modules cached) still booted, because the worker quietly went to the
+  network. Phase 1's "offline reload, then a new puzzle generated" check
+  used `setOffline` after an online reload, so it showed less than it
+  claimed. Every offline result below comes from a **real outage**: the
+  test server process is stopped. MANUAL_QA §10 now says to use a real
+  disconnect for the same reason, since devtools' Offline checkbox
+  doesn't reach a service worker's own fetches either.
+- **Playwright's `waitForFunction` doesn't await an async predicate.** A
+  Promise is truthy, so it returns at once. My first repro "waited" for
+  the worker to activate without really waiting, which produced a racy
+  result. All waits now poll `page.evaluate()`.
+
+### Reproduced on the Phase-1 worker (real outage)
+
+1. **First install cached 0 of the 38 modules** (only index.js, the
+   shell, and media). An offline reload never reached the menu. The old
+   design precached a minimal shell and runtime-cached modules "the
+   first time they're requested", but on a first visit every module is
+   requested *before* the worker controls the page, so none ever got
+   cached unless the player happened to reload online. README and
+   MANUAL_QA had a "click through to the menu first" step to paper over
+   this.
+2. **Mixed-version page.** On the first load after a deploy, the
+   network-first navigation returned release-B HTML while the
+   cache-first modules were still release A. Measured: `html B / modules
+   A`. A runtime fill could also store a release-B file into the
+   release-A cache.
+3. **Another project's cache was deleted.** Every
+   `officialinspire.github.io/<repo>` project shares one origin and one
+   CacheStorage, and the old `activate` deleted *every* cache not named
+   exactly its own. A cache planted as `other-project-cache` was gone
+   after the deploy.
+4. **A cached MP3 answered `Range: bytes=0-99` with a full `200`.**
+   Chrome tolerates that; Safari's media stack expects `206`, and
+   seeking relies on it.
+
+GitHub Pages itself (checked live) serves `cache-control: max-age=600`,
+so a worker installing within 10 minutes of a deploy could also store
+stale HTTP-cached files under the new version's name.
+
+### What changed, and why
+
+**One atomic install of everything required (`sw.js`).**
+- `SHELL_ASSETS` (index.html, styles.css, manifest, index.js) and
+  `MODULE_ASSETS` (all 38 modules under `js/`, no tests) go through a
+  single `cache.addAll()`. It's all-or-nothing by spec: one failure
+  stores nothing and fails the install, and whatever version was
+  running stays in charge.
+- Every request uses `cache: 'reload'` to bypass the 10-minute HTTP
+  cache.
+- **Why a hand-written list rather than crawling the imports at install
+  time.** A crawler in the worker would need its own regex parser of JS,
+  run sequential fetches, and lose `addAll`'s built-in atomicity. A
+  plain list is easy to read and atomic for free. Drift is caught
+  instead: `validate:assets` now compares `MODULE_ASSETS` with the
+  validator's real import graph and errors on a missing module or a
+  listed test file (with its own fixture test), and `sw.test.js`
+  installs the real worker and checks every graph module landed in the
+  cache.
+- `'./'` is no longer precached: the navigation handler maps the scope
+  root to the cached index.html, so it was a duplicate download.
+
+**Optional media, independently and bounded.** `OPTIONAL_ASSETS`
+(logo, icons, intro video, both MP3s through `encodeURI`, exactly as
+`js/audio.js` requests them) runs *after* the required set succeeds.
+- Each asset gets its own fetch and `cache.put()`, so a 404, a network
+  error, or a bad response skips only that file.
+- **Bounded:** one shared 60-second `AbortController` budget for the
+  whole group. Browsers abandon an install that runs for minutes, and
+  that would take the required shell down with it. 60 s comfortably
+  covers ~5 MB on a fast-3G link.
+- **Alternatives considered:**
+  - Sequential downloads with a deadline each: the worst case adds up
+    past the browser's limit.
+  - Moving media caching after activation (a page→worker message):
+    faster activation, but a whole new message protocol.
+
+  A file that misses the budget is streamed from the network when
+  online and retried by the next version's install.
+
+**Byte ranges from the cache.** `parseByteRange()` follows RFC 9110:
+- `bytes=a-b`, `bytes=a-`, and `bytes=-n` (suffix) give a `206` slice.
+  The body is `Blob.slice()` of the cached file, with `Content-Range`,
+  `Content-Length`, the cached `Content-Type`, and `Accept-Ranges`.
+- A start at or past the end, or a zero-length suffix, gives `416` with
+  `Content-Range: bytes */size`.
+- Malformed headers (`b<a`, multiple ranges, other units) are ignored
+  and get the full `200`, which the spec explicitly allows.
+- The runtime fill still stores only `status === 200`, so a network
+  `206` passes through and is never stored as if it were the whole
+  file.
+
+**Scope and cache names.**
+- Interception is limited to GET requests whose URL starts with
+  `self.registration.scope`. Same-origin alone isn't narrow enough on
+  GitHub Pages.
+- Cache names carry the scope path, `inspire-sudoku:/<path>/:v22`.
+  `activate` deletes only names with this exact prefix, plus the
+  legacy `inspire-sudoku-shell-vN` names (that prefix is unique to this
+  app).
+- Another project's caches, or this same app deployed under a
+  different path on the same origin, are left alone.
+
+**No mixed-version pages.**
+- Navigations to the app (`./`, `./index.html`, with any query string)
+  are served from the same cache as the modules. Other in-scope
+  navigations still go network-first with the cached shell as an
+  offline fallback, as before.
+- `install` no longer calls `skipWaiting()`. A new version installs and
+  *waits*.
+- `js/sw-register.js` shows the banner when an update finishes
+  installing, or if one was already waiting or installing when the page
+  registered. Before, only the `updatefound` path was covered. Refresh
+  posts `{type: 'SKIP_WAITING'}`, and the page reloads on the resulting
+  `controllerchange`.
+- The reload only happens after the player tapped Refresh. The first
+  install's `clients.claim()` also fires `controllerchange`, and
+  reloading then would restart the intro.
+- It also happens only once. With no waiting worker (another tab
+  already updated), Refresh just reloads.
+- The reload fires `pagehide`, where `js/game-persistence.js` flushes
+  the debounced autosave, so the in-progress game survives (verified
+  below).
+- The update logic is now a DOM-free `createUpdateFlow(container,
+  {showBanner, reload})`, so it's testable with fake EventTarget
+  workers.
+
+**One-time legacy compatibility.** Pages served by a v20/v21 worker
+have a Refresh button that only reloads, and a plain reload can't
+activate a *waiting* worker. If legacy cache names exist, the new
+worker calls `skipWaiting()` once at the end of install, so those old
+pages' banners keep working. Every later update uses the waiting flow.
+
+`CACHE_VERSION` → `v22`.
+
+### Tests
+
+- `sw.test.js` (18 tests) evaluates the **real** `sw.js` source with
+  `new Function('self','caches','fetch', source)`. Its fakes:
+  - a FakeCacheStorage that follows the two spec rules the worker
+    relies on (`addAll` is atomic; `put` refuses a 206);
+  - a fake network that serves the repo's own files at
+    `https://example.test/sudoku-by-inspire-v1/`, with GitHub-Pages-like
+    206 support, per-path overrides, and an offline switch.
+
+  It covers:
+  - the full graph precached with no tests, all fetched with
+    `cache: 'reload'`;
+  - install atomicity;
+  - optional media independent and bounded (the stall test uses
+    `mock.timers`, plus a 5 s test timeout so a regression fails instead
+    of hanging);
+  - encoded music URLs;
+  - the update/SKIP_WAITING and legacy behavior;
+  - cleanup sparing other apps;
+  - scope filtering;
+  - shell-from-cache after a newer deploy, and the offline navigation
+    fallback;
+  - 206 passthrough never stored, and a failed cache write never
+    failing the response;
+  - every range case (first bytes, open-ended, suffix, past-the-end
+    clamp, MP4, 416s, ignored headers).
+- `js/sw-register.test.js` (5): first install doesn't prompt or reload;
+  an update prompts but doesn't take over; already-waiting and
+  already-installing updates are announced; Refresh sends SKIP_WAITING
+  and reloads exactly once on `controllerchange`; with no waiting
+  worker it just reloads.
+- **Mutation check:** 14 deliberate regressions to `sw.js` (each old
+  behavior, plus off-by-one, no 416, no budget, non-atomic install,
+  dropping a module, and so on) and 4 to `sw-register.js`. Each one
+  failed the suite with a non-zero exit. `npm test`: **249/249** (73
+  suites); `npm run validate:assets`: 0 errors, 0 warnings.
+
+### Real-browser verification (Chromium, real outages)
+
+Served at a `/sudoku-by-inspire-v1/` subpath from scratch copies only
+(the repo's media files were never touched):
+- **First install → outage → reload → new game:** works. The cache
+  holds 39 JS files, 0 tests, and all 3 media files.
+- **Offline media:** an MP3 slice returns `206 bytes 1000-1999/2390063`,
+  the MP4 returns `206`, past-the-end returns `416 bytes */2390063`, and
+  an `<audio>` element seeks to 1:30 of 2:29 from the cache.
+- **Upgrade with an active save:** the first load after deploying B is
+  **A/A** (was A-modules + B-HTML), the banner shows, and the page stays
+  A/A while B waits. Refresh → **B/B**. Only B's cache plus
+  `other-project-cache` remain; the save is byte-identical and Continue
+  is enabled.
+- **Legacy v21 → v22:** the old page's own banner and Refresh land on
+  v22; the legacy cache is removed and the other project's cache kept.
+- **Missing MP3:** installs without it, and offline boot still works.
+- **Missing required module:** nothing installs.
+
+### Still needs a real device
+
+- iOS Safari: offline music and intro from the cache on a second
+  launch. Byte ranges are now served properly, but WebKit itself hasn't
+  been exercised here.
+- A real GitHub Pages deploy of a bumped version: banner → Refresh →
+  Continue restores the game.
+- Installed-PWA (home-screen) update behavior on Android and iOS.
+
+---
+
 ## 2026-10-07 — Hardening Phase 1: Asset/Loading Hardening
 
 **Branch:** `claude/nifty-lovelace-9zf07w`

@@ -138,10 +138,13 @@ dependency to install:
 npm test
 ```
 
-This runs every `*.test.js` file in the repo (225 tests across 67
+This runs every `*.test.js` file in the repo (249 tests across 73
 suites as of this writing, covering the Sudoku engine, puzzle generator,
 game state, scoring, every persisted store, the board's render
-decisions, and the asset validator below) in a few seconds. See
+decisions, the service worker and its update flow, and the asset
+validator below) in a few seconds. `sw.test.js` runs the real `sw.js`
+against a fake Cache Storage and network, so install, update, offline,
+and byte-range behavior are all checked without a browser. See
 `DEVELOPMENT_LOG.md`'s Phase 12 entry for what's covered here versus
 what belongs in manual browser QA instead.
 
@@ -174,19 +177,22 @@ checklist covering fresh install through data reset.
 
 Quick check that offline support is actually working:
 
-1. Load the app once with the network on (so the service worker
-   installs — confirm in devtools → Application → Service Workers that
-   it shows "activated and is running").
-2. Click through to the main menu at least once, so the rest of the JS
-   module graph gets runtime-cached (see `sw.js`'s comment on why only a
-   minimal shell is precached at install time).
-3. Set devtools → Network → "Offline" (or actually disconnect), then
-   reload. The app should load and be fully playable.
-4. To confirm installability: look for the browser's install/"Add to
+1. Load the app once with the network on, and wait for devtools →
+   Application → Service Workers to show "activated and is running".
+   No clicking around is needed: the install precaches the shell *and
+   every JS module the app imports*, so nothing depends on screens
+   having been visited first.
+2. Disconnect for real (turn off Wi-Fi, or stop your local server),
+   then reload. The app should load and be fully playable, music and
+   intro included. Devtools' Network → "Offline" checkbox is fine for
+   a quick look, but it isn't a true outage for the service worker
+   itself, so confirm at least once with a real disconnect.
+3. To confirm installability: look for the browser's install/"Add to
    Home Screen" prompt, or check devtools → Application → Manifest
    shows no errors.
 
-See `MANUAL_QA.md` §10 for the full offline-reload checklist.
+See `MANUAL_QA.md` §10 (offline, media seeking, missing media) and §14
+(updates) for the full checklists.
 
 ## Local-Data Behavior
 
@@ -208,22 +214,32 @@ an account or a server to do it.
 
 ## Cache Reset and Update Instructions
 
-The service worker (`sw.js`) uses one explicitly-versioned cache name
-(see the `CACHE_NAME` constant near the top of that file for the current
-version — deliberately not restated here as a specific number, since
-that would just go stale the next time it's bumped). Nothing about cache
-invalidation is automatic — this is deliberate, documented in `sw.js`'s
-own header comment:
+The service worker (`sw.js`) stores each release in one versioned
+cache, named after this app's own URL path (for example
+`inspire-sudoku:/sudoku-by-inspire-v1/:v22`). Every GitHub Pages project
+under one account shares a single origin, and with it one set of
+caches, so the path in the name keeps this app from touching anyone
+else's. The current version is the `CACHE_VERSION` constant near the
+top of `sw.js` (not restated here, since that would go stale). Nothing
+about cache invalidation is automatic, by design; `sw.js`'s header
+comment documents it:
 
 - **To ship an update that existing visitors actually pick up**: bump
-  the `CACHE_NAME` version suffix in `sw.js` (`...-v1` → `...-v2`) any
-  time a core app-shell file changes. On their next visit, the browser
-  detects the byte-different `sw.js`, installs the new version
-  alongside the old one, and once it activates, an in-page "An updated
-  version is available" banner appears with a Refresh button. The
-  `activate` handler deletes every cache that isn't the current
-  `CACHE_NAME` automatically — bumping the version is the entire update
-  mechanism, no separate cleanup step needed.
+  `CACHE_VERSION` in `sw.js` (`v22` → `v23`) whenever any file it
+  precaches changes. On their next visit the browser notices the
+  changed `sw.js` and installs the new release in the background,
+  while the page keeps running the old one, consistently: HTML and
+  modules always come from the same release. The new version then
+  *waits*, and the "An updated version is available" banner appears.
+  Tapping Refresh activates it and reloads once. Any in-progress game
+  is autosaved on that reload and comes back through Continue Game. If
+  the player ignores the banner, the new release takes over the next
+  time every tab of the app has been closed. Activation deletes this
+  app's older caches, and only this app's.
+- **Adding a JS module**: also add it to `MODULE_ASSETS` in `sw.js`.
+  `npm run validate:assets` and `npm test` both fail until you do,
+  because a missing entry would only break an offline launch right
+  after a first install.
 - **To force a hard reset during development** (stale cache fighting
   your changes): devtools → Application → Service Workers →
   Unregister, and/or Application → Storage → "Clear site data." Chrome's
@@ -396,7 +412,8 @@ For discoverability on GitHub (Settings → General → Topics):
 - **I changed a file and the browser won't show my update**: the
   service worker is serving its cached copy. See [Cache reset and
   update instructions](#cache-reset-and-update-instructions) — either
-  bump `CACHE_NAME` or hard-reset via devtools during development.
+  bump `CACHE_VERSION` (then tap the update banner's Refresh) or
+  hard-reset via devtools during development.
 - **The app looks broken at `inspireclothing.art/sudoku-by-inspire-v1`
   or any subpath**: every asset reference in this repo is a relative
   path specifically so this doesn't happen (see `TASKS.md`'s Phase 13

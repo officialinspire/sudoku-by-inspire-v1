@@ -215,13 +215,14 @@ function listFiles(dir, skip = new Set(['.git', 'node_modules'])) {
 // --------------------------------------------------------------- checks
 
 export function validateAssets(rootDir) {
-  const report = { errors: [], warnings: [], notes: [], startup: [], afterLoad: [] };
+  const report = { errors: [], warnings: [], notes: [], startup: [], afterLoad: [], modules: [] };
   const resolveExact = createResolver(rootDir);
   const rel = (file) => path.relative(rootDir, file) || '.';
   const referenced = new Set();
   const contentChecked = new Set();
   const startupFiles = new Set();
   const modules = new Set();
+  const serviceWorker = { file: null, required: new Set() };
 
   const indexPath = path.join(rootDir, 'index.html');
   if (!existsSync(indexPath)) {
@@ -323,13 +324,33 @@ export function validateAssets(rootDir) {
   }
 
   function checkServiceWorker(swFile) {
+    serviceWorker.file = swFile;
     const source = readFileSync(swFile, 'utf8');
     for (const [, listName, body] of source.matchAll(/const\s+(\w+)\s*=\s*\[([\s\S]*?)\];/g)) {
       const isOptional = /OPTIONAL/.test(listName);
       for (const [, , entry] of body.matchAll(/(['"])([^'"]*)\1/g)) {
         const file = checkReference(`${rel(swFile)} ${listName}`, entry, path.dirname(swFile), { missingIsError: !isOptional });
-        if (file) report.afterLoad.push(file);
+        if (!file) continue;
+        report.afterLoad.push(file);
+        if (!isOptional) serviceWorker.required.add(file);
       }
+    }
+  }
+
+  // The service worker's required precache must be exactly what a cold
+  // offline launch needs: every module index.js reaches (a missing one
+  // only fails on a first-install offline launch, long after any manual
+  // test would notice), and never a test file.
+  function checkPrecacheCoversModules() {
+    if (!serviceWorker.file) return;
+    const where = rel(serviceWorker.file);
+    for (const module of modules) {
+      if (!serviceWorker.required.has(module)) {
+        report.errors.push(`${where}: runtime module ${rel(module)} isn't in the required precache — an offline launch right after first install would fail to load it`);
+      }
+    }
+    for (const file of serviceWorker.required) {
+      if (file.endsWith('.test.js')) report.errors.push(`${where}: precaches test file ${rel(file)}, which the app never loads`);
     }
   }
 
@@ -436,6 +457,9 @@ export function validateAssets(rootDir) {
   }
 
   // --------------------------------------------------------- summary
+
+  checkPrecacheCoversModules();
+  report.modules = [...modules].map(rel);
 
   const jsDir = path.join(rootDir, 'js');
   const appModules = existsSync(jsDir) ? listFiles(jsDir).filter((f) => f.endsWith('.js') && !f.endsWith('.test.js')) : [];

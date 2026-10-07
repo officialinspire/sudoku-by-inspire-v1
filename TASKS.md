@@ -1815,6 +1815,64 @@ numbers are in `DEVELOPMENT_LOG.md`'s entry for this date.
       iOS Safari second-visit media from the service-worker cache; focus
       stability with a real screen reader. See MANUAL_QA §3 and §5.
 
+## Hardening Phase 2 — Service Worker Hardening ✅ (2026-10-07)
+
+Builds on Hardening Phase 1. Full reasoning, alternatives, repro
+numbers, and the mutation-testing table are in `DEVELOPMENT_LOG.md`'s
+entry for this date.
+
+- [x] **Reproduced first** (headless Chromium, with a real outage —
+      the server stopped — on the Phase-1 worker): first install
+      cached 0 of 38 modules, so an offline reload never reached the
+      menu; the first load after a deploy ran new HTML with old
+      modules; a deploy deleted another same-origin project's cache; a
+      cached MP3 answered a Range request with a full `200`.
+- [x] **Whole runtime module graph precached** in one atomic
+      `cache.addAll()` (`SHELL_ASSETS` + `MODULE_ASSETS`, 39 JS files,
+      no tests), fetched with `cache: 'reload'` so the HTTP cache can't
+      slip stale files into a new version. `npm run validate:assets`
+      now fails if `MODULE_ASSETS` drifts from the real import graph or
+      lists a test file.
+- [x] **Optional media cached independently** (`OPTIONAL_ASSETS`):
+      each download succeeds or fails on its own, under one shared
+      60-second budget, so a stalled connection can't hang or fail the
+      install. Encoded music URLs (`Sudoku%20Zen.mp3`) unchanged.
+- [x] **Byte ranges from the cache:** `206` with correct
+      `Content-Range`/`Content-Length`/`Content-Type`/`Accept-Ranges`,
+      `416` with `Content-Range: bytes */size` past the end, full `200`
+      for malformed or multi-range headers. A network `206` is passed
+      through and never stored.
+- [x] **Scope-restricted:** only GET requests under this app's own
+      scope are intercepted. Cache names carry the scope path
+      (`inspire-sudoku:/<path>/:v22`); activation deletes only this
+      app's older caches and the legacy `inspire-sudoku-shell-vN` ones.
+- [x] **No mixed-version pages:** index.html is served from the same
+      cache as its modules. Updates install and *wait*; the banner's
+      Refresh sends `SKIP_WAITING`, and the page reloads once on
+      `controllerchange` (autosave flushes on that reload). One-time
+      compatibility: replacing a v20/v21 worker takes over immediately
+      so that old page's own Refresh button still works.
+- [x] `js/sw-register.js`: update flow split into a DOM-free
+      `createUpdateFlow()`; also announces an update that was already
+      waiting or installing when the page registered.
+- [x] `CACHE_VERSION` → `v22`.
+- [x] Tests: `sw.test.js` (18, runs the real `sw.js` against fake Cache
+      Storage + network), `js/sw-register.test.js` (5), +1 validator
+      test. 14 deliberate `sw.js` regressions and 4 `sw-register.js`
+      regressions all fail the suite. `npm test`: 249/249.
+- [x] Real-browser verification (Chromium, real outages): first
+      install → offline new game; offline 206/416 and a real audio seek
+      to 1:30; upgrade A→B with no mixed page and the save intact;
+      legacy v21→v22; missing MP3; missing required module.
+- [x] Docs: README (offline verification, cache/update instructions),
+      MANUAL_QA §10 (first install → offline, media seeking, missing
+      media, real-outage note) and §14 (upgrade, two tabs, legacy),
+      icons/README list name.
+- [ ] **Device checks still needed:** iOS Safari offline media from
+      the cache (second launch); a real GitHub Pages deploy of a bumped
+      version (banner → Refresh → save intact); installed-PWA (home
+      screen) update behavior on Android and iOS.
+
 ## Outstanding / Blocked
 
 - [x] `./inspiresoftwareintro.mp4` and `./logo.png` supplied by user

@@ -70,15 +70,15 @@ to record dated results of an actual QA pass if you want that history.
       intro either starts, or — if it can't start within ~4 s, or
       freezes waiting on data for ~4 s — the app moves on to the menu by
       itself. Skip works the whole time.
-- [ ] **iOS Safari, second visit** (Hardening Phase 1): load once,
+- [ ] **iOS Safari, second visit** (Hardening Phases 1–2): load once,
       reload once (so the service worker is installed and controlling
       the page), then fully close and reopen the app. The intro video
       and both music tracks must still play. On that second visit they
-      come from the service worker's cache as full (200) responses, and
-      Safari is the browser most likely to reject that for media range
-      requests — if media works on the first visit but the intro
-      silently skips / music never starts on the second, that's the bug
-      described in `DEVELOPMENT_LOG.md`'s Hardening Phase 1 entry.
+      come from the service worker's cache, which since Hardening Phase
+      2 answers Safari's byte-range requests with proper `206` slices;
+      if media works on the first visit but not the second, check
+      devtools (Safari Web Inspector → Network) for the media requests'
+      status codes.
 - [ ] **Missing logo**: temporarily rename/remove `logo.png`, reload to
       the main menu. The footer area shouldn't show a broken-image icon
       or console error — a `<img>` with a failed `src` degrading
@@ -300,20 +300,45 @@ least once:
       playing; returning to the tab resumes it only if the Music toggle
       is still on.
 
-## 10. Offline reload after first online visit
+## 10. Offline: first install, media seeking, missing media
 
-- [ ] Load the app online at least once (so the service worker installs
-      and precaches the app shell — check devtools → Application →
-      Service Workers shows it "activated and is running").
-- [ ] Play through at least one full screen transition (e.g. reach the
-      main menu) so the rest of the JS module graph gets runtime-cached
-      too (see `sw.js`'s comment on why only a minimal shell is
-      precached at install time).
-- [ ] Set devtools → Network → "Offline" (or actually disable your
-      network connection), then reload the page. The app should load
-      and be fully playable — start a game, play a few moves — with no
-      network-error page.
-- [ ] Go back online and reload again — everything still works, no
+Use a **real** outage for these: turn off Wi-Fi / airplane mode, or
+stop your local server. Devtools' Network → "Offline" checkbox doesn't
+cut off the service worker's own fetches, so it can make a broken
+offline setup look fine.
+
+- [ ] **First install → offline reload** (Hardening Phase 2): clear
+      site data, load the app online **once**, and wait for devtools →
+      Application → Service Workers to show "activated and is running".
+      Don't reload, navigate, or click through first. Application →
+      Cache Storage should show a single
+      `inspire-sudoku:/<your-path>/:v<N>` cache holding `index.html`,
+      `styles.css`, `manifest.webmanifest`, `index.js`, every file under
+      `js/` **except** `*.test.js`, plus the logo, icons, intro video,
+      and both MP3s.
+- [ ] Now go offline for real and reload. The app loads; Start → intro
+      plays → menu; start a game and play a few moves. No network-error
+      page, no blank screen.
+- [ ] **Media seeking offline**: still offline, let menu music play,
+      start a game so "Logic Flow" plays, and let the intro play once.
+      In devtools → Network, the media requests show "(ServiceWorker)"
+      with status **206**. To test seeking directly, run in the console:
+      `const a = new Audio('./Logic%20Flow.mp3'); a.currentTime = 90; a.play()`
+      — it plays from 1:30 without stalling. On **iOS Safari** (the
+      strictest about this), confirm music and the intro both play
+      offline on a second launch.
+- [ ] **Missing optional media**: in a local copy (never the real
+      repo files), rename one MP3, clear site data, and load online.
+      The service worker still installs and activates; Cache Storage
+      just lacks that one file; offline reload still works; that track
+      is silent with no error dialog. Restore the file.
+- [ ] **Missing required file**: in a local copy, rename any `js/`
+      module and load with cleared site data. The service worker
+      install **fails** (Service Workers panel shows it as redundant or
+      errored) and nothing half-installed is left serving. With an
+      older version already installed, that older version keeps
+      working untouched. Restore the file.
+- [ ] Go back online and reload — everything still works, no
       stale-cache weirdness.
 
 ## 10a. Installability and app icon (real device)
@@ -416,18 +441,33 @@ it's easy to only half-check.)
 
 ## 14. Service-worker updates
 
-- [ ] With the app already loaded and a service worker active, ship a
-      change to a core file and bump `sw.js`'s `CACHE_NAME` version
-      suffix (see that file's own header comment for the exact
-      convention), then reload the page or wait for the browser's
-      periodic update check.
-- [ ] The in-page "An updated version is available" banner appears with
-      a Refresh button.
-- [ ] Clicking Refresh reloads and the app continues working normally
-      on the new version; devtools → Application → Service Workers
-      shows only the new version active, and → Cache Storage shows only
-      the new cache name (the old one was cleaned up automatically on
-      activation).
+- [ ] With the app loaded and a service worker active, start a game and
+      place a few digits (so there's an active save).
+- [ ] Ship a change to any precached file and bump `CACHE_VERSION` in
+      `sw.js`. Locally: edit, bump, and serve; on GitHub Pages: push
+      and wait for the deploy.
+- [ ] Reload once. The page still runs the **old** release consistently
+      (HTML and modules both old; devtools → Network shows them "from
+      ServiceWorker"), and the "An updated version is available" banner
+      appears. Service Workers panel: the new worker is "waiting to
+      activate".
+- [ ] Tap Refresh. The page reloads **once** into the new release
+      (verify your change is visible). Continue Game restores the exact
+      board from before, including the digits you placed.
+- [ ] Cache Storage now holds only the new version's
+      `inspire-sudoku:/<your-path>/:v<N>` cache for this app. Caches
+      belonging to anything else on the same origin (another GitHub
+      Pages project under the same account) are untouched.
+- [ ] **Two tabs**: with the app open in two tabs when an update
+      lands, both show the banner. Refresh in one tab reloads only that
+      tab; Refresh in the other then simply reloads it into the new
+      version.
+- [ ] **Ignoring the banner**: close every tab of the app instead of
+      tapping Refresh, then reopen — the new release is running.
+- [ ] **Upgrading from v20/v21** (installs from before Hardening Phase
+      2): a page served by the old worker still shows its banner, its
+      Refresh lands on the new release, and the old
+      `inspire-sudoku-shell-v<N>` cache is removed.
 - [ ] Without a version bump, a plain reload does *not* show the update
       banner (nothing actually changed from the service worker's point
       of view).

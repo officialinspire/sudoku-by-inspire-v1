@@ -47,6 +47,27 @@ describe('validate-assets on this repo', () => {
   });
 });
 
+describe('validate-assets checks the service worker precache against the module graph', () => {
+  test('a runtime module missing from the required precache, or a precached test file, is an error', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'validate-sw-'));
+    try {
+      writeFixture(dir, {
+        'index.html': '<script type="module" src="./main.js"></script>',
+        'main.js': "import './util.js';\nnavigator.serviceWorker.register('./sw.js');",
+        'util.js': 'export {};',
+        'util.test.js': '',
+        'sw.js': "const MODULE_ASSETS = ['./main.js', './util.test.js'];\nconst OPTIONAL_ASSETS = ['./util.js'];",
+      });
+      const { errors, modules } = validateAssets(dir);
+      assert.deepEqual(modules.sort(), ['main.js', 'util.js']);
+      assert.ok(errors.some((e) => e.includes("runtime module util.js isn't in the required precache")), errors.join('\n'));
+      assert.ok(errors.some((e) => e.includes('precaches test file util.test.js')), errors.join('\n'));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('validate-assets catches broken references', () => {
   let dir;
   let report;
