@@ -43,7 +43,8 @@ try {
     await page.locator('#btn-new-game').click();
     await page.locator('#difficulty-dialog input[value="easy"]').check();
     await page.locator('#difficulty-dialog button[value="start"]').click();
-    await page.waitForFunction(async () => (await import('./js/game-state.js')).getState().status === 'playing');
+    await page.waitForFunction(() => document.getElementById('game-status').textContent.startsWith('Ready — Easy'));
+    // Wait for a rendered generation result; an async predicate can resolve before the poll observes state.
     const state = await page.evaluate(async () => (await import('./js/game-state.js')).getState());
     assert.equal(state.difficulty, 'easy');
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
