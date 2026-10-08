@@ -29,6 +29,7 @@ export function initGameAnalytics() {
         if (state.status === 'playing') {
           trackGameEvent('game_started', { continued: continued ? 'yes' : 'no' }, runId);
         }
+        if (state.status !== 'playing' && state.status !== 'complete') return;
         // Entries retain identity on selection, notes, and timer notifications.
         if (state.entries === entries || !state.puzzle) return;
         entries = state.entries;
