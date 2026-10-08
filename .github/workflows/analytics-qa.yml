@@ -1,7 +1,7 @@
 name: Analytics QA
 on:
   pull_request:
-    branches: [main]
+    branches: ['claude/sudoku-inspire-setup-2jpef2']
 permissions:
   contents: read
 jobs:
