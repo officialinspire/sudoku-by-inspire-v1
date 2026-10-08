@@ -1,3 +1,4 @@
+import { capturePuzzleCompletion, readAnalyticsHighScore } from './game-analytics.js';
 /**
  * The one place that reacts to game-state changes by writing to
  * storage. game-state.js itself stays persistence-agnostic (it only
@@ -84,6 +85,7 @@ function handleCompletion(state) {
   // which runs were already counted (a duplicate skips everything else
   // too), and a first-ever progress record is seeded from statistics,
   // which mustn't already include this win.
+  const previousHighScore = readAnalyticsHighScore(state.difficulty);
   const { duplicate } = recordCompletedRun({
     runId: state.runId,
     difficulty: state.difficulty,
@@ -91,7 +93,10 @@ function handleCompletion(state) {
     elapsedSeconds: state.elapsedSeconds,
     ...classifyCompletedRun(state),
   });
-  if (!duplicate) recordCompletion(state, score);
+  if (!duplicate) {
+    recordCompletion(state, score);
+    capturePuzzleCompletion(state, score, previousHighScore);
+  }
 
   // A completed game has nothing left to "continue" — drop the save
   // (and any pending debounced write that could otherwise resurrect it).

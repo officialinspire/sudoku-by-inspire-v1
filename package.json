@@ -5,6 +5,10 @@
   "description": "A polished, offline-first Sudoku web app by INSPIRE.",
   "scripts": {
     "test": "node --test",
-    "validate:assets": "node scripts/validate-assets.js"
+    "validate:assets": "node scripts/validate-assets.js",
+    "test:browser": "node scripts/analytics-browser.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.63.0"
   }
 }

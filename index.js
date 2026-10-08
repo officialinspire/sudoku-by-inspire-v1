@@ -1,3 +1,4 @@
+import { initGameAnalytics } from './js/game-analytics.js';
 import { showScreen } from './js/screens.js';
 import { initTheme } from './js/theme.js';
 import { initGameSettings } from './js/game-settings.js';
@@ -27,6 +28,7 @@ import { initAudioBindings } from './js/ui/audio-bindings.js';
 import { initConnectionStatus } from './js/ui/connection-status.js';
 import { initServiceWorker } from './js/sw-register.js';
 
+initGameAnalytics();
 initTheme();
 initGameSettings();
 initAudioSettings();
